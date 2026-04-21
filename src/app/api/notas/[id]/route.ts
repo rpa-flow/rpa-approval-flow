@@ -38,9 +38,26 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
+  const payloadToSave = { ...parsed.data };
+
+  if (payloadToSave.status === "PROCESSADO") {
+    payloadToSave.processada = true;
+    payloadToSave.statusProcessamento = "CONCLUIDO";
+  }
+
+  if (payloadToSave.status === "AGUARDANDO_APROVACAO") {
+    payloadToSave.processada = false;
+    payloadToSave.statusProcessamento = "PENDENTE";
+  }
+
+  if (payloadToSave.status === "APROVADO") {
+    payloadToSave.processada = false;
+    payloadToSave.statusProcessamento = "PROCESSANDO";
+  }
+
   const updated = await prisma.invoice.update({
     where: { id: params.id },
-    data: parsed.data
+    data: payloadToSave
   });
 
   return NextResponse.json(updated);

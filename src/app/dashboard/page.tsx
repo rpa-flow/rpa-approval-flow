@@ -57,8 +57,8 @@ export default function DashboardPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "pendentes") return invoices.filter((i) => !i.processada);
-    if (filter === "concluidas") return invoices.filter((i) => i.processada);
+    if (filter === "pendentes") return invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
+    if (filter === "concluidas") return invoices.filter((i) => i.status !== "AGUARDANDO_APROVACAO");
     return invoices;
   }, [filter, invoices]);
 
@@ -66,7 +66,7 @@ export default function DashboardPage() {
     const res = await fetch(`/api/notas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "APROVADO", processada: true, statusProcessamento: "CONCLUIDO" })
+      body: JSON.stringify({ status: "APROVADO" })
     });
 
     if (!res.ok) {
@@ -130,10 +130,10 @@ export default function DashboardPage() {
                   <td>{invoice.fornecedor.nome}</td>
                   <td>{invoice.numeroNota}</td>
                   <td>{invoice.codigoIdentificador}</td>
-                  <td><span className={invoice.processada ? "badge success" : "badge warning"}>{invoice.processada ? "Concluída" : "Pendente"}</span></td>
+                  <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : "Processado"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
-                    {!invoice.processada ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}
+                    {invoice.status === "AGUARDANDO_APROVACAO" ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}
                   </td>
                 </tr>
               ))}

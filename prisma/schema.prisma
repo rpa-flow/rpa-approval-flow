@@ -8,8 +8,9 @@ datasource db {
 }
 
 enum InvoiceStatus {
+  AGUARDANDO_APROVACAO
   APROVADO
-  EM_ANALISE
+  PROCESSADO
 }
 
 enum ProcessingStatus {
@@ -67,7 +68,7 @@ model Invoice {
   numeroNota          String
   nDfse               String?
   fornecedorId        String
-  status              InvoiceStatus    @default(EM_ANALISE)
+  status              InvoiceStatus    @default(AGUARDANDO_APROVACAO)
   processada          Boolean          @default(false)
   statusProcessamento ProcessingStatus @default(PENDENTE)
   dataAtualizacao     DateTime         @updatedAt

@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "InvoiceStatus" AS ENUM ('APROVADO', 'EM_ANALISE');
+CREATE TYPE "InvoiceStatus" AS ENUM ('AGUARDANDO_APROVACAO', 'APROVADO', 'PROCESSADO');
 
 -- CreateEnum
 CREATE TYPE "ProcessingStatus" AS ENUM ('PENDENTE', 'PROCESSANDO', 'CONCLUIDO', 'ERRO');
@@ -42,7 +42,7 @@ CREATE TABLE "Invoice" (
     "numeroNota" TEXT NOT NULL,
     "nDfse" TEXT,
     "fornecedorId" TEXT NOT NULL,
-    "status" "InvoiceStatus" NOT NULL DEFAULT 'EM_ANALISE',
+    "status" "InvoiceStatus" NOT NULL DEFAULT 'AGUARDANDO_APROVACAO',
     "processada" BOOLEAN NOT NULL DEFAULT false,
     "statusProcessamento" "ProcessingStatus" NOT NULL DEFAULT 'PENDENTE',
     "dataAtualizacao" TIMESTAMP(3) NOT NULL,
