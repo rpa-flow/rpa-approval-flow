@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -28,5 +29,8 @@
     "eslint-config-next": "14.2.33",
     "prisma": "^5.22.0",
     "typescript": "^5.7.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

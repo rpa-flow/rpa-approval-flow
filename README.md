@@ -49,6 +49,7 @@ npm install
 cp .env.example .env
 npm run prisma:generate
 npm run prisma:migrate -- --name init
+npm run prisma:seed
 npm run dev
 ```
 
@@ -56,3 +57,17 @@ npm run dev
 
 Para login funcionar, os gestores precisam existir no banco com `email` e `senhaHash`.
 Ao criar fornecedor via `POST /api/fornecedores`, cada gestor já pode ser criado com senha (`senha`) no payload.
+
+
+## Seed de usuário de teste
+
+Execute:
+
+```bash
+npm run prisma:seed
+```
+
+Usuário criado/atualizado pelo seed:
+
+- email: `gestor.teste@empresa.com`
+- senha: `123456`
