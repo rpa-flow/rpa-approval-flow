@@ -8,7 +8,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - Um gestor pode estar vinculado a múltiplos fornecedores, com escopo respeitado em listagem/aprovação/configurações.
 - Persistência de dados da nota (status, processamento, valores, prestador/tomador, XML original).
 - Identificador de nota com 44 dígitos (`codigoIdentificador`).
-- Status da nota: `AGUARDANDO_APROVACAO`, `APROVADO`, `PROCESSADO`.
+- Status da nota: `AGUARDANDO_APROVACAO`, `APROVADO`, `PROCESSADO`, `EXPIRADA`.
 - Regras de aviso globais e por fornecedor (recorrência + e-mails extras).
 - Login de gestor via frontend (`/login`) com sessão por cookie HttpOnly.
 - Aprovação de notas via frontend (`/dashboard`), com escopo de acesso:
@@ -27,7 +27,8 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - `POST /api/notas`
 - `PATCH /api/notas/:id` (requer login; valida acesso por fornecedor)
 - `GET /api/notas/minhas` (requer login; retorna apenas notas permitidas)
-- `GET /api/notas/lembretes` (endpoint global para job diário de lembrete, opcionalmente protegido por `x-api-key`)
+- `GET /api/notas/lembretes` (lista notas pendentes de lembrete para job diário, opcionalmente protegido por `x-api-key`)
+- `POST /api/notas/lembretes` (processa tentativas de lembrete; ao atingir `maxTentativas`, marca nota como `EXPIRADA`)
 
 ### Configurações
 - Global:

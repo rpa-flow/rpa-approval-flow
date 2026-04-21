@@ -46,6 +46,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     config: supplier.notificationConfig ?? {
       ativo: true,
       recorrenciaDias: 2,
+      maxTentativas: 2,
       emailsExtras: []
     }
   });

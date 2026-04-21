@@ -55,6 +55,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "PROCESSANDO";
   }
 
+  if (payloadToSave.status === "EXPIRADA") {
+    payloadToSave.processada = true;
+    payloadToSave.statusProcessamento = "ERRO";
+  }
+
   const updated = await prisma.invoice.update({
     where: { id: params.id },
     data: payloadToSave

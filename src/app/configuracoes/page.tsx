@@ -17,7 +17,7 @@ export default function ConfiguracoesPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
-  const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, emailsExtras: "" });
+  const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, maxTentativas: 2, emailsExtras: "" });
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -28,6 +28,7 @@ export default function ConfiguracoesPage() {
       setSupplierConfig({
         ativo: payload.config.ativo,
         recorrenciaDias: payload.config.recorrenciaDias,
+        maxTentativas: payload.config.maxTentativas ?? 2,
         emailsExtras: (payload.config.emailsExtras ?? []).join(", ")
       });
     }
@@ -77,6 +78,7 @@ export default function ConfiguracoesPage() {
       body: JSON.stringify({
         ativo: supplierConfig.ativo,
         recorrenciaDias: Number(supplierConfig.recorrenciaDias),
+        maxTentativas: Number(supplierConfig.maxTentativas),
         emailsExtras: supplierConfig.emailsExtras.split(",").map((s) => s.trim()).filter(Boolean)
       })
     });
@@ -135,6 +137,10 @@ export default function ConfiguracoesPage() {
           <label>
             Recorrência (dias)
             <input type="number" min={1} max={90} value={supplierConfig.recorrenciaDias} onChange={(e) => setSupplierConfig((p) => ({ ...p, recorrenciaDias: Number(e.target.value) }))} />
+          </label>
+          <label>
+            Máximo de tentativas de lembrete
+            <input type="number" min={1} max={10} value={supplierConfig.maxTentativas} onChange={(e) => setSupplierConfig((p) => ({ ...p, maxTentativas: Number(e.target.value) }))} />
           </label>
           <label>
             E-mails extras (separados por vírgula)

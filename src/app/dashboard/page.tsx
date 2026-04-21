@@ -130,7 +130,7 @@ export default function DashboardPage() {
                   <td>{invoice.fornecedor.nome}</td>
                   <td>{invoice.numeroNota}</td>
                   <td>{invoice.codigoIdentificador}</td>
-                  <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : "Processado"}</span></td>
+                  <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
                     {invoice.status === "AGUARDANDO_APROVACAO" ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}

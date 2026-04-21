@@ -11,6 +11,7 @@ enum InvoiceStatus {
   AGUARDANDO_APROVACAO
   APROVADO
   PROCESSADO
+  EXPIRADA
 }
 
 enum ProcessingStatus {
@@ -73,6 +74,8 @@ model Invoice {
   statusProcessamento ProcessingStatus @default(PENDENTE)
   dataAtualizacao     DateTime         @updatedAt
   createdAt           DateTime         @default(now())
+  tentativasNotificacao Int            @default(0)
+  ultimoLembreteEm    DateTime?
 
   xmlOriginal         String?
   localEmissao        String?
@@ -119,6 +122,7 @@ model SupplierNotificationConfig {
   supplierId      String   @unique
   ativo           Boolean  @default(true)
   recorrenciaDias Int      @default(2)
+  maxTentativas   Int      @default(2)
   emailsExtras    String[] @default([])
   ultimoEnvioEm   DateTime?
   proximoEnvioEm  DateTime?

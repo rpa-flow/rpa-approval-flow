@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "InvoiceStatus" AS ENUM ('AGUARDANDO_APROVACAO', 'APROVADO', 'PROCESSADO');
+CREATE TYPE "InvoiceStatus" AS ENUM ('AGUARDANDO_APROVACAO', 'APROVADO', 'PROCESSADO', 'EXPIRADA');
 
 -- CreateEnum
 CREATE TYPE "ProcessingStatus" AS ENUM ('PENDENTE', 'PROCESSANDO', 'CONCLUIDO', 'ERRO');
@@ -47,6 +47,8 @@ CREATE TABLE "Invoice" (
     "statusProcessamento" "ProcessingStatus" NOT NULL DEFAULT 'PENDENTE',
     "dataAtualizacao" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tentativasNotificacao" INTEGER NOT NULL DEFAULT 0,
+    "ultimoLembreteEm" TIMESTAMP(3),
     "xmlOriginal" TEXT,
     "localEmissao" TEXT,
     "localPrestacao" TEXT,
@@ -87,6 +89,7 @@ CREATE TABLE "SupplierNotificationConfig" (
     "supplierId" TEXT NOT NULL,
     "ativo" BOOLEAN NOT NULL DEFAULT true,
     "recorrenciaDias" INTEGER NOT NULL DEFAULT 2,
+    "maxTentativas" INTEGER NOT NULL DEFAULT 2,
     "emailsExtras" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "ultimoEnvioEm" TIMESTAMP(3),
     "proximoEnvioEm" TIMESTAMP(3),
