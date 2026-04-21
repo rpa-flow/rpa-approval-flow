@@ -56,6 +56,13 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
+  const stats = useMemo(() => {
+    const pendentes = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO").length;
+    const aprovadas = invoices.filter((i) => i.status === "APROVADO").length;
+    const encerradas = invoices.filter((i) => i.status === "PROCESSADO" || i.status === "EXPIRADA").length;
+    return { total: invoices.length, pendentes, aprovadas, encerradas };
+  }, [invoices]);
+
   const filtered = useMemo(() => {
     if (filter === "pendentes") return invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
     if (filter === "concluidas") return invoices.filter((i) => i.status !== "AGUARDANDO_APROVACAO");
@@ -84,7 +91,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="container">
+    <main className="container container-wide">
       <header className="topbar card">
         <div>
           <h1>Dashboard de Notas</h1>
@@ -102,6 +109,25 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      <section className="stats-grid">
+        <article className="card stat-card">
+          <p className="muted small">Total de notas</p>
+          <h3>{stats.total}</h3>
+        </article>
+        <article className="card stat-card highlight-warning">
+          <p className="muted small">Aguardando aprovação</p>
+          <h3>{stats.pendentes}</h3>
+        </article>
+        <article className="card stat-card highlight-success">
+          <p className="muted small">Aprovadas</p>
+          <h3>{stats.aprovadas}</h3>
+        </article>
+        <article className="card stat-card">
+          <p className="muted small">Encerradas (processadas/expiradas)</p>
+          <h3>{stats.encerradas}</h3>
+        </article>
+      </section>
+
       <section className="card">
         <div className="filters-header">
           <h2>Notas fiscais</h2>
@@ -112,7 +138,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap-large">
           <table>
             <thead>
               <tr>
