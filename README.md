@@ -49,6 +49,8 @@ npm install
 cp .env.example .env
 npm run prisma:generate
 npm run prisma:migrate -- --name init
+# ou em ambiente já versionado (CI/prod):
+npx prisma migrate deploy
 npm run prisma:seed
 npm run dev
 ```
@@ -71,3 +73,8 @@ Usuário criado/atualizado pelo seed:
 
 - email: `gestor.teste@empresa.com`
 - senha: `123456`
+
+
+## Migrations versionadas
+
+O repositório agora inclui migration SQL versionada em `prisma/migrations/` para subir estrutura inicial do banco sem depender de geração local.
