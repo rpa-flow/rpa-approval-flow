@@ -15,8 +15,10 @@ export async function GET() {
       nome: manager.nome,
       email: manager.email,
       role: manager.role,
-      supplierId: manager.supplierId,
-      supplierName: manager.supplier.nome
+      suppliers: manager.managerSuppliers.map((ms) => ({
+        supplierId: ms.supplierId,
+        supplierName: ms.supplier.nome
+      }))
     }
   });
 }

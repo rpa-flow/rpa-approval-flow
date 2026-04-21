@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supplierNotificationConfigSchema } from "@/lib/validations";
-import { getSessionManager } from "@/lib/auth";
+import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 
 type Params = {
   params: {
@@ -12,13 +12,25 @@ type Params = {
 export async function GET(_request: NextRequest, { params }: Params) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  if (manager.role !== "ADMIN" && manager.supplierId !== params.supplierId) {
+
+  const allowedSupplierIds = getAllowedSupplierIds(manager);
+  if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(params.supplierId)) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
+
   const supplier = await prisma.supplier.findUnique({
     where: { id: params.supplierId },
     include: {
-      managers: true,
+      managerSuppliers: {
+        include: {
+          manager: {
+            select: {
+              email: true,
+              nome: true
+            }
+          }
+        }
+      },
       notificationConfig: true
     }
   });
@@ -30,7 +42,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
   return NextResponse.json({
     supplierId: supplier.id,
     supplierName: supplier.nome,
-    managerEmails: supplier.managers.map((m) => m.email),
+    managerEmails: supplier.managerSuppliers.map((m) => m.manager.email),
     config: supplier.notificationConfig ?? {
       ativo: true,
       recorrenciaDias: 2,
@@ -42,9 +54,12 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  if (manager.role !== "ADMIN" && manager.supplierId !== params.supplierId) {
+
+  const allowedSupplierIds = getAllowedSupplierIds(manager);
+  if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(params.supplierId)) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
+
   const supplier = await prisma.supplier.findUnique({ where: { id: params.supplierId } });
 
   if (!supplier) {

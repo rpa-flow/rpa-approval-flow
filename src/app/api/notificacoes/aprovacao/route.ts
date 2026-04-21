@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { approvalNotificationSchema } from "@/lib/validations";
 import { sendApprovalRequestEmail } from "@/lib/email";
-import { getSessionManager } from "@/lib/auth";
+import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   const manager = await getSessionManager();
@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
     include: {
       fornecedor: {
         include: {
-          managers: true,
+          managerSuppliers: {
+            include: {
+              manager: true
+            }
+          },
           notificationConfig: true
         }
       }
@@ -38,11 +42,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nota fiscal não encontrada." }, { status: 404 });
   }
 
-  if (manager.role !== "ADMIN" && invoice.fornecedorId !== manager.supplierId) {
+  const allowedSupplierIds = getAllowedSupplierIds(manager);
+  if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(invoice.fornecedorId)) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
-  const managerEmails = invoice.fornecedor.managers.map((m) => m.email);
+  const managerEmails = invoice.fornecedor.managerSuppliers.map((m) => m.manager.email);
   const extraEmails = invoice.fornecedor.notificationConfig?.emailsExtras ?? [];
   const globalRule = await prisma.notificationRule.findFirst({ orderBy: { createdAt: "desc" } });
 

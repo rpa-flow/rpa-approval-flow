@@ -30,24 +30,34 @@ model Supplier {
   cnpj               String?                      @unique
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
-  managers           Manager[]
+  managerSuppliers   ManagerSupplier[]
   invoices           Invoice[]
   notificationConfig SupplierNotificationConfig?
 }
 
 model Manager {
+  id               String            @id @default(cuid())
+  nome             String
+  email            String            @unique
+  senhaHash        String
+  role             UserRole          @default(GESTOR)
+  ativo            Boolean           @default(true)
+  managerSuppliers ManagerSupplier[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model ManagerSupplier {
   id         String   @id @default(cuid())
-  nome       String
-  email      String   @unique
-  senhaHash  String
-  role       UserRole @default(GESTOR)
-  ativo      Boolean  @default(true)
+  managerId  String
   supplierId String
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
 
+  manager    Manager  @relation(fields: [managerId], references: [id], onDelete: Cascade)
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
+  @@unique([managerId, supplierId])
+  @@index([managerId])
   @@index([supplierId])
 }
 

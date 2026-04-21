@@ -62,6 +62,7 @@ label {
 }
 
 input,
+select,
 button,
 .button-secondary {
   border: 1px solid #c9d6e8;

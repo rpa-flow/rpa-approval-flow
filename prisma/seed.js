@@ -11,20 +11,22 @@ function hashPassword(password) {
 }
 
 async function main() {
-  const supplier = await prisma.supplier.upsert({
+  const supplierA = await prisma.supplier.upsert({
     where: { cnpj: "00000000000000" },
-    update: { nome: "Fornecedor de Teste" },
-    create: {
-      nome: "Fornecedor de Teste",
-      cnpj: "00000000000000"
-    }
+    update: { nome: "Fornecedor de Teste A" },
+    create: { nome: "Fornecedor de Teste A", cnpj: "00000000000000" }
   });
 
-  await prisma.manager.upsert({
+  const supplierB = await prisma.supplier.upsert({
+    where: { cnpj: "11111111111111" },
+    update: { nome: "Fornecedor de Teste B" },
+    create: { nome: "Fornecedor de Teste B", cnpj: "11111111111111" }
+  });
+
+  const manager = await prisma.manager.upsert({
     where: { email: "gestor.teste@empresa.com" },
     update: {
       nome: "Gestor Teste",
-      supplierId: supplier.id,
       ativo: true,
       role: "GESTOR"
     },
@@ -32,9 +34,36 @@ async function main() {
       nome: "Gestor Teste",
       email: "gestor.teste@empresa.com",
       senhaHash: hashPassword("123456"),
-      supplierId: supplier.id,
       role: "GESTOR",
       ativo: true
+    }
+  });
+
+  await prisma.managerSupplier.upsert({
+    where: {
+      managerId_supplierId: {
+        managerId: manager.id,
+        supplierId: supplierA.id
+      }
+    },
+    update: {},
+    create: {
+      managerId: manager.id,
+      supplierId: supplierA.id
+    }
+  });
+
+  await prisma.managerSupplier.upsert({
+    where: {
+      managerId_supplierId: {
+        managerId: manager.id,
+        supplierId: supplierB.id
+      }
+    },
+    update: {},
+    create: {
+      managerId: manager.id,
+      supplierId: supplierB.id
     }
   });
 
@@ -54,14 +83,14 @@ async function main() {
   });
 
   await prisma.supplierNotificationConfig.upsert({
-    where: { supplierId: supplier.id },
+    where: { supplierId: supplierA.id },
     update: {
       ativo: true,
       recorrenciaDias: 2,
       emailsExtras: ["compras@empresa.com"]
     },
     create: {
-      supplierId: supplier.id,
+      supplierId: supplierA.id,
       ativo: true,
       recorrenciaDias: 2,
       emailsExtras: ["compras@empresa.com"]
@@ -72,6 +101,7 @@ async function main() {
   console.log("Usuário de teste:");
   console.log("email: gestor.teste@empresa.com");
   console.log("senha: 123456");
+  console.log("Fornecedores vinculados: Fornecedor de Teste A e Fornecedor de Teste B");
 }
 
 main()

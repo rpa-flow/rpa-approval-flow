@@ -8,8 +8,10 @@ type Me = {
   manager: {
     nome: string;
     email: string;
-    supplierId: string;
-    supplierName: string;
+    suppliers: Array<{
+      supplierId: string;
+      supplierName: string;
+    }>;
   };
 };
 
@@ -22,6 +24,7 @@ type Invoice = {
   statusProcessamento: string;
   dataAtualizacao: string;
   fornecedor: {
+    id: string;
     nome: string;
   };
 };
@@ -87,7 +90,7 @@ export default function DashboardPage() {
           <h1>Dashboard de Notas</h1>
           {me && (
             <p className="muted">
-              {me.manager.nome} ({me.manager.email}) — fornecedor: {me.manager.supplierName}
+              {me.manager.nome} ({me.manager.email}) — fornecedores: {me.manager.suppliers.map((s) => s.supplierName).join(", ")}
             </p>
           )}
         </div>
@@ -103,24 +106,9 @@ export default function DashboardPage() {
         <div className="filters-header">
           <h2>Notas fiscais</h2>
           <div className="filter-group">
-            <button
-              className={filter === "pendentes" ? "chip active" : "chip"}
-              onClick={() => setFilter("pendentes")}
-            >
-              Pendentes
-            </button>
-            <button
-              className={filter === "concluidas" ? "chip active" : "chip"}
-              onClick={() => setFilter("concluidas")}
-            >
-              Concluídas
-            </button>
-            <button
-              className={filter === "todas" ? "chip active" : "chip"}
-              onClick={() => setFilter("todas")}
-            >
-              Todas
-            </button>
+            <button className={filter === "pendentes" ? "chip active" : "chip"} onClick={() => setFilter("pendentes")}>Pendentes</button>
+            <button className={filter === "concluidas" ? "chip active" : "chip"} onClick={() => setFilter("concluidas")}>Concluídas</button>
+            <button className={filter === "todas" ? "chip active" : "chip"} onClick={() => setFilter("todas")}>Todas</button>
           </div>
         </div>
 
@@ -128,6 +116,7 @@ export default function DashboardPage() {
           <table>
             <thead>
               <tr>
+                <th>Fornecedor</th>
                 <th>Número</th>
                 <th>Identificador</th>
                 <th>Status</th>
@@ -138,28 +127,19 @@ export default function DashboardPage() {
             <tbody>
               {filtered.map((invoice) => (
                 <tr key={invoice.id}>
+                  <td>{invoice.fornecedor.nome}</td>
                   <td>{invoice.numeroNota}</td>
                   <td>{invoice.codigoIdentificador}</td>
-                  <td>
-                    <span className={invoice.processada ? "badge success" : "badge warning"}>
-                      {invoice.processada ? "Concluída" : "Pendente"}
-                    </span>
-                  </td>
+                  <td><span className={invoice.processada ? "badge success" : "badge warning"}>{invoice.processada ? "Concluída" : "Pendente"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
-                    {!invoice.processada ? (
-                      <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
+                    {!invoice.processada ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}
                   </td>
                 </tr>
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={5} className="muted center">
-                    Nenhuma nota encontrada para o filtro selecionado.
-                  </td>
+                  <td colSpan={6} className="muted center">Nenhuma nota encontrada para o filtro selecionado.</td>
                 </tr>
               )}
             </tbody>

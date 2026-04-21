@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionManager } from "@/lib/auth";
+import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -9,8 +9,10 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
+  const allowedSupplierIds = getAllowedSupplierIds(manager);
+
   const invoices = await prisma.invoice.findMany({
-    where: manager.role === "ADMIN" ? {} : { fornecedorId: manager.supplierId },
+    where: manager.role === "ADMIN" ? {} : { fornecedorId: { in: allowedSupplierIds } },
     include: {
       fornecedor: {
         select: {

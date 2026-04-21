@@ -57,13 +57,21 @@ export async function getSessionManager() {
   const manager = await prisma.manager.findUnique({
     where: { id: session.managerId },
     include: {
-      supplier: true
+      managerSuppliers: {
+        include: {
+          supplier: true
+        }
+      }
     }
   });
 
   if (!manager || !manager.ativo) return null;
 
   return manager;
+}
+
+export function getAllowedSupplierIds(manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
+  return manager.managerSuppliers.map((ms) => ms.supplierId);
 }
 
 export const SESSION_COOKIE_NAME = COOKIE_NAME;

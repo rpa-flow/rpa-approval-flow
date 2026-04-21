@@ -6,13 +6,17 @@ import { hashPassword } from "@/lib/auth";
 export async function GET() {
   const suppliers = await prisma.supplier.findMany({
     include: {
-      managers: {
-        select: {
-          id: true,
-          nome: true,
-          email: true,
-          role: true,
-          ativo: true
+      managerSuppliers: {
+        include: {
+          manager: {
+            select: {
+              id: true,
+              nome: true,
+              email: true,
+              role: true,
+              ativo: true
+            }
+          }
         }
       }
     },
@@ -21,7 +25,14 @@ export async function GET() {
     }
   });
 
-  return NextResponse.json(suppliers);
+  return NextResponse.json(
+    suppliers.map((s) => ({
+      id: s.id,
+      nome: s.nome,
+      cnpj: s.cnpj,
+      managers: s.managerSuppliers.map((ms) => ms.manager)
+    }))
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -38,27 +49,64 @@ export async function POST(request: NextRequest) {
   const supplier = await prisma.supplier.create({
     data: {
       nome: parsed.data.nome,
-      cnpj: parsed.data.cnpj,
-      managers: {
-        create: parsed.data.managers.map((m) => ({
-          nome: m.nome,
-          email: m.email,
-          senhaHash: hashPassword(m.senha)
-        }))
+      cnpj: parsed.data.cnpj
+    }
+  });
+
+  for (const m of parsed.data.managers) {
+    const existingManager = await prisma.manager.findUnique({ where: { email: m.email } });
+
+    const manager = existingManager
+      ? existingManager
+      : await prisma.manager.create({
+          data: {
+            nome: m.nome,
+            email: m.email,
+            senhaHash: hashPassword(m.senha)
+          }
+        });
+
+    await prisma.managerSupplier.upsert({
+      where: {
+        managerId_supplierId: {
+          managerId: manager.id,
+          supplierId: supplier.id
+        }
+      },
+      update: {},
+      create: {
+        managerId: manager.id,
+        supplierId: supplier.id
       }
-    },
+    });
+  }
+
+  const fullSupplier = await prisma.supplier.findUnique({
+    where: { id: supplier.id },
     include: {
-      managers: {
-        select: {
-          id: true,
-          nome: true,
-          email: true,
-          role: true,
-          ativo: true
+      managerSuppliers: {
+        include: {
+          manager: {
+            select: {
+              id: true,
+              nome: true,
+              email: true,
+              role: true,
+              ativo: true
+            }
+          }
         }
       }
     }
   });
 
-  return NextResponse.json(supplier, { status: 201 });
+  return NextResponse.json(
+    {
+      id: fullSupplier?.id,
+      nome: fullSupplier?.nome,
+      cnpj: fullSupplier?.cnpj,
+      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? []
+    },
+    { status: 201 }
+  );
 }

@@ -9,7 +9,13 @@ export async function GET() {
     include: {
       fornecedor: {
         include: {
-          managers: { select: { id: true, nome: true, email: true } }
+          managerSuppliers: {
+            include: {
+              manager: {
+                select: { id: true, nome: true, email: true }
+              }
+            }
+          }
         }
       }
     },
@@ -56,7 +62,13 @@ export async function POST(request: NextRequest) {
   const supplierByPayload = parsed.data.fornecedorId
     ? await prisma.supplier.findUnique({
         where: { id: parsed.data.fornecedorId },
-        include: { managers: { select: { id: true, nome: true, email: true } } }
+        include: {
+          managerSuppliers: {
+            include: {
+              manager: { select: { id: true, nome: true, email: true } }
+            }
+          }
+        }
       })
     : null;
 
@@ -65,7 +77,13 @@ export async function POST(request: NextRequest) {
   if (!supplier && "prestadorCnpj" in nfseData && nfseData.prestadorCnpj) {
     supplier = await prisma.supplier.findFirst({
       where: { cnpj: nfseData.prestadorCnpj },
-      include: { managers: { select: { id: true, nome: true, email: true } } }
+      include: {
+        managerSuppliers: {
+          include: {
+            manager: { select: { id: true, nome: true, email: true } }
+          }
+        }
+      }
     });
   }
 
@@ -75,7 +93,13 @@ export async function POST(request: NextRequest) {
         nome: ("prestadorNome" in nfseData && nfseData.prestadorNome) || "Fornecedor importado via NFSe",
         cnpj: "prestadorCnpj" in nfseData ? nfseData.prestadorCnpj : undefined
       },
-      include: { managers: { select: { id: true, nome: true, email: true } } }
+      include: {
+        managerSuppliers: {
+          include: {
+            manager: { select: { id: true, nome: true, email: true } }
+          }
+        }
+      }
     });
   }
 
@@ -134,7 +158,7 @@ export async function POST(request: NextRequest) {
   await sendInvoiceCreatedEmail({
     invoiceNumber: invoice.numeroNota,
     supplierName: supplier.nome,
-    managers: supplier.managers
+    managers: supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email }))
   });
 
   return NextResponse.json(invoice, { status: 201 });
