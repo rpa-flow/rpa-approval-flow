@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvoiceStatus {
+  APROVADO
+  EM_ANALISE
+}
+
+enum ProcessingStatus {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDO
+  ERRO
+}
+
+enum UserRole {
+  ADMIN
+  GESTOR
+}
+
+model Supplier {
+  id                 String                       @id @default(cuid())
+  nome               String
+  cnpj               String?                      @unique
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  managers           Manager[]
+  invoices           Invoice[]
+  notificationConfig SupplierNotificationConfig?
+}
+
+model Manager {
+  id         String   @id @default(cuid())
+  nome       String
+  email      String   @unique
+  senhaHash  String
+  role       UserRole @default(GESTOR)
+  ativo      Boolean  @default(true)
+  supplierId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}
+
+model Invoice {
+  id                  String           @id @default(cuid())
+  codigoIdentificador String           @unique
+  numeroNota          String
+  nDfse               String?
+  fornecedorId        String
+  status              InvoiceStatus    @default(EM_ANALISE)
+  processada          Boolean          @default(false)
+  statusProcessamento ProcessingStatus @default(PENDENTE)
+  dataAtualizacao     DateTime         @updatedAt
+  createdAt           DateTime         @default(now())
+
+  xmlOriginal         String?
+  localEmissao        String?
+  localPrestacao      String?
+  municipioIncidencia String?
+  itemTributacaoNac   String?
+  itemTributacaoMun   String?
+  nbsDescricao        String?
+  dataProcessamento   DateTime?
+  dataEmissao         DateTime?
+  dataCompetencia     DateTime?
+
+  prestadorCnpj       String?
+  prestadorNome       String?
+  prestadorEmail      String?
+  tomadorCnpj         String?
+  tomadorNome         String?
+  tomadorEmail        String?
+
+  valorBaseCalculo    Decimal?         @db.Decimal(14, 2)
+  valorIssqn          Decimal?         @db.Decimal(14, 2)
+  valorTotalRetido    Decimal?         @db.Decimal(14, 2)
+  valorLiquido        Decimal?         @db.Decimal(14, 2)
+  valorServico        Decimal?         @db.Decimal(14, 2)
+  aliquota            Decimal?         @db.Decimal(5, 2)
+
+  fornecedor          Supplier         @relation(fields: [fornecedorId], references: [id])
+
+  @@index([fornecedorId])
+  @@index([codigoIdentificador])
+}
+
+model NotificationRule {
+  id                    String   @id @default(cuid())
+  diasLembrete          Int      @default(2)
+  ativo                 Boolean  @default(true)
+  destinatarioAdicional String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model SupplierNotificationConfig {
+  id              String   @id @default(cuid())
+  supplierId      String   @unique
+  ativo           Boolean  @default(true)
+  recorrenciaDias Int      @default(2)
+  emailsExtras    String[] @default([])
+  ultimoEnvioEm   DateTime?
+  proximoEnvioEm  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}

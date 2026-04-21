@@ -1,0 +1,32 @@
+{
+  "name": "rpa-approval-flow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "next": "14.2.33",
+    "nodemailer": "^6.9.16",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "^3.23.8",
+    "fast-xml-parser": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^18.3.13",
+    "@types/react-dom": "^18.3.1",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.33",
+    "prisma": "^5.22.0",
+    "typescript": "^5.7.2"
+  }
+}
