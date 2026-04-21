@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Me = {
@@ -18,16 +19,19 @@ type Invoice = {
   codigoIdentificador: string;
   status: string;
   processada: boolean;
+  statusProcessamento: string;
+  dataAtualizacao: string;
   fornecedor: {
     nome: string;
   };
 };
 
+type Filter = "todas" | "pendentes" | "concluidas";
+
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
-  const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, emailsExtras: "" });
+  const [filter, setFilter] = useState<Filter>("pendentes");
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -41,27 +45,19 @@ export default function DashboardPage() {
     const meData = await meRes.json();
     setMe(meData);
 
-    const [notesRes, globalRes, supplierRes] = await Promise.all([
-      fetch("/api/notas/minhas"),
-      fetch("/api/configuracoes/avisos"),
-      fetch(`/api/configuracoes/fornecedores/${meData.manager.supplierId}/avisos`)
-    ]);
-
+    const notesRes = await fetch("/api/notas/minhas");
     if (notesRes.ok) setInvoices(await notesRes.json());
-    if (globalRes.ok) setRule(await globalRes.json());
-    if (supplierRes.ok) {
-      const payload = await supplierRes.json();
-      setSupplierConfig({
-        ativo: payload.config.ativo,
-        recorrenciaDias: payload.config.recorrenciaDias,
-        emailsExtras: (payload.config.emailsExtras ?? []).join(",")
-      });
-    }
   }
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const filtered = useMemo(() => {
+    if (filter === "pendentes") return invoices.filter((i) => !i.processada);
+    if (filter === "concluidas") return invoices.filter((i) => i.processada);
+    return invoices;
+  }, [filter, invoices]);
 
   async function aprovarNota(id: string) {
     const res = await fetch(`/api/notas/${id}`, {
@@ -79,37 +75,6 @@ export default function DashboardPage() {
     await loadData();
   }
 
-  async function salvarRegraGlobal(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/configuracoes/avisos", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...rule, destinatarioAdicional: rule.destinatarioAdicional || null })
-    });
-
-    setMessage(res.ok ? "Regra global salva." : "Erro ao salvar regra global.");
-  }
-
-  async function salvarRegraFornecedor(e: React.FormEvent) {
-    e.preventDefault();
-    if (!me) return;
-
-    const res = await fetch(`/api/configuracoes/fornecedores/${me.manager.supplierId}/avisos`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ativo: supplierConfig.ativo,
-        recorrenciaDias: Number(supplierConfig.recorrenciaDias),
-        emailsExtras: supplierConfig.emailsExtras
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      })
-    });
-
-    setMessage(res.ok ? "Regra do fornecedor salva." : "Erro ao salvar regra do fornecedor.");
-  }
-
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
@@ -117,84 +82,89 @@ export default function DashboardPage() {
 
   return (
     <main className="container">
-      <h1>Painel do Gestor</h1>
-      {me && (
-        <p>
-          Logado como <strong>{me.manager.nome}</strong> ({me.manager.email}) — fornecedor:
-          <strong> {me.manager.supplierName}</strong>
-        </p>
-      )}
-      <button onClick={logout}>Sair</button>
+      <header className="topbar card">
+        <div>
+          <h1>Dashboard de Notas</h1>
+          {me && (
+            <p className="muted">
+              {me.manager.nome} ({me.manager.email}) — fornecedor: {me.manager.supplierName}
+            </p>
+          )}
+        </div>
+        <div className="actions-row">
+          <Link href="/configuracoes" className="button-secondary">
+            Configurações
+          </Link>
+          <button onClick={logout}>Sair</button>
+        </div>
+      </header>
 
       <section className="card">
-        <h2>Aprovação de notas (somente do seu fornecedor)</h2>
-        <ul>
-          {invoices.map((invoice) => (
-            <li key={invoice.id}>
-              NF {invoice.numeroNota} ({invoice.codigoIdentificador}) - {invoice.status}
-              {!invoice.processada && (
-                <button onClick={() => aprovarNota(invoice.id)} style={{ marginLeft: 8 }}>
-                  Aprovar
-                </button>
+        <div className="filters-header">
+          <h2>Notas fiscais</h2>
+          <div className="filter-group">
+            <button
+              className={filter === "pendentes" ? "chip active" : "chip"}
+              onClick={() => setFilter("pendentes")}
+            >
+              Pendentes
+            </button>
+            <button
+              className={filter === "concluidas" ? "chip active" : "chip"}
+              onClick={() => setFilter("concluidas")}
+            >
+              Concluídas
+            </button>
+            <button
+              className={filter === "todas" ? "chip active" : "chip"}
+              onClick={() => setFilter("todas")}
+            >
+              Todas
+            </button>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Identificador</th>
+                <th>Status</th>
+                <th>Atualização</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((invoice) => (
+                <tr key={invoice.id}>
+                  <td>{invoice.numeroNota}</td>
+                  <td>{invoice.codigoIdentificador}</td>
+                  <td>
+                    <span className={invoice.processada ? "badge success" : "badge warning"}>
+                      {invoice.processada ? "Concluída" : "Pendente"}
+                    </span>
+                  </td>
+                  <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
+                  <td>
+                    {!invoice.processada ? (
+                      <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length && (
+                <tr>
+                  <td colSpan={5} className="muted center">
+                    Nenhuma nota encontrada para o filtro selecionado.
+                  </td>
+                </tr>
               )}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="card">
-        <h2>Regra global de aviso</h2>
-        <form onSubmit={salvarRegraGlobal} className="form-grid">
-          <input
-            type="number"
-            value={rule.diasLembrete}
-            onChange={(e) => setRule((p) => ({ ...p, diasLembrete: Number(e.target.value) }))}
-          />
-          <input
-            type="email"
-            placeholder="destinatario@empresa.com"
-            value={rule.destinatarioAdicional ?? ""}
-            onChange={(e) => setRule((p) => ({ ...p, destinatarioAdicional: e.target.value }))}
-          />
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={rule.ativo}
-              onChange={(e) => setRule((p) => ({ ...p, ativo: e.target.checked }))}
-            />
-            Regra ativa
-          </label>
-          <button type="submit">Salvar regra global</button>
-        </form>
-      </section>
-
-      <section className="card">
-        <h2>Regra de recorrência do seu fornecedor</h2>
-        <form onSubmit={salvarRegraFornecedor} className="form-grid">
-          <input
-            type="number"
-            min={1}
-            max={90}
-            value={supplierConfig.recorrenciaDias}
-            onChange={(e) =>
-              setSupplierConfig((p) => ({ ...p, recorrenciaDias: Number(e.target.value) }))
-            }
-          />
-          <input
-            placeholder="emails extras separados por vírgula"
-            value={supplierConfig.emailsExtras}
-            onChange={(e) => setSupplierConfig((p) => ({ ...p, emailsExtras: e.target.value }))}
-          />
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={supplierConfig.ativo}
-              onChange={(e) => setSupplierConfig((p) => ({ ...p, ativo: e.target.checked }))}
-            />
-            Recorrência ativa
-          </label>
-          <button type="submit">Salvar regra do fornecedor</button>
-        </form>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {message && <p className="message">{message}</p>}

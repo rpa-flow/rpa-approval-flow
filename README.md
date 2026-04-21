@@ -40,7 +40,8 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 ## Frontend
 
 - `/login`: autenticação do gestor.
-- `/dashboard`: aprovação de notas do fornecedor do gestor + edição de regras globais e recorrência do fornecedor.
+- `/dashboard`: listagem profissional de notas com filtros (pendentes, concluídas, todas).
+- `/configuracoes`: tela dedicada para regras globais e regras do fornecedor (recorrência + e-mails extras).
 
 ## Setup
 
