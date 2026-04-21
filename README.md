@@ -85,4 +85,4 @@ Usuário criado/atualizado pelo seed:
 O repositório agora inclui migration SQL versionada em `prisma/migrations/` para subir estrutura inicial do banco sem depender de geração local.
 
 
-Notas de exemplo criadas pelo seed: `NF-1001`, `NF-1002`, `NF-2001`, `NF-2002`.
+Notas de exemplo criadas pelo seed (todas vinculadas ao gestor `gestor.teste@empresa.com`): `NF-1001`, `NF-1002`, `NF-2001`, `NF-2002`.

@@ -153,7 +153,7 @@ async function main() {
   await upsertInvoice({
     codigoIdentificador: "00000000000000000000000000000000000000000003",
     numeroNota: "NF-2001",
-    fornecedorId: supplierB.id,
+    fornecedorId: supplierA.id,
     status: "PROCESSADO",
     processada: true,
     statusProcessamento: "CONCLUIDO",
@@ -165,7 +165,7 @@ async function main() {
   await upsertInvoice({
     codigoIdentificador: "00000000000000000000000000000000000000000004",
     numeroNota: "NF-2002",
-    fornecedorId: supplierB.id,
+    fornecedorId: supplierA.id,
     status: "EXPIRADA",
     processada: true,
     statusProcessamento: "ERRO",
@@ -179,8 +179,8 @@ async function main() {
   console.log("Usuário de teste:");
   console.log("email: gestor.teste@empresa.com");
   console.log("senha: 123456");
-  console.log("Fornecedores vinculados: Fornecedor de Teste A e Fornecedor de Teste B");
-  console.log("Notas de exemplo criadas: NF-1001, NF-1002, NF-2001, NF-2002");
+  console.log("Fornecedores vinculados ao gestor.teste@empresa.com: Fornecedor de Teste A e Fornecedor de Teste B");
+  console.log("Notas de exemplo criadas e vinculadas ao gestor.teste@empresa.com: NF-1001, NF-1002, NF-2001, NF-2002");
 }
 
 main()
