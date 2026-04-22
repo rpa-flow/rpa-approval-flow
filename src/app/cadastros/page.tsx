@@ -111,6 +111,9 @@ export default function CadastrosPage() {
           <p className="muted">Cadastre fornecedores e gestores sem poluir a tela de configurações.</p>
         </div>
         <div className="actions-row">
+          <Link href="/fornecedores" className="button-secondary">
+            Fornecedores
+          </Link>
           <Link href="/configuracoes" className="button-secondary">
             Voltar às configurações
           </Link>

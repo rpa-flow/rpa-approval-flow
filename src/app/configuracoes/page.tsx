@@ -102,16 +102,21 @@ export default function ConfiguracoesPage() {
           <h1>Configurações</h1>
           <p className="muted">Gerencie regras globais e políticas de lembrete por fornecedor.</p>
         </div>
-        <Link href="/dashboard" className="button-secondary">
-          Voltar ao dashboard
-        </Link>
+        <div className="actions-row">
+          <Link href="/dashboard" className="button-secondary">
+            Dashboard
+          </Link>
+          <Link href="/fornecedores" className="button-secondary">
+            Fornecedores
+          </Link>
+        </div>
       </header>
 
       {me?.manager.role === "ADMIN" && (
         <section className="card">
           <h2>Cadastros administrativos</h2>
           <p className="muted small">Para melhorar a experiência, o cadastro de fornecedores e gestores fica em uma tela separada.</p>
-          <Link href="/cadastros" className="button-secondary">
+          <Link href="/fornecedores" className="button-secondary">
             Ir para tela de cadastros
           </Link>
         </section>

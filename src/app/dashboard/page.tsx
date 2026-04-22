@@ -103,11 +103,9 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="actions-row">
-          {me?.manager.role === "ADMIN" && (
-            <Link href="/cadastros" className="button-secondary">
-              Cadastros
-            </Link>
-          )}
+          <Link href="/fornecedores" className="button-secondary">
+            Fornecedores
+          </Link>
           <Link href="/configuracoes" className="button-secondary">
             Configurações
           </Link>
