@@ -60,6 +60,28 @@ npm run prisma:seed
 npm run dev
 ```
 
+## SMTP recomendado para envio real
+
+Opções simples para começar:
+
+- **Brevo (Sendinblue)**: fácil para transacional e tem plano gratuito inicial.
+- **Mailgun**: robusto para backend e automações.
+- **SendGrid**: popular e bem documentado.
+- **Amazon SES**: custo baixo em escala (setup um pouco mais técnico).
+
+Exemplo de configuração (com Brevo/SendGrid/Mailgun via SMTP):
+
+```env
+SMTP_HOST="smtp.seu-provedor.com"
+SMTP_PORT="587"
+SMTP_USER="seu_usuario_smtp"
+SMTP_PASS="sua_senha_ou_api_key_smtp"
+SMTP_SECURE="false"
+SMTP_FROM="notificacoes@suaempresa.com"
+```
+
+> Dica: em produção, prefira `SMTP_FROM` com domínio autenticado (SPF/DKIM) para melhorar entregabilidade.
+
 ## Observação importante de usuários
 
 Para login funcionar, os gestores precisam existir no banco com `email` e `senhaHash`.
