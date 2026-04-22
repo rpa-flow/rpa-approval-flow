@@ -194,6 +194,13 @@ th {
   font-weight: 700;
 }
 
+.list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
 
 .stats-grid {
   display: grid;

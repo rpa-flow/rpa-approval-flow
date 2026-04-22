@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 type Me = {
   manager: {
+    role: "ADMIN" | "GESTOR";
     suppliers: Array<{
       supplierId: string;
       supplierName: string;
@@ -13,11 +14,32 @@ type Me = {
   };
 };
 
+type SupplierListItem = {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  managers: Array<{
+    id: string;
+    nome: string;
+    email: string;
+    role: "ADMIN" | "GESTOR";
+    ativo: boolean;
+  }>;
+};
+
 export default function ConfiguracoesPage() {
   const [me, setMe] = useState<Me | null>(null);
+  const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
   const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, maxTentativas: 2, emailsExtras: "" });
+  const [supplierForm, setSupplierForm] = useState({
+    nome: "",
+    cnpj: "",
+    managerNome: "",
+    managerEmail: "",
+    managerSenha: ""
+  });
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -57,9 +79,23 @@ export default function ConfiguracoesPage() {
     if (firstSupplierId) await loadSupplierConfig(firstSupplierId);
   }
 
+  async function loadSuppliers() {
+    const suppliersRes = await fetch("/api/fornecedores");
+    if (!suppliersRes.ok) return;
+
+    const payload = (await suppliersRes.json()) as SupplierListItem[];
+    setSuppliers(payload);
+  }
+
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (me?.manager.role === "ADMIN") {
+      loadSuppliers();
+    }
+  }, [me?.manager.role]);
 
   async function salvarRegraGlobal(e: React.FormEvent) {
     e.preventDefault();
@@ -92,6 +128,43 @@ export default function ConfiguracoesPage() {
         ? `Configuração do fornecedor ${selectedSupplierName} salva com sucesso.`
         : "Erro ao salvar configuração do fornecedor."
     );
+  }
+
+  async function cadastrarFornecedor(e: React.FormEvent) {
+    e.preventDefault();
+    const cnpjDigits = supplierForm.cnpj.replace(/\D/g, "");
+
+    const res = await fetch("/api/fornecedores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: supplierForm.nome,
+        cnpj: cnpjDigits || undefined,
+        managers: [
+          {
+            nome: supplierForm.managerNome,
+            email: supplierForm.managerEmail,
+            senha: supplierForm.managerSenha
+          }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      setMessage("Erro ao cadastrar fornecedor/gestor. Verifique os dados.");
+      return;
+    }
+
+    setSupplierForm({
+      nome: "",
+      cnpj: "",
+      managerNome: "",
+      managerEmail: "",
+      managerSenha: ""
+    });
+
+    setMessage("Fornecedor e gestor cadastrados com sucesso.");
+    await loadSuppliers();
   }
 
   return (
@@ -209,6 +282,80 @@ export default function ConfiguracoesPage() {
           </form>
         </article>
       </section>
+
+      {me?.manager.role === "ADMIN" && (
+        <section className="card">
+          <h2>Cadastro de fornecedor e gestor</h2>
+          <p className="muted small">
+            Hoje a configuração é feita via API em <code>POST /api/fornecedores</code>. Nesta tela você pode cadastrar
+            direto pelo painel.
+          </p>
+
+          <form onSubmit={cadastrarFornecedor} className="form-grid">
+            <label>
+              Nome do fornecedor
+              <input
+                required
+                minLength={2}
+                placeholder="Fornecedor ABC"
+                value={supplierForm.nome}
+                onChange={(e) => setSupplierForm((p) => ({ ...p, nome: e.target.value }))}
+              />
+            </label>
+            <label>
+              CNPJ (opcional)
+              <input
+                placeholder="12345678000199"
+                value={supplierForm.cnpj}
+                onChange={(e) => setSupplierForm((p) => ({ ...p, cnpj: e.target.value }))}
+              />
+            </label>
+            <label>
+              Nome do gestor
+              <input
+                required
+                minLength={2}
+                placeholder="Maria Gestora"
+                value={supplierForm.managerNome}
+                onChange={(e) => setSupplierForm((p) => ({ ...p, managerNome: e.target.value }))}
+              />
+            </label>
+            <label>
+              E-mail do gestor
+              <input
+                required
+                type="email"
+                placeholder="gestor@empresa.com"
+                value={supplierForm.managerEmail}
+                onChange={(e) => setSupplierForm((p) => ({ ...p, managerEmail: e.target.value }))}
+              />
+            </label>
+            <label>
+              Senha inicial do gestor
+              <input
+                required
+                minLength={6}
+                type="password"
+                placeholder="mínimo 6 caracteres"
+                value={supplierForm.managerSenha}
+                onChange={(e) => setSupplierForm((p) => ({ ...p, managerSenha: e.target.value }))}
+              />
+            </label>
+            <button type="submit">Cadastrar fornecedor e gestor</button>
+          </form>
+
+          <h3>Fornecedores cadastrados</h3>
+          <ul className="list">
+            {suppliers.map((supplier) => (
+              <li key={supplier.id}>
+                <strong>{supplier.nome}</strong> {supplier.cnpj ? `(${supplier.cnpj})` : "(sem CNPJ)"} — gestores:{" "}
+                {supplier.managers.map((manager) => `${manager.nome} <${manager.email}>`).join(", ")}
+              </li>
+            ))}
+            {suppliers.length === 0 && <li>Nenhum fornecedor cadastrado ainda.</li>}
+          </ul>
+        </section>
+      )}
 
       {message && <p className="message">{message}</p>}
     </main>

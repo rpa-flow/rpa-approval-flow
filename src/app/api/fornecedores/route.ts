@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supplierSchema } from "@/lib/validations";
-import { hashPassword } from "@/lib/auth";
+import { getSessionManager, hashPassword } from "@/lib/auth";
+
+async function validateAdmin() {
+  const manager = await getSessionManager();
+  if (!manager) {
+    return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  }
+
+  if (manager.role !== "ADMIN") {
+    return NextResponse.json({ error: "Apenas administradores podem gerenciar fornecedores." }, { status: 403 });
+  }
+
+  return null;
+}
 
 export async function GET() {
+  const unauthorized = await validateAdmin();
+  if (unauthorized) return unauthorized;
+
   const suppliers = await prisma.supplier.findMany({
     include: {
       managerSuppliers: {
@@ -36,6 +52,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await validateAdmin();
+  if (unauthorized) return unauthorized;
+
   const payload = await request.json();
   const parsed = supplierSchema.safeParse(payload);
 
