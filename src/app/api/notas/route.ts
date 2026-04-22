@@ -4,6 +4,18 @@ import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
 
+function validateInvoiceIngestApiKey(request: NextRequest) {
+  const apiKey = process.env.INVOICE_INGEST_API_KEY;
+  if (!apiKey) return null;
+
+  const keyFromRequest = request.headers.get("x-api-key");
+  if (keyFromRequest !== apiKey) {
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  }
+
+  return null;
+}
+
 export async function GET() {
   const invoices = await prisma.invoice.findMany({
     include: {
@@ -28,6 +40,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = validateInvoiceIngestApiKey(request);
+  if (unauthorized) return unauthorized;
+
   const json = await request.json();
   const parsed = createInvoiceSchema.safeParse(json);
 
