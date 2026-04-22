@@ -104,6 +104,7 @@ Usuário criado/atualizado pelo seed:
 
 - email: `gestor.teste@empresa.com`
 - senha: `123456`
+- role: `ADMIN`
 
 
 ## Migrations versionadas

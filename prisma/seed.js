@@ -36,13 +36,13 @@ async function main() {
     update: {
       nome: "Gestor Teste",
       ativo: true,
-      role: "GESTOR"
+      role: "ADMIN"
     },
     create: {
       nome: "Gestor Teste",
       email: "gestor.teste@empresa.com",
       senhaHash: hashPassword("123456"),
-      role: "GESTOR",
+      role: "ADMIN",
       ativo: true
     }
   });
@@ -179,6 +179,7 @@ async function main() {
   console.log("Usuário de teste:");
   console.log("email: gestor.teste@empresa.com");
   console.log("senha: 123456");
+  console.log("role: ADMIN");
   console.log("Fornecedores vinculados ao gestor.teste@empresa.com: Fornecedor de Teste A e Fornecedor de Teste B");
   console.log("Notas de exemplo criadas e vinculadas ao gestor.teste@empresa.com: NF-1001, NF-1002, NF-2001, NF-2002");
 }
