@@ -227,3 +227,17 @@ th {
     align-items: flex-start;
   }
 }
+
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.info-banner {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}

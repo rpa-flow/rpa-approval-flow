@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Me = {
@@ -20,6 +20,10 @@ export default function ConfiguracoesPage() {
   const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, maxTentativas: 2, emailsExtras: "" });
   const [message, setMessage] = useState("");
   const router = useRouter();
+
+  const selectedSupplierName = useMemo(() => {
+    return me?.manager.suppliers.find((s) => s.supplierId === selectedSupplierId)?.supplierName ?? "Fornecedor";
+  }, [me, selectedSupplierId]);
 
   async function loadSupplierConfig(supplierId: string) {
     const supplierRes = await fetch(`/api/configuracoes/fornecedores/${supplierId}/avisos`);
@@ -65,7 +69,7 @@ export default function ConfiguracoesPage() {
       body: JSON.stringify({ ...rule, destinatarioAdicional: rule.destinatarioAdicional || null })
     });
 
-    setMessage(res.ok ? "Configuração global salva." : "Erro ao salvar configuração global.");
+    setMessage(res.ok ? "Configuração global salva com sucesso." : "Erro ao salvar configuração global.");
   }
 
   async function salvarRegraFornecedor(e: React.FormEvent) {
@@ -83,75 +87,127 @@ export default function ConfiguracoesPage() {
       })
     });
 
-    setMessage(res.ok ? "Configuração do fornecedor salva." : "Erro ao salvar configuração do fornecedor.");
+    setMessage(
+      res.ok
+        ? `Configuração do fornecedor ${selectedSupplierName} salva com sucesso.`
+        : "Erro ao salvar configuração do fornecedor."
+    );
   }
 
   return (
-    <main className="container">
+    <main className="container container-wide">
       <header className="topbar card">
         <div>
           <h1>Configurações</h1>
-          <p className="muted">Selecione o fornecedor para editar regras específicas.</p>
+          <p className="muted">Gerencie regras globais e políticas de lembrete por fornecedor.</p>
         </div>
-        <Link href="/dashboard" className="button-secondary">Voltar ao dashboard</Link>
+        <Link href="/dashboard" className="button-secondary">
+          Voltar ao dashboard
+        </Link>
       </header>
 
-      <section className="card">
-        <h2>Regra global de aviso</h2>
-        <p className="muted small">Define lembretes gerais e destinatário adicional padrão.</p>
-        <form onSubmit={salvarRegraGlobal} className="form-grid">
-          <label>
-            Dias para lembrete
-            <input type="number" min={0} max={60} value={rule.diasLembrete} onChange={(e) => setRule((p) => ({ ...p, diasLembrete: Number(e.target.value) }))} />
-          </label>
-          <label>
-            E-mail adicional global
-            <input type="email" placeholder="financeiro@empresa.com" value={rule.destinatarioAdicional ?? ""} onChange={(e) => setRule((p) => ({ ...p, destinatarioAdicional: e.target.value }))} />
-          </label>
-          <label className="checkbox">
-            <input type="checkbox" checked={rule.ativo} onChange={(e) => setRule((p) => ({ ...p, ativo: e.target.checked }))} />
-            Ativar lembretes globais
-          </label>
-          <button type="submit">Salvar regra global</button>
-        </form>
+      <section className="card info-banner">
+        <strong>Como funciona:</strong> o lembrete respeita recorrência em dias e quantidade máxima de tentativas por fornecedor.
+        Ao atingir o limite, a nota muda para <strong>EXPIRADA</strong>.
       </section>
 
-      <section className="card">
-        <h2>Regra do fornecedor</h2>
-        <label>
-          Fornecedor
-          <select
-            value={selectedSupplierId}
-            onChange={async (e) => {
-              setSelectedSupplierId(e.target.value);
-              await loadSupplierConfig(e.target.value);
-            }}
-          >
-            {(me?.manager.suppliers ?? []).map((s) => (
-              <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
-            ))}
-          </select>
-        </label>
-        <p className="muted small">Defina recorrência e e-mails extras para o fornecedor selecionado.</p>
-        <form onSubmit={salvarRegraFornecedor} className="form-grid">
+      <section className="settings-grid">
+        <article className="card">
+          <h2>Regra global da plataforma</h2>
+          <p className="muted small">Usada como padrão para destinatário adicional e política geral de lembrete.</p>
+          <form onSubmit={salvarRegraGlobal} className="form-grid">
+            <label>
+              Dias para lembrete
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={rule.diasLembrete}
+                onChange={(e) => setRule((p) => ({ ...p, diasLembrete: Number(e.target.value) }))}
+              />
+            </label>
+            <label>
+              E-mail adicional global
+              <input
+                type="email"
+                placeholder="financeiro@empresa.com"
+                value={rule.destinatarioAdicional ?? ""}
+                onChange={(e) => setRule((p) => ({ ...p, destinatarioAdicional: e.target.value }))}
+              />
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={rule.ativo}
+                onChange={(e) => setRule((p) => ({ ...p, ativo: e.target.checked }))}
+              />
+              Ativar regra global
+            </label>
+            <button type="submit">Salvar regra global</button>
+          </form>
+        </article>
+
+        <article className="card">
+          <h2>Regra por fornecedor</h2>
+          <p className="muted small">Escolha um fornecedor e ajuste recorrência, tentativas e e-mails de notificação.</p>
+
           <label>
-            Recorrência (dias)
-            <input type="number" min={1} max={90} value={supplierConfig.recorrenciaDias} onChange={(e) => setSupplierConfig((p) => ({ ...p, recorrenciaDias: Number(e.target.value) }))} />
+            Fornecedor
+            <select
+              value={selectedSupplierId}
+              onChange={async (e) => {
+                setSelectedSupplierId(e.target.value);
+                await loadSupplierConfig(e.target.value);
+              }}
+            >
+              {(me?.manager.suppliers ?? []).map((s) => (
+                <option key={s.supplierId} value={s.supplierId}>
+                  {s.supplierName}
+                </option>
+              ))}
+            </select>
           </label>
-          <label>
-            Máximo de tentativas de lembrete
-            <input type="number" min={1} max={10} value={supplierConfig.maxTentativas} onChange={(e) => setSupplierConfig((p) => ({ ...p, maxTentativas: Number(e.target.value) }))} />
-          </label>
-          <label>
-            E-mails extras (separados por vírgula)
-            <input placeholder="compras@empresa.com, fiscal@empresa.com" value={supplierConfig.emailsExtras} onChange={(e) => setSupplierConfig((p) => ({ ...p, emailsExtras: e.target.value }))} />
-          </label>
-          <label className="checkbox">
-            <input type="checkbox" checked={supplierConfig.ativo} onChange={(e) => setSupplierConfig((p) => ({ ...p, ativo: e.target.checked }))} />
-            Ativar lembretes do fornecedor
-          </label>
-          <button type="submit">Salvar regra do fornecedor</button>
-        </form>
+
+          <form onSubmit={salvarRegraFornecedor} className="form-grid">
+            <label>
+              Recorrência (dias)
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={supplierConfig.recorrenciaDias}
+                onChange={(e) => setSupplierConfig((p) => ({ ...p, recorrenciaDias: Number(e.target.value) }))}
+              />
+            </label>
+            <label>
+              Máximo de tentativas
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={supplierConfig.maxTentativas}
+                onChange={(e) => setSupplierConfig((p) => ({ ...p, maxTentativas: Number(e.target.value) }))}
+              />
+            </label>
+            <label>
+              E-mails extras (separados por vírgula)
+              <input
+                placeholder="compras@empresa.com, fiscal@empresa.com"
+                value={supplierConfig.emailsExtras}
+                onChange={(e) => setSupplierConfig((p) => ({ ...p, emailsExtras: e.target.value }))}
+              />
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={supplierConfig.ativo}
+                onChange={(e) => setSupplierConfig((p) => ({ ...p, ativo: e.target.checked }))}
+              />
+              Ativar regra do fornecedor
+            </label>
+            <button type="submit">Salvar regra do fornecedor</button>
+          </form>
+        </article>
       </section>
 
       {message && <p className="message">{message}</p>}
