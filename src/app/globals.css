@@ -241,3 +241,66 @@ th {
   border-color: #bfdbfe;
   color: #1e3a8a;
 }
+
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  background: linear-gradient(120deg, #eaf1ff 0%, #f8fbff 60%);
+}
+
+.login-brand {
+  padding: 4rem 3rem;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: 2.2rem;
+}
+
+.login-brand p {
+  max-width: 520px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.login-brand ul {
+  margin: 0;
+  padding-left: 1rem;
+  color: #1e293b;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.login-card {
+  margin: auto;
+  width: min(460px, calc(100% - 2rem));
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 16px;
+  padding: 1.4rem;
+  box-shadow: 0 16px 45px rgba(15, 23, 42, 0.1);
+}
+
+.login-card h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 980px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    padding: 1.2rem 0;
+  }
+
+  .login-brand {
+    padding: 1rem 1.2rem 0;
+  }
+
+  .login-card {
+    margin-top: 1rem;
+  }
+}
