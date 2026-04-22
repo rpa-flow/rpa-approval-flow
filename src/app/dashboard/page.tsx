@@ -8,6 +8,7 @@ type Me = {
   manager: {
     nome: string;
     email: string;
+    role: "ADMIN" | "GESTOR";
     suppliers: Array<{
       supplierId: string;
       supplierName: string;
@@ -102,6 +103,11 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="actions-row">
+          {me?.manager.role === "ADMIN" && (
+            <Link href="/cadastros" className="button-secondary">
+              Cadastros
+            </Link>
+          )}
           <Link href="/configuracoes" className="button-secondary">
             Configurações
           </Link>
