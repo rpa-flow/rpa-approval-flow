@@ -37,7 +37,12 @@ export const supplierSchema = z.object({
 
 export const updateSupplierSchema = z.object({
   nome: z.string().min(2),
-  cnpj: z.string().regex(/^\d{14}$/).nullable().optional()
+  cnpj: z.string().regex(/^\d{14}$/).nullable().optional(),
+  addManager: z.object({
+    nome: z.string().min(2).optional(),
+    email: z.string().email(),
+    senha: z.string().min(6).optional()
+  }).optional()
 });
 
 export const supplierNotificationConfigSchema = z.object({

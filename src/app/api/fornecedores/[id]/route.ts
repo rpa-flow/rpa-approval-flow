@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSessionManager } from "@/lib/auth";
+import { getSessionManager, hashPassword } from "@/lib/auth";
 import { updateSupplierSchema } from "@/lib/validations";
 
 async function validateAdmin() {
@@ -44,7 +44,67 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     });
 
-    return NextResponse.json(supplier);
+    if (parsed.data.addManager) {
+      const { email, nome, senha } = parsed.data.addManager;
+
+      let manager = await prisma.manager.findUnique({ where: { email } });
+      if (!manager) {
+        if (!nome || !senha) {
+          return NextResponse.json(
+            { error: "Para criar novo gestor, informe nome e senha junto do e-mail." },
+            { status: 400 }
+          );
+        }
+
+        manager = await prisma.manager.create({
+          data: {
+            nome,
+            email,
+            senhaHash: hashPassword(senha)
+          }
+        });
+      }
+
+      await prisma.managerSupplier.upsert({
+        where: {
+          managerId_supplierId: {
+            managerId: manager.id,
+            supplierId: params.id
+          }
+        },
+        update: {},
+        create: {
+          managerId: manager.id,
+          supplierId: params.id
+        }
+      });
+    }
+
+    const fullSupplier = await prisma.supplier.findUnique({
+      where: { id: params.id },
+      include: {
+        managerSuppliers: {
+          include: {
+            manager: {
+              select: {
+                id: true,
+                nome: true,
+                email: true,
+                role: true,
+                ativo: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return NextResponse.json({
+      id: fullSupplier?.id,
+      nome: fullSupplier?.nome,
+      cnpj: fullSupplier?.cnpj,
+      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? []
+    });
   } catch (error) {
     return NextResponse.json(
       { error: "Não foi possível atualizar fornecedor.", details: (error as Error).message },

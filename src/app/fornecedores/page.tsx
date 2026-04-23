@@ -39,7 +39,13 @@ export default function FornecedoresPage() {
     managerSenha: ""
   });
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ nome: "", cnpj: "" });
+  const [editForm, setEditForm] = useState({
+    nome: "",
+    cnpj: "",
+    addManagerNome: "",
+    addManagerEmail: "",
+    addManagerSenha: ""
+  });
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -109,7 +115,10 @@ export default function FornecedoresPage() {
     setEditingSupplierId(supplier.id);
     setEditForm({
       nome: supplier.nome,
-      cnpj: supplier.cnpj ?? ""
+      cnpj: supplier.cnpj ?? "",
+      addManagerNome: "",
+      addManagerEmail: "",
+      addManagerSenha: ""
     });
   }
 
@@ -123,7 +132,14 @@ export default function FornecedoresPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nome: editForm.nome,
-        cnpj: cnpjDigits || null
+        cnpj: cnpjDigits || null,
+        addManager: editForm.addManagerEmail
+          ? {
+              nome: editForm.addManagerNome || undefined,
+              email: editForm.addManagerEmail,
+              senha: editForm.addManagerSenha || undefined
+            }
+          : undefined
       })
     });
 
@@ -274,6 +290,37 @@ export default function FornecedoresPage() {
                     placeholder="12345678000199"
                     value={editForm.cnpj}
                     onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))}
+                  />
+                </label>
+                <h3>Vincular gestor ao fornecedor (opcional)</h3>
+                <p className="muted small">
+                  Se o e-mail já existir, apenas vinculamos ao fornecedor. Se não existir, informe também nome e senha para criar.
+                </p>
+                <label>
+                  E-mail do gestor
+                  <input
+                    type="email"
+                    placeholder="gestor@empresa.com"
+                    value={editForm.addManagerEmail}
+                    onChange={(e) => setEditForm((p) => ({ ...p, addManagerEmail: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  Nome do gestor (novo)
+                  <input
+                    placeholder="Maria Gestora"
+                    value={editForm.addManagerNome}
+                    onChange={(e) => setEditForm((p) => ({ ...p, addManagerNome: e.target.value }))}
+                  />
+                </label>
+                <label>
+                  Senha inicial (novo)
+                  <input
+                    type="password"
+                    minLength={6}
+                    placeholder="mínimo 6 caracteres"
+                    value={editForm.addManagerSenha}
+                    onChange={(e) => setEditForm((p) => ({ ...p, addManagerSenha: e.target.value }))}
                   />
                 </label>
                 <div className="actions-row">
