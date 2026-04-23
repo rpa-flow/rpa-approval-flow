@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppHeader } from "@/app/components/app-header";
 
 type Me = {
   manager: {
@@ -105,23 +105,16 @@ export default function CadastrosPage() {
 
   return (
     <main className="container container-wide">
-      <header className="topbar card">
-        <div>
-          <h1>Cadastros administrativos</h1>
-          <p className="muted">Cadastre fornecedores e gestores sem poluir a tela de configurações.</p>
-        </div>
-        <div className="actions-row">
-          <Link href="/fornecedores" className="button-secondary">
-            Fornecedores
-          </Link>
-          <Link href="/configuracoes" className="button-secondary">
-            Voltar às configurações
-          </Link>
-          <Link href="/dashboard" className="button-secondary">
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader
+        title="Cadastros administrativos"
+        subtitle="Cadastre fornecedores e gestores para operação diária."
+        links={[
+          { href: "/dashboard", label: "Dashboard", icon: "📊" },
+          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+          { href: "/perfil", label: "Perfil", icon: "👤" }
+        ]}
+      />
 
       <section className="card">
         <h2>Novo fornecedor + gestor</h2>

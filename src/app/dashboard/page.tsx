@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppHeader } from "@/app/components/app-header";
 
 type Me = {
   manager: {
@@ -93,25 +93,23 @@ export default function DashboardPage() {
 
   return (
     <main className="container container-wide">
-      <header className="topbar card">
-        <div>
-          <h1>Dashboard de Notas</h1>
-          {me && (
-            <p className="muted">
-              {me.manager.nome} ({me.manager.email}) — fornecedores: {me.manager.suppliers.map((s) => s.supplierName).join(", ")}
-            </p>
-          )}
-        </div>
-        <div className="actions-row">
-          <Link href="/fornecedores" className="button-secondary">
-            Fornecedores
-          </Link>
-          <Link href="/configuracoes" className="button-secondary">
-            Configurações
-          </Link>
-          <button onClick={logout}>Sair</button>
-        </div>
-      </header>
+      <AppHeader
+        title="Dashboard de Notas"
+        subtitle={
+          me
+            ? `${me.manager.nome} (${me.manager.email}) — fornecedores: ${me.manager.suppliers.map((s) => s.supplierName).join(", ")}`
+            : undefined
+        }
+        links={[
+          { href: "/dashboard", label: "Dashboard", icon: "📊" },
+          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+          { href: "/perfil", label: "Perfil", icon: "👤" }
+        ]}
+      />
+      <div className="actions-row">
+        <button onClick={logout}>Sair</button>
+      </div>
 
       <section className="stats-grid">
         <article className="card stat-card">

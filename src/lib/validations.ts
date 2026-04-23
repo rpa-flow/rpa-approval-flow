@@ -67,3 +67,8 @@ export const notificationRuleSchema = z.object({
   ativo: z.boolean(),
   destinatarioAdicional: z.string().email().nullable().optional()
 });
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6)
+});
