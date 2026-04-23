@@ -36,10 +36,11 @@ async function buildDueReminders() {
       const recorrenciaDias = config?.recorrenciaDias ?? 2;
       const maxTentativas = config?.maxTentativas ?? 2;
       const ativo = config?.ativo ?? true;
-      const lastReferenceDate = config?.ultimoEnvioEm ?? invoice.ultimoLembreteEm ?? invoice.dataAtualizacao;
+      const neverNotified = invoice.tentativasNotificacao === 0 && !invoice.ultimoLembreteEm;
+      const lastReferenceDate = invoice.ultimoLembreteEm ?? invoice.dataAtualizacao;
       const diffMs = now.getTime() - new Date(lastReferenceDate).getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const due = ativo && diffDays >= recorrenciaDias;
+      const due = ativo && (neverNotified || diffDays >= recorrenciaDias);
 
       return {
         invoiceId: invoice.id,
@@ -55,6 +56,7 @@ async function buildDueReminders() {
         maxTentativas,
         tentativasAtuais: invoice.tentativasNotificacao,
         diasDesdeUltimoEnvioOuAtualizacao: diffDays,
+        primeiroEnvioPendente: neverNotified,
         due,
         emailsGestores: invoice.fornecedor.managerSuppliers.map((ms) => ms.manager.email),
         emailsExtras: config?.emailsExtras ?? []
