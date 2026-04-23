@@ -29,9 +29,14 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
         <button type="button" className="button-secondary menu-toggle" onClick={() => setOpen((v) => !v)}>
           ☰ Menu
         </button>
-        <nav className={`actions-row nav-menu ${open ? "open" : ""}`}>
+        <nav className={`nav-menu ${open ? "open" : ""}`}>
           {links.map((link) => (
-            <Link key={`${link.href}-${link.label}`} href={link.href} className="button-secondary">
+            <Link
+              key={`${link.href}-${link.label}`}
+              href={link.href}
+              className="button-secondary"
+              onClick={() => setOpen(false)}
+            >
               {link.icon ? `${link.icon} ` : ""}
               {link.label}
             </Link>

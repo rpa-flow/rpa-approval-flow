@@ -112,7 +112,7 @@ export default function CadastrosPage() {
           { href: "/dashboard", label: "Dashboard", icon: "📊" },
           { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
           { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
-          { href: "/configuracoes#perfil", label: "Perfil", icon: "👤" }
+          { href: "/perfil", label: "Perfil", icon: "👤" }
         ]}
       />
 

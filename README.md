@@ -57,6 +57,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - `/login`: autenticação do gestor.
 - `/dashboard`: listagem profissional de notas com filtros (pendentes, concluídas, todas).
 - `/configuracoes`: tela dedicada para regras globais e regras do fornecedor (recorrência + e-mails extras).
+- `/perfil`: tela de perfil com alteração de senha do usuário logado.
 - `/fornecedores`: entrada da gestão de fornecedores.
   - para `ADMIN`, mostra tabela com fornecedores, ação de editar e botão "Adicionar novo fornecedor";
   - para `GESTOR`, mostra os fornecedores vinculados ao usuário em modo consulta.

@@ -20,11 +20,6 @@ export default function ConfiguracoesPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
   const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, maxTentativas: 2, emailsExtras: "" });
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: ""
-  });
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -101,37 +96,6 @@ export default function ConfiguracoesPage() {
     );
   }
 
-  async function alterarSenha(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMessage("A confirmação da nova senha não confere.");
-      return;
-    }
-
-    const res = await fetch("/api/auth/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword
-      })
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => null);
-      setMessage(payload?.error ?? "Erro ao alterar senha.");
-      return;
-    }
-
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: ""
-    });
-    setMessage("Senha alterada com sucesso.");
-  }
-
   return (
     <main className="container container-wide">
       <AppHeader
@@ -141,7 +105,7 @@ export default function ConfiguracoesPage() {
           { href: "/dashboard", label: "Dashboard", icon: "📊" },
           { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
           { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
-          { href: "/configuracoes#perfil", label: "Perfil", icon: "👤" }
+          { href: "/perfil", label: "Perfil", icon: "👤" }
         ]}
       />
 
@@ -257,43 +221,6 @@ export default function ConfiguracoesPage() {
             <button type="submit">Salvar regra do fornecedor</button>
           </form>
         </article>
-      </section>
-
-      <section className="card" id="perfil">
-        <h2>Alterar minha senha</h2>
-        <p className="muted small">Atualize sua senha de acesso com segurança.</p>
-        <form onSubmit={alterarSenha} className="form-grid">
-          <label>
-            Senha atual
-            <input
-              required
-              type="password"
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
-            />
-          </label>
-          <label>
-            Nova senha
-            <input
-              required
-              minLength={6}
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
-            />
-          </label>
-          <label>
-            Confirmar nova senha
-            <input
-              required
-              minLength={6}
-              type="password"
-              value={passwordForm.confirmPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
-            />
-          </label>
-          <button type="submit">Alterar senha</button>
-        </form>
       </section>
 
       {message && <p className="message">{message}</p>}
