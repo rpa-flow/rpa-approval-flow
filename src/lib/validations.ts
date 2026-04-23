@@ -35,6 +35,11 @@ export const supplierSchema = z.object({
   )
 });
 
+export const updateSupplierSchema = z.object({
+  nome: z.string().min(2),
+  cnpj: z.string().regex(/^\d{14}$/).nullable().optional()
+});
+
 export const supplierNotificationConfigSchema = z.object({
   ativo: z.boolean(),
   recorrenciaDias: z.number().int().min(1).max(90),
