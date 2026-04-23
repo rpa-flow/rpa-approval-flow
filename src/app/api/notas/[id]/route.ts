@@ -40,6 +40,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const payloadToSave = { ...parsed.data };
 
+  if (manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
+    return NextResponse.json(
+      { error: "Somente ADMIN pode alterar tentativas de notificação." },
+      { status: 403 }
+    );
+  }
+
   if (payloadToSave.status === "PROCESSADO") {
     payloadToSave.processada = true;
     payloadToSave.statusProcessamento = "CONCLUIDO";
@@ -60,9 +67,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
+  const dataToUpdate = {
+    ...payloadToSave,
+    ultimoLembreteEm:
+      payloadToSave.ultimoLembreteEm === undefined
+        ? undefined
+        : payloadToSave.ultimoLembreteEm === null
+          ? null
+          : new Date(payloadToSave.ultimoLembreteEm)
+  };
+
   const updated = await prisma.invoice.update({
     where: { id: params.id },
-    data: payloadToSave
+    data: dataToUpdate
   });
 
   return NextResponse.json(updated);

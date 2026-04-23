@@ -26,6 +26,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - `GET /api/notas` (integração geral)
 - `POST /api/notas` (pode ser protegido por `x-api-key` via `INVOICE_INGEST_API_KEY`)
 - `PATCH /api/notas/:id` (requer login; valida acesso por fornecedor)
+  - `ADMIN` pode ajustar manualmente `tentativasNotificacao` e `ultimoLembreteEm`.
 - `GET /api/notas/minhas` (requer login; retorna apenas notas permitidas)
 - `GET /api/notas/lembretes` (lista notas pendentes de lembrete para job diário, opcionalmente protegido por `x-api-key`)
 - `POST /api/notas/lembretes` (processa tentativas de lembrete; ao atingir `maxTentativas`, marca nota como `EXPIRADA`)

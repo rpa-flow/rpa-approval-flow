@@ -17,7 +17,9 @@ export const updateInvoiceSchema = z
   .object({
     status: z.nativeEnum(InvoiceStatus).optional(),
     processada: z.boolean().optional(),
-    statusProcessamento: z.nativeEnum(ProcessingStatus).optional()
+    statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),
+    tentativasNotificacao: z.number().int().min(0).optional(),
+    ultimoLembreteEm: z.string().datetime().nullable().optional()
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "Informe ao menos um campo para atualizar."
