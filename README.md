@@ -29,6 +29,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
   - `ADMIN` pode ajustar manualmente `tentativasNotificacao` e `ultimoLembreteEm`.
 - `GET /api/notas/minhas` (requer login; retorna apenas notas permitidas)
 - `GET /api/notas/lembretes` (lista notas pendentes de lembrete para job diário, opcionalmente protegido por `x-api-key`)
+  - use `?contabilizar=true` para já incrementar tentativas na mesma chamada.
 - `POST /api/notas/lembretes` (processa tentativas de lembrete; ao atingir `maxTentativas`, marca nota como `EXPIRADA`)
   - notas sem nenhum envio anterior (`tentativasNotificacao = 0`) entram como lembrete devido imediatamente.
 

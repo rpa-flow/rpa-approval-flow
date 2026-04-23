@@ -65,37 +65,8 @@ async function buildDueReminders() {
     .filter((item) => item.due);
 }
 
-function validateReminderApiKey(request: NextRequest) {
-  const apiKey = process.env.REMINDER_API_KEY;
-  if (!apiKey) return null;
-
-  const keyFromRequest = request.headers.get("x-api-key");
-  if (keyFromRequest !== apiKey) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-  }
-
-  return null;
-}
-
-export async function GET(request: NextRequest) {
-  const unauthorized = validateReminderApiKey(request);
-  if (unauthorized) return unauthorized;
-
-  const reminders = await buildDueReminders();
-
-  return NextResponse.json({
-    count: reminders.length,
-    reminders
-  });
-}
-
-export async function POST(request: NextRequest) {
-  const unauthorized = validateReminderApiKey(request);
-  if (unauthorized) return unauthorized;
-
-  const reminders = await buildDueReminders();
+async function processDueReminders(reminders: Awaited<ReturnType<typeof buildDueReminders>>) {
   const now = new Date();
-
   const processed = [];
 
   for (const reminder of reminders) {
@@ -129,6 +100,53 @@ export async function POST(request: NextRequest) {
       status: updated.status
     });
   }
+
+  return processed;
+}
+
+function validateReminderApiKey(request: NextRequest) {
+  const apiKey = process.env.REMINDER_API_KEY;
+  if (!apiKey) return null;
+
+  const keyFromRequest = request.headers.get("x-api-key");
+  if (keyFromRequest !== apiKey) {
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  }
+
+  return null;
+}
+
+export async function GET(request: NextRequest) {
+  const unauthorized = validateReminderApiKey(request);
+  if (unauthorized) return unauthorized;
+
+  const reminders = await buildDueReminders();
+  const contabilizar = request.nextUrl.searchParams.get("contabilizar") === "true";
+
+  if (contabilizar) {
+    const processed = await processDueReminders(reminders);
+
+    return NextResponse.json({
+      count: reminders.length,
+      reminders,
+      contabilizado: true,
+      processed
+    });
+  }
+
+  return NextResponse.json({
+    count: reminders.length,
+    reminders,
+    contabilizado: false
+  });
+}
+
+export async function POST(request: NextRequest) {
+  const unauthorized = validateReminderApiKey(request);
+  if (unauthorized) return unauthorized;
+
+  const reminders = await buildDueReminders();
+  const processed = await processDueReminders(reminders);
 
   return NextResponse.json({
     count: processed.length,
