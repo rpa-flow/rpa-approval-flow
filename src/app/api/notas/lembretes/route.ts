@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendApprovalRequestEmail } from "@/lib/email";
 
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
@@ -65,13 +66,35 @@ async function buildDueReminders() {
     .filter((item) => item.due);
 }
 
-async function processDueReminders(reminders: Awaited<ReturnType<typeof buildDueReminders>>) {
+async function processDueReminders(
+  reminders: Awaited<ReturnType<typeof buildDueReminders>>,
+  options?: { sendEmails?: boolean }
+) {
   const now = new Date();
   const processed = [];
+  const sendEmails = options?.sendEmails ?? false;
 
   for (const reminder of reminders) {
     const nextTentativa = reminder.tentativasAtuais + 1;
     const shouldExpire = nextTentativa >= reminder.maxTentativas;
+
+    const recipients = Array.from(new Set([...reminder.emailsGestores, ...reminder.emailsExtras].filter(Boolean)));
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    if (sendEmails && recipients.length) {
+      try {
+        await sendApprovalRequestEmail({
+          invoiceNumber: reminder.numeroNota,
+          codigoIdentificador: reminder.codigoIdentificador,
+          supplierName: reminder.fornecedor.nome,
+          recipients
+        });
+        emailSent = true;
+      } catch (error) {
+        emailError = (error as Error).message;
+      }
+    }
 
     const updated = await prisma.invoice.update({
       where: { id: reminder.invoiceId },
@@ -97,7 +120,10 @@ async function processDueReminders(reminders: Awaited<ReturnType<typeof buildDue
     processed.push({
       invoiceId: updated.id,
       tentativasNotificacao: updated.tentativasNotificacao,
-      status: updated.status
+      status: updated.status,
+      emailSent,
+      emailError,
+      recipients
     });
   }
 
@@ -122,14 +148,15 @@ export async function GET(request: NextRequest) {
 
   const reminders = await buildDueReminders();
   const contabilizar = request.nextUrl.searchParams.get("contabilizar") === "true";
+  const enviarEmail = request.nextUrl.searchParams.get("enviarEmail") !== "false";
 
   if (contabilizar) {
-    const processed = await processDueReminders(reminders);
+    const processed = await processDueReminders(reminders, { sendEmails: enviarEmail });
 
     return NextResponse.json({
-      count: reminders.length,
-      reminders,
+      count: processed.length,
       contabilizado: true,
+      emailsEnviados: processed.filter((p) => p.emailSent).length,
       processed
     });
   }
@@ -146,10 +173,11 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const reminders = await buildDueReminders();
-  const processed = await processDueReminders(reminders);
+  const processed = await processDueReminders(reminders, { sendEmails: true });
 
   return NextResponse.json({
     count: processed.length,
+    emailsEnviados: processed.filter((p) => p.emailSent).length,
     processed
   });
 }
