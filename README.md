@@ -45,6 +45,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - `GET /api/fornecedores` (requer `ADMIN`)
 - `POST /api/fornecedores` (requer `ADMIN`)
 - `PATCH /api/fornecedores/:id` (requer `ADMIN`, edição de nome/CNPJ e vínculo de gestor)
+- `GET /api/gestores` (requer `ADMIN`, lista gestores existentes para seleção)
 
 ## Frontend
 

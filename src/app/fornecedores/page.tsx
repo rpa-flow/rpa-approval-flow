@@ -27,9 +27,18 @@ type SupplierListItem = {
   }>;
 };
 
+type ManagerItem = {
+  id: string;
+  nome: string;
+  email: string;
+  role: "ADMIN" | "GESTOR";
+  ativo: boolean;
+};
+
 export default function FornecedoresPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
+  const [managers, setManagers] = useState<ManagerItem[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({
     nome: "",
@@ -42,6 +51,8 @@ export default function FornecedoresPage() {
   const [editForm, setEditForm] = useState({
     nome: "",
     cnpj: "",
+    selectedManagerEmail: "",
+    createNewManager: false,
     addManagerNome: "",
     addManagerEmail: "",
     addManagerSenha: ""
@@ -64,6 +75,12 @@ export default function FornecedoresPage() {
       if (suppliersRes.ok) {
         const payload = (await suppliersRes.json()) as SupplierListItem[];
         setSuppliers(payload);
+      }
+
+      const managersRes = await fetch("/api/gestores");
+      if (managersRes.ok) {
+        const payload = (await managersRes.json()) as ManagerItem[];
+        setManagers(payload);
       }
     }
   }
@@ -116,6 +133,8 @@ export default function FornecedoresPage() {
     setEditForm({
       nome: supplier.nome,
       cnpj: supplier.cnpj ?? "",
+      selectedManagerEmail: "",
+      createNewManager: false,
       addManagerNome: "",
       addManagerEmail: "",
       addManagerSenha: ""
@@ -133,12 +152,16 @@ export default function FornecedoresPage() {
       body: JSON.stringify({
         nome: editForm.nome,
         cnpj: cnpjDigits || null,
-        addManager: editForm.addManagerEmail
+        addManager: editForm.createNewManager
           ? {
               nome: editForm.addManagerNome || undefined,
               email: editForm.addManagerEmail,
               senha: editForm.addManagerSenha || undefined
             }
+          : editForm.selectedManagerEmail
+            ? {
+                email: editForm.selectedManagerEmail
+              }
           : undefined
       })
     });
@@ -294,8 +317,37 @@ export default function FornecedoresPage() {
                 </label>
                 <h3>Vincular gestor ao fornecedor (opcional)</h3>
                 <p className="muted small">
-                  Se o e-mail já existir, apenas vinculamos ao fornecedor. Se não existir, informe também nome e senha para criar.
+                  Selecione um gestor existente ou marque a opção para criar um novo.
                 </p>
+                <label>
+                  Gestores existentes
+                  <select
+                    value={editForm.selectedManagerEmail}
+                    onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerEmail: e.target.value }))}
+                    disabled={editForm.createNewManager}
+                  >
+                    <option value="">Selecione um gestor existente</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.email}>
+                        {manager.nome} ({manager.email})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={editForm.createNewManager}
+                    onChange={(e) =>
+                      setEditForm((p) => ({
+                        ...p,
+                        createNewManager: e.target.checked,
+                        selectedManagerEmail: e.target.checked ? "" : p.selectedManagerEmail
+                      }))
+                    }
+                  />
+                  Criar e vincular novo gestor
+                </label>
                 <label>
                   E-mail do gestor
                   <input
@@ -303,6 +355,7 @@ export default function FornecedoresPage() {
                     placeholder="gestor@empresa.com"
                     value={editForm.addManagerEmail}
                     onChange={(e) => setEditForm((p) => ({ ...p, addManagerEmail: e.target.value }))}
+                    disabled={!editForm.createNewManager}
                   />
                 </label>
                 <label>
@@ -311,6 +364,7 @@ export default function FornecedoresPage() {
                     placeholder="Maria Gestora"
                     value={editForm.addManagerNome}
                     onChange={(e) => setEditForm((p) => ({ ...p, addManagerNome: e.target.value }))}
+                    disabled={!editForm.createNewManager}
                   />
                 </label>
                 <label>
@@ -321,6 +375,7 @@ export default function FornecedoresPage() {
                     placeholder="mínimo 6 caracteres"
                     value={editForm.addManagerSenha}
                     onChange={(e) => setEditForm((p) => ({ ...p, addManagerSenha: e.target.value }))}
+                    disabled={!editForm.createNewManager}
                   />
                 </label>
                 <div className="actions-row">
