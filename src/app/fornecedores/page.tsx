@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppHeader } from "@/app/components/app-header";
 
 type Me = {
   manager: {
@@ -178,20 +178,16 @@ export default function FornecedoresPage() {
 
   return (
     <main className="container container-wide">
-      <header className="topbar card">
-        <div>
-          <h1>Fornecedores</h1>
-          <p className="muted">Visualização dos fornecedores vinculados ao seu usuário.</p>
-        </div>
-        <div className="actions-row">
-          <Link href="/dashboard" className="button-secondary">
-            Dashboard
-          </Link>
-          <Link href="/configuracoes" className="button-secondary">
-            Configurações
-          </Link>
-        </div>
-      </header>
+      <AppHeader
+        title="Fornecedores"
+        subtitle="Visualização e administração de fornecedores."
+        links={[
+          { href: "/dashboard", label: "Dashboard", icon: "📊" },
+          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+          { href: "/configuracoes#perfil", label: "Perfil", icon: "👤" }
+        ]}
+      />
 
       {me.manager.role === "ADMIN" ? (
         <>

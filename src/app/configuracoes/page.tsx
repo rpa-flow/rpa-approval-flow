@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppHeader } from "@/app/components/app-header";
 
 type Me = {
   manager: {
@@ -133,20 +134,16 @@ export default function ConfiguracoesPage() {
 
   return (
     <main className="container container-wide">
-      <header className="topbar card">
-        <div>
-          <h1>Configurações</h1>
-          <p className="muted">Gerencie regras globais e políticas de lembrete por fornecedor.</p>
-        </div>
-        <div className="actions-row">
-          <Link href="/dashboard" className="button-secondary">
-            Dashboard
-          </Link>
-          <Link href="/fornecedores" className="button-secondary">
-            Fornecedores
-          </Link>
-        </div>
-      </header>
+      <AppHeader
+        title="Configurações"
+        subtitle="Gerencie regras globais, lembretes por fornecedor e sua conta."
+        links={[
+          { href: "/dashboard", label: "Dashboard", icon: "📊" },
+          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+          { href: "/configuracoes#perfil", label: "Perfil", icon: "👤" }
+        ]}
+      />
 
       {me?.manager.role === "ADMIN" && (
         <section className="card">
@@ -262,7 +259,7 @@ export default function ConfiguracoesPage() {
         </article>
       </section>
 
-      <section className="card">
+      <section className="card" id="perfil">
         <h2>Alterar minha senha</h2>
         <p className="muted small">Atualize sua senha de acesso com segurança.</p>
         <form onSubmit={alterarSenha} className="form-grid">

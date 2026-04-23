@@ -61,6 +61,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
   - para `ADMIN`, mostra tabela com fornecedores, ação de editar e botão "Adicionar novo fornecedor";
   - para `GESTOR`, mostra os fornecedores vinculados ao usuário em modo consulta.
 - `/cadastros`: tela separada (somente `ADMIN`) para cadastro de fornecedores e gestores.
+- Header com menu rápido (Dashboard, Fornecedores, Configurações e Perfil) para navegação diária.
 
 ## Setup
 
