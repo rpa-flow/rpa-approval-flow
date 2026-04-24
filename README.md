@@ -77,6 +77,12 @@ npm run prisma:seed
 npm run dev
 ```
 
+## Deploy na Vercel (Prisma)
+
+Este projeto já está configurado para rodar `prisma generate` durante o build (`npm run build` e `vercel-build`), evitando erro de `PrismaClientInitializationError` causado por cache de dependências da Vercel.
+
+Garanta também as variáveis de ambiente em produção (`DATABASE_URL`, `AUTH_SECRET`, etc.).
+
 ## SMTP recomendado para envio real
 
 Opções simples para começar:
