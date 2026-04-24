@@ -125,6 +125,11 @@ Usuário criado/atualizado pelo seed:
 - senha: `123456`
 - role: `ADMIN`
 
+Se em produção/login aparecer erro 500, valide:
+- `DATABASE_URL` configurada na Vercel;
+- se o banco possui usuário válido (`npm run prisma:seed` em ambiente de setup);
+- se `senhaHash` dos gestores está no formato esperado (`salt:hash`).
+
 
 ## Migrations versionadas
 
