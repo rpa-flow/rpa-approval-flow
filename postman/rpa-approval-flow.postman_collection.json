@@ -345,6 +345,43 @@
           }
         },
         {
+          "name": "Criar nota (via XML)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{xApiKey}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notas"
+              ]
+            },
+            "description": "Exemplo de ingestão enviando XML NFSe no campo `xml`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"xml\": \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><NFSE><infNFSe><ide><nNFSe>1001</nNFSe><cLocEmi>3550308</cLocEmi><cLocPrestacao>3550308</cLocPrestacao></ide><prest><CNPJ>12345678000199</CNPJ><xNome>Fornecedor Exemplo</xNome><email>financeiro@fornecedor.com</email></prest><tomador><CPFCNPJ>99887766000155</CPFCNPJ><xNome>Empresa Tomadora</xNome><email>fiscal@tomador.com</email></tomador><servico><vServ>1500.75</vServ><vISSQN>75.03</vISSQN><aliq>0.05</aliq></servico></infNFSe></NFSE>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Atualizar nota",
           "request": {
             "method": "PATCH",
