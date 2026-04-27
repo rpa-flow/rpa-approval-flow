@@ -33,6 +33,14 @@ type Invoice = {
 type QuickFilter = "todas" | "pendentes" | "concluidas";
 type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
 
+const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "TODOS", label: "Todos" },
+  { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
+  { value: "APROVADO", label: "Aprovado" },
+  { value: "PROCESSADO", label: "Processado" },
+  { value: "EXPIRADA", label: "Expirada" }
+];
+
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -148,29 +156,31 @@ export default function DashboardPage() {
       <section className="card">
         <div className="filters-header">
           <h2>Notas fiscais</h2>
-          <div className="filter-group">
-            <button className={quickFilter === "pendentes" ? "chip active" : "chip"} onClick={() => setQuickFilter("pendentes")}>Pendentes</button>
-            <button className={quickFilter === "concluidas" ? "chip active" : "chip"} onClick={() => setQuickFilter("concluidas")}>Concluídas</button>
-            <button className={quickFilter === "todas" ? "chip active" : "chip"} onClick={() => setQuickFilter("todas")}>Todas</button>
+          <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(130px, 1fr))", gap: 8 }}>
+            <button className={quickFilter === "pendentes" ? "chip active" : "chip"} onClick={() => setQuickFilter("pendentes")} style={{ width: "100%" }}>Pendentes</button>
+            <button className={quickFilter === "concluidas" ? "chip active" : "chip"} onClick={() => setQuickFilter("concluidas")} style={{ width: "100%" }}>Concluídas</button>
+            <button className={quickFilter === "todas" ? "chip active" : "chip"} onClick={() => setQuickFilter("todas")} style={{ width: "100%" }}>Todas</button>
           </div>
         </div>
 
         <div className="filters-header" style={{ marginTop: 12 }}>
-          <div className="filter-group" style={{ flexWrap: "wrap" }}>
-            <label className="small muted">
-              Status
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-                style={{ marginLeft: 8 }}
+          <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 8, width: "100%" }}>
+            {STATUS_FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={statusFilter === option.value ? "chip active" : "chip"}
+                onClick={() => setStatusFilter(option.value)}
+                style={{ width: "100%" }}
               >
-                <option value="TODOS">Todos</option>
-                <option value="AGUARDANDO_APROVACAO">Aguardando aprovação</option>
-                <option value="APROVADO">Aprovado</option>
-                <option value="PROCESSADO">Processado</option>
-                <option value="EXPIRADA">Expirada</option>
-              </select>
-            </label>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="filters-header" style={{ marginTop: 12 }}>
+          <div className="filter-group" style={{ flexWrap: "wrap", gap: 8 }}>
             <label className="small muted">
               De
               <input
@@ -193,10 +203,12 @@ export default function DashboardPage() {
               type="button"
               className="chip"
               onClick={() => {
+                setQuickFilter("pendentes");
                 setStatusFilter("TODOS");
                 setStartDate("");
                 setEndDate("");
               }}
+              style={{ minWidth: 140 }}
             >
               Limpar filtros
             </button>
