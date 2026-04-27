@@ -7,6 +7,33 @@ import { parseNFSeXml } from "@/lib/nfse-parser";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
+type ManualInvoiceData = {
+  numeroNota: string;
+  codigoIdentificador: string;
+  nDfse?: string;
+  localEmissao?: string;
+  localPrestacao?: string;
+  municipioIncidencia?: string;
+  itemTributacaoNac?: string;
+  itemTributacaoMun?: string;
+  nbsDescricao?: string;
+  dataProcessamento?: string;
+  dataEmissao?: string;
+  dataCompetencia?: string;
+  prestadorCnpj?: string;
+  prestadorNome?: string;
+  prestadorEmail?: string;
+  tomadorCnpj?: string;
+  tomadorNome?: string;
+  tomadorEmail?: string;
+  valorBaseCalculo?: number;
+  valorIssqn?: number;
+  valorTotalRetido?: number;
+  valorLiquido?: number;
+  valorServico?: number;
+  aliquota?: number;
+};
+
 function shouldIncludeXml(request: NextRequest) {
   return request.nextUrl.searchParams.get("includeXml") === "true";
 }
@@ -81,19 +108,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let nfseData:
-    | ReturnType<typeof parseNFSeXml>
-    | {
-        numeroNota: string;
-        codigoIdentificador: string;
-      };
+  let nfseData: ReturnType<typeof parseNFSeXml> | ManualInvoiceData;
 
   try {
     nfseData = parsed.data.xml
       ? parseNFSeXml(parsed.data.xml)
       : {
           numeroNota: parsed.data.numeroNota!,
-          codigoIdentificador: parsed.data.codigoIdentificador ?? `${Date.now()}`.padEnd(44, "0")
+          codigoIdentificador: parsed.data.codigoIdentificador ?? `${Date.now()}`.padEnd(44, "0"),
+          nDfse: parsed.data.nDfse,
+          localEmissao: parsed.data.localEmissao,
+          localPrestacao: parsed.data.localPrestacao,
+          municipioIncidencia: parsed.data.municipioIncidencia,
+          itemTributacaoNac: parsed.data.itemTributacaoNac,
+          itemTributacaoMun: parsed.data.itemTributacaoMun,
+          nbsDescricao: parsed.data.nbsDescricao,
+          dataProcessamento: parsed.data.dataProcessamento,
+          dataEmissao: parsed.data.dataEmissao,
+          dataCompetencia: parsed.data.dataCompetencia,
+          prestadorCnpj: parsed.data.prestadorCnpj,
+          prestadorNome: parsed.data.prestadorNome,
+          prestadorEmail: parsed.data.prestadorEmail,
+          tomadorCnpj: parsed.data.tomadorCnpj,
+          tomadorNome: parsed.data.tomadorNome,
+          tomadorEmail: parsed.data.tomadorEmail,
+          valorBaseCalculo: parsed.data.valorBaseCalculo,
+          valorIssqn: parsed.data.valorIssqn,
+          valorTotalRetido: parsed.data.valorTotalRetido,
+          valorLiquido: parsed.data.valorLiquido,
+          valorServico: parsed.data.valorServico,
+          aliquota: parsed.data.aliquota
         };
   } catch (error) {
     return NextResponse.json(
@@ -147,7 +191,7 @@ export async function POST(request: NextRequest) {
   }
 
   const alreadyExists = await prisma.invoice.findUnique({
-    where: { codigoIdentificador: nfseData.codigoIdentificador }
+    where: { codigoIdentificador: String(nfseData.codigoIdentificador) }
   });
 
   if (alreadyExists) {
@@ -159,8 +203,8 @@ export async function POST(request: NextRequest) {
 
   const invoice = await prisma.invoice.create({
     data: {
-      numeroNota: nfseData.numeroNota,
-      codigoIdentificador: nfseData.codigoIdentificador,
+      numeroNota: String(nfseData.numeroNota),
+      codigoIdentificador: String(nfseData.codigoIdentificador),
       fornecedorId: supplier.id,
       nDfse: "nDfse" in nfseData ? nfseData.nDfse : undefined,
       xmlOriginal: parsed.data.xml,

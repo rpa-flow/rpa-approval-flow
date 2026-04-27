@@ -332,10 +332,10 @@
                 "notas"
               ]
             },
-            "description": "",
+            "description": "Envie `xml` para extração automática ou informe os campos manualmente (ex.: prestador/tomador/valores/datas).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"numeroNota\": \"1001\",\n  \"codigoIdentificador\": \"12345678901234567890123456789012345678901234\",\n  \"fornecedorId\": \"{{supplierId}}\"\n}",
+              "raw": "{\n  \"numeroNota\": \"1001\",\n  \"codigoIdentificador\": \"12345678901234567890123456789012345678901234\",\n  \"fornecedorId\": \"{{supplierId}}\",\n  \"prestadorNome\": \"Fornecedor Exemplo\",\n  \"prestadorCnpj\": \"12345678000199\",\n  \"tomadorNome\": \"Empresa Tomadora\",\n  \"valorServico\": 1500.75,\n  \"valorIssqn\": 75.03,\n  \"dataEmissao\": \"2026-04-27T10:00:00.000Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
