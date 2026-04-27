@@ -281,13 +281,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/notas",
+              "raw": "{{baseUrl}}/api/notas?status=AGUARDANDO_APROVACAO",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "notas"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "AGUARDANDO_APROVACAO",
+                  "description": "Opcional. Valores: AGUARDANDO_APROVACAO, APROVADO, PROCESSADO, EXPIRADA.",
+                  "disabled": true
+                }
               ]
             },
             "description": ""

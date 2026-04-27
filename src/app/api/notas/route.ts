@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { InvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+
+const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
 function validateInvoiceIngestApiKey(request: NextRequest) {
   const apiKey = process.env.INVOICE_INGEST_API_KEY;
@@ -16,8 +19,21 @@ function validateInvoiceIngestApiKey(request: NextRequest) {
   return null;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const statusParam = request.nextUrl.searchParams.get("status");
+
+  if (statusParam && !ALLOWED_STATUSES.includes(statusParam as InvoiceStatus)) {
+    return NextResponse.json(
+      {
+        error: "Status inválido.",
+        allowed: ALLOWED_STATUSES
+      },
+      { status: 400 }
+    );
+  }
+
   const invoices = await prisma.invoice.findMany({
+    where: statusParam ? { status: statusParam as InvoiceStatus } : undefined,
     include: {
       fornecedor: {
         include: {
