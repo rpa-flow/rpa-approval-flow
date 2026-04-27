@@ -168,14 +168,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="filters-header" style={{ marginTop: 12 }}>
-          <div className="filter-group" style={{ flexWrap: "wrap", gap: 8 }}>
+          <div className="dashboard-filters-row">
             <label className="small muted">
               De
               <input
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                style={{ marginLeft: 8, minHeight: 42 }}
+                style={{ minHeight: 42 }}
               />
             </label>
             <label className="small muted">
@@ -184,18 +184,17 @@ export default function DashboardPage() {
                 type="date"
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
-                style={{ marginLeft: 8, minHeight: 42 }}
+                style={{ minHeight: 42 }}
               />
             </label>
             <button
               type="button"
-              className={statusFilter === "TODOS" && !startDate && !endDate ? "chip active" : "chip"}
               onClick={() => {
                 setStatusFilter("TODOS");
                 setStartDate("");
                 setEndDate("");
               }}
-              style={{ minWidth: 152, minHeight: 42 }}
+              className={`clear-filter-button ${statusFilter === "TODOS" && !startDate && !endDate ? "chip active" : "chip"}`}
             >
               Limpar filtros
             </button>
@@ -203,7 +202,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="table-wrap table-wrap-large">
-          <table>
+          <table className="dashboard-table">
             <thead>
               <tr>
                 <th>Fornecedor</th>
@@ -219,7 +218,7 @@ export default function DashboardPage() {
                 <tr key={invoice.id}>
                   <td>{invoice.fornecedor.nome}</td>
                   <td>{invoice.numeroNota}</td>
-                  <td>{invoice.codigoIdentificador}</td>
+                  <td className="identifier-cell">{invoice.codigoIdentificador}</td>
                   <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
