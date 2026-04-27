@@ -30,7 +30,6 @@ type Invoice = {
   };
 };
 
-type QuickFilter = "todas" | "pendentes" | "concluidas";
 type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
 
 const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
@@ -44,7 +43,6 @@ const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>("pendentes");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("TODOS");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -81,8 +79,6 @@ export default function DashboardPage() {
     const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
 
     return invoices.filter((invoice) => {
-      if (quickFilter === "pendentes" && invoice.status !== "AGUARDANDO_APROVACAO") return false;
-      if (quickFilter === "concluidas" && invoice.status === "AGUARDANDO_APROVACAO") return false;
       if (statusFilter !== "TODOS" && invoice.status !== statusFilter) return false;
 
       const updatedAt = new Date(invoice.dataAtualizacao);
@@ -91,7 +87,7 @@ export default function DashboardPage() {
 
       return true;
     });
-  }, [quickFilter, statusFilter, startDate, endDate, invoices]);
+  }, [statusFilter, startDate, endDate, invoices]);
 
   async function atualizarNota(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/notas/${id}`, {
@@ -156,14 +152,6 @@ export default function DashboardPage() {
       <section className="card">
         <div className="filters-header">
           <h2>Notas fiscais</h2>
-          <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(130px, 1fr))", gap: 8 }}>
-            <button className={quickFilter === "pendentes" ? "chip active" : "chip"} onClick={() => setQuickFilter("pendentes")} style={{ width: "100%" }}>Pendentes</button>
-            <button className={quickFilter === "concluidas" ? "chip active" : "chip"} onClick={() => setQuickFilter("concluidas")} style={{ width: "100%" }}>Concluídas</button>
-            <button className={quickFilter === "todas" ? "chip active" : "chip"} onClick={() => setQuickFilter("todas")} style={{ width: "100%" }}>Todas</button>
-          </div>
-        </div>
-
-        <div className="filters-header" style={{ marginTop: 12 }}>
           <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 8, width: "100%" }}>
             {STATUS_FILTER_OPTIONS.map((option) => (
               <button
@@ -187,7 +175,7 @@ export default function DashboardPage() {
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                style={{ marginLeft: 8 }}
+                style={{ marginLeft: 8, minHeight: 42 }}
               />
             </label>
             <label className="small muted">
@@ -196,19 +184,18 @@ export default function DashboardPage() {
                 type="date"
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
-                style={{ marginLeft: 8 }}
+                style={{ marginLeft: 8, minHeight: 42 }}
               />
             </label>
             <button
               type="button"
-              className="chip"
+              className={statusFilter === "TODOS" && !startDate && !endDate ? "chip active" : "chip"}
               onClick={() => {
-                setQuickFilter("pendentes");
                 setStatusFilter("TODOS");
                 setStartDate("");
                 setEndDate("");
               }}
-              style={{ minWidth: 140 }}
+              style={{ minWidth: 152, minHeight: 42 }}
             >
               Limpar filtros
             </button>
