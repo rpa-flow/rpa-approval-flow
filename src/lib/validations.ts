@@ -15,6 +15,7 @@ export const createInvoiceSchema = z
 
 export const updateInvoiceSchema = z
   .object({
+    numeroNota: z.string().min(1).optional(),
     status: z.nativeEnum(InvoiceStatus).optional(),
     processada: z.boolean().optional(),
     statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),

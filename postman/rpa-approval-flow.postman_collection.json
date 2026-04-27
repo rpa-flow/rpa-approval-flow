@@ -359,10 +359,10 @@
                 "{{invoiceId}}"
               ]
             },
-            "description": "",
+            "description": "Pode enviar campos parciais para atualizar a nota (ex.: numeroNota, status, processada, statusProcessamento, tentativasNotificacao, ultimoLembreteEm).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"APROVADO\"\n}",
+              "raw": "{\n  \"numeroNota\": \"1001-A\",\n  \"status\": \"APROVADO\",\n  \"processada\": false,\n  \"statusProcessamento\": \"PROCESSANDO\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

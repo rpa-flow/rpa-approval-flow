@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/app/components/app-header";
 
@@ -30,16 +30,20 @@ type Invoice = {
   };
 };
 
-type Filter = "todas" | "pendentes" | "concluidas";
+type QuickFilter = "todas" | "pendentes" | "concluidas";
+type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filter, setFilter] = useState<Filter>("pendentes");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("pendentes");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("TODOS");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
       router.push("/login");
@@ -51,11 +55,11 @@ export default function DashboardPage() {
 
     const notesRes = await fetch("/api/notas/minhas");
     if (notesRes.ok) setInvoices(await notesRes.json());
-  }
+  }, [router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const stats = useMemo(() => {
     const pendentes = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO").length;
@@ -65,24 +69,35 @@ export default function DashboardPage() {
   }, [invoices]);
 
   const filtered = useMemo(() => {
-    if (filter === "pendentes") return invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
-    if (filter === "concluidas") return invoices.filter((i) => i.status !== "AGUARDANDO_APROVACAO");
-    return invoices;
-  }, [filter, invoices]);
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
 
-  async function aprovarNota(id: string) {
+    return invoices.filter((invoice) => {
+      if (quickFilter === "pendentes" && invoice.status !== "AGUARDANDO_APROVACAO") return false;
+      if (quickFilter === "concluidas" && invoice.status === "AGUARDANDO_APROVACAO") return false;
+      if (statusFilter !== "TODOS" && invoice.status !== statusFilter) return false;
+
+      const updatedAt = new Date(invoice.dataAtualizacao);
+      if (start && updatedAt < start) return false;
+      if (end && updatedAt > end) return false;
+
+      return true;
+    });
+  }, [quickFilter, statusFilter, startDate, endDate, invoices]);
+
+  async function atualizarNota(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/notas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "APROVADO" })
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
-      setMessage("Erro ao aprovar nota.");
+      setMessage("Erro ao atualizar nota.");
       return;
     }
 
-    setMessage("Nota aprovada com sucesso.");
+    setMessage("Nota atualizada com sucesso.");
     await loadData();
   }
 
@@ -134,9 +149,57 @@ export default function DashboardPage() {
         <div className="filters-header">
           <h2>Notas fiscais</h2>
           <div className="filter-group">
-            <button className={filter === "pendentes" ? "chip active" : "chip"} onClick={() => setFilter("pendentes")}>Pendentes</button>
-            <button className={filter === "concluidas" ? "chip active" : "chip"} onClick={() => setFilter("concluidas")}>Concluídas</button>
-            <button className={filter === "todas" ? "chip active" : "chip"} onClick={() => setFilter("todas")}>Todas</button>
+            <button className={quickFilter === "pendentes" ? "chip active" : "chip"} onClick={() => setQuickFilter("pendentes")}>Pendentes</button>
+            <button className={quickFilter === "concluidas" ? "chip active" : "chip"} onClick={() => setQuickFilter("concluidas")}>Concluídas</button>
+            <button className={quickFilter === "todas" ? "chip active" : "chip"} onClick={() => setQuickFilter("todas")}>Todas</button>
+          </div>
+        </div>
+
+        <div className="filters-header" style={{ marginTop: 12 }}>
+          <div className="filter-group" style={{ flexWrap: "wrap" }}>
+            <label className="small muted">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                style={{ marginLeft: 8 }}
+              >
+                <option value="TODOS">Todos</option>
+                <option value="AGUARDANDO_APROVACAO">Aguardando aprovação</option>
+                <option value="APROVADO">Aprovado</option>
+                <option value="PROCESSADO">Processado</option>
+                <option value="EXPIRADA">Expirada</option>
+              </select>
+            </label>
+            <label className="small muted">
+              De
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                style={{ marginLeft: 8 }}
+              />
+            </label>
+            <label className="small muted">
+              Até
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                style={{ marginLeft: 8 }}
+              />
+            </label>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => {
+                setStatusFilter("TODOS");
+                setStartDate("");
+                setEndDate("");
+              }}
+            >
+              Limpar filtros
+            </button>
           </div>
         </div>
 
@@ -161,7 +224,11 @@ export default function DashboardPage() {
                   <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
-                    {invoice.status === "AGUARDANDO_APROVACAO" ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}
+                    {invoice.status === "AGUARDANDO_APROVACAO" ? (
+                      <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
