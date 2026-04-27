@@ -295,6 +295,12 @@
                   "value": "AGUARDANDO_APROVACAO",
                   "description": "Opcional. Valores: AGUARDANDO_APROVACAO, APROVADO, PROCESSADO, EXPIRADA.",
                   "disabled": true
+                },
+                {
+                  "key": "includeXml",
+                  "value": "true",
+                  "description": "Opcional. Retorna xmlOriginal quando true.",
+                  "disabled": true
                 }
               ]
             },
@@ -357,6 +363,14 @@
                 "api",
                 "notas",
                 "{{invoiceId}}"
+              ],
+              "query": [
+                {
+                  "key": "includeXml",
+                  "value": "true",
+                  "description": "Opcional. Retorna xmlOriginal quando true.",
+                  "disabled": true
+                }
               ]
             },
             "description": "Pode enviar campos parciais para atualizar a nota (ex.: numeroNota, status, processada, statusProcessamento, tentativasNotificacao, ultimoLembreteEm).",
@@ -390,6 +404,14 @@
                 "api",
                 "notas",
                 "minhas"
+              ],
+              "query": [
+                {
+                  "key": "includeXml",
+                  "value": "true",
+                  "description": "Opcional. Retorna xmlOriginal quando true.",
+                  "disabled": true
+                }
               ]
             },
             "description": ""

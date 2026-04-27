@@ -7,6 +7,16 @@ import { parseNFSeXml } from "@/lib/nfse-parser";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
+function shouldIncludeXml(request: NextRequest) {
+  return request.nextUrl.searchParams.get("includeXml") === "true";
+}
+
+function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(invoice: T, includeXml: boolean) {
+  if (includeXml) return invoice;
+  const { xmlOriginal, ...rest } = invoice;
+  return rest;
+}
+
 function validateInvoiceIngestApiKey(request: NextRequest) {
   const apiKey = process.env.INVOICE_INGEST_API_KEY;
   if (!apiKey) return null;
@@ -21,6 +31,7 @@ function validateInvoiceIngestApiKey(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const statusParam = request.nextUrl.searchParams.get("status");
+  const includeXml = shouldIncludeXml(request);
 
   if (statusParam && !ALLOWED_STATUSES.includes(statusParam as InvoiceStatus)) {
     return NextResponse.json(
@@ -52,12 +63,13 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  return NextResponse.json(invoices);
+  return NextResponse.json(invoices.map((invoice) => serializeInvoiceResponse(invoice, includeXml)));
 }
 
 export async function POST(request: NextRequest) {
   const unauthorized = validateInvoiceIngestApiKey(request);
   if (unauthorized) return unauthorized;
+  const includeXml = shouldIncludeXml(request);
 
   const json = await request.json();
   const parsed = createInvoiceSchema.safeParse(json);
@@ -192,5 +204,5 @@ export async function POST(request: NextRequest) {
     managers: supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email }))
   });
 
-  return NextResponse.json(invoice, { status: 201 });
+  return NextResponse.json(serializeInvoiceResponse(invoice, includeXml), { status: 201 });
 }
