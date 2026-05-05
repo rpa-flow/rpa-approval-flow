@@ -59,7 +59,13 @@ if (!sheet) {
   process.exit(1);
 }
 
-const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+const json = XLSX.utils.sheet_to_json(sheet, {
+  defval: ""
+});
+
+console.log("📊 Total de linhas lidas:", json.length);
+console.log("🧾 Primeira linha:", json[0]);
+console.log("🧾 Chaves detectadas:", Object.keys(json[0] || {}));
 
 // ==========================
 // PROCESS
@@ -86,7 +92,7 @@ for (const row of json) {
   });
 
   if (!gestoresMap.has(email)) {
-    gestoresMap.set(email, generatePassword());
+    gestoresMap.set(email, '123456');
   }
 }
 

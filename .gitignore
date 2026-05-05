@@ -2,3 +2,8 @@ node_modules
 .next
 .env
 npm-debug.log*
+.vercel
+.env*.local
+dados.json
+gestores.csv
+gestores.json

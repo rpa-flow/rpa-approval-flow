@@ -12,9 +12,20 @@ export function hashPassword(password: string) {
 }
 
 export function verifyPassword(password: string, storedHash: string) {
-  const [salt, hash] = storedHash.split(":");
-  const verify = crypto.scryptSync(password, salt, 64).toString("hex");
-  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(verify, "hex"));
+  try {
+    const [salt, hash] = storedHash.split(":");
+    if (!salt || !hash) return false;
+
+    const verify = crypto.scryptSync(password, salt, 64).toString("hex");
+    const hashBuffer = Buffer.from(hash, "hex");
+    const verifyBuffer = Buffer.from(verify, "hex");
+
+    if (hashBuffer.length !== verifyBuffer.length) return false;
+
+    return crypto.timingSafeEqual(hashBuffer, verifyBuffer);
+  } catch {
+    return false;
+  }
 }
 
 type SessionPayload = {

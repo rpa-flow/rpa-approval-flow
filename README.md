@@ -77,6 +77,12 @@ npm run prisma:seed
 npm run dev
 ```
 
+## Deploy na Vercel (Prisma)
+
+Este projeto já está configurado para rodar `prisma generate` durante o build (`npm run build` e `vercel-build`), evitando erro de `PrismaClientInitializationError` causado por cache de dependências da Vercel.
+
+Garanta também as variáveis de ambiente em produção (`DATABASE_URL`, `AUTH_SECRET`, etc.).
+
 ## SMTP recomendado para envio real
 
 Opções simples para começar:
@@ -118,6 +124,11 @@ Usuário criado/atualizado pelo seed:
 - email: `gestor.teste@empresa.com`
 - senha: `123456`
 - role: `ADMIN`
+
+Se em produção/login aparecer erro 500, valide:
+- `DATABASE_URL` configurada na Vercel;
+- se o banco possui usuário válido (`npm run prisma:seed` em ambiente de setup);
+- se `senhaHash` dos gestores está no formato esperado (`salt:hash`).
 
 
 ## Migrations versionadas
