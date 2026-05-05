@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
@@ -94,8 +95,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const manager = await getSessionManager();
   const unauthorized = validateInvoiceIngestApiKey(request);
-  if (unauthorized) return unauthorized;
+  if (!manager && unauthorized) return unauthorized;
+
+  if (manager && manager.role !== "FORNECEDOR") {
+    return NextResponse.json({ error: "Somente usuários com perfil FORNECEDOR podem lançar notas." }, { status: 403 });
+  }
   const includeXml = shouldIncludeXml(request);
 
   const json = await request.json();
@@ -146,6 +152,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const allowedSupplierIds = manager ? getAllowedSupplierIds(manager) : [];
+
+  if (manager && parsed.data.fornecedorId) {
+    const canAccessSupplier = manager.role === "ADMIN" || allowedSupplierIds.includes(parsed.data.fornecedorId);
+    if (!canAccessSupplier) {
+      return NextResponse.json(
+        { error: "Acesso negado para lançar nota neste fornecedor." },
+        { status: 403 }
+      );
+    }
+  }
+
   const supplierByPayload = parsed.data.fornecedorId
     ? await prisma.supplier.findUnique({
         where: { id: parsed.data.fornecedorId },
@@ -174,7 +192,24 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  if (manager && supplier) {
+    const canAccessSupplier = manager.role === "ADMIN" || allowedSupplierIds.includes(supplier.id);
+    if (!canAccessSupplier) {
+      return NextResponse.json(
+        { error: "Acesso negado para lançar nota neste fornecedor." },
+        { status: 403 }
+      );
+    }
+  }
+
   if (!supplier) {
+    if (manager && manager.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Fornecedor não encontrado. Informe um fornecedor vinculado à sua conta." },
+        { status: 404 }
+      );
+    }
+
     supplier = await prisma.supplier.create({
       data: {
         nome: ("prestadorNome" in nfseData && nfseData.prestadorNome) || "Fornecedor importado via NFSe",
@@ -235,7 +270,8 @@ export async function POST(request: NextRequest) {
       valorTotalRetido: "valorTotalRetido" in nfseData ? nfseData.valorTotalRetido : undefined,
       valorLiquido: "valorLiquido" in nfseData ? nfseData.valorLiquido : undefined,
       valorServico: "valorServico" in nfseData ? nfseData.valorServico : undefined,
-      aliquota: "aliquota" in nfseData ? nfseData.aliquota : undefined
+      aliquota: "aliquota" in nfseData ? nfseData.aliquota : undefined,
+      criadoPorId: manager?.id
     },
     include: {
       fornecedor: true

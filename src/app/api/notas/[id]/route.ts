@@ -17,6 +17,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
+  if (manager.role === "FORNECEDOR") {
+    return NextResponse.json({ error: "Perfil FORNECEDOR não pode atualizar notas." }, { status: 403 });
+  }
+
   const payload = await request.json();
   const parsed = updateInvoiceSchema.safeParse(payload);
 

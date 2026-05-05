@@ -24,6 +24,7 @@ enum ProcessingStatus {
 enum UserRole {
   ADMIN
   GESTOR
+  FORNECEDOR
 }
 
 model Supplier {
@@ -47,6 +48,7 @@ model Manager {
   managerSuppliers ManagerSupplier[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  invoicesCriadas  Invoice[]         @relation("InvoiceCreatedBy")
 }
 
 model ManagerSupplier {
@@ -103,9 +105,12 @@ model Invoice {
   aliquota            Decimal?         @db.Decimal(5, 2)
 
   fornecedor          Supplier         @relation(fields: [fornecedorId], references: [id])
+  criadoPor           Manager?         @relation("InvoiceCreatedBy", fields: [criadoPorId], references: [id])
+  criadoPorId         String?
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
+  @@index([criadoPorId])
 }
 
 model NotificationRule {
