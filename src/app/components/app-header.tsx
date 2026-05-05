@@ -19,29 +19,39 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="topbar card">
-      <div>
-        <h1>{title}</h1>
-        {subtitle && <p className="muted">{subtitle}</p>}
-      </div>
+    <header className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-bold text-slate-900">{title}</h1>
+          {subtitle && <p className="mt-2 text-sm text-slate-500">{subtitle}</p>}
+        </div>
 
-      <div className="header-menu">
-        <button type="button" className="button-secondary menu-toggle" onClick={() => setOpen((v) => !v)}>
-          ☰ Menu
-        </button>
-        <nav className={`nav-menu ${open ? "open" : ""}`}>
-          {links.map((link) => (
-            <Link
-              key={`${link.href}-${link.label}`}
-              href={link.href}
-              className="button-secondary"
-              onClick={() => setOpen(false)}
-            >
-              {link.icon ? `${link.icon} ` : ""}
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="relative">
+          <button
+            type="button"
+            className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => setOpen((v) => !v)}
+          >
+            ☰ Menu
+          </button>
+          <nav
+            className={`absolute right-0 top-[calc(100%+0.45rem)] z-20 min-w-56 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${
+              open ? "flex" : "hidden"
+            }`}
+          >
+            {links.map((link) => (
+              <Link
+                key={`${link.href}-${link.label}`}
+                href={link.href}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                onClick={() => setOpen(false)}
+              >
+                {link.icon ? `${link.icon} ` : ""}
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   );
