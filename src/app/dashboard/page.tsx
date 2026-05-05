@@ -162,7 +162,10 @@ export default function DashboardPage() {
 
       <section className="card">
         <div className="filters-header">
-          <h2>Notas fiscais</h2>
+          <div>
+            <h2 style={{ marginBottom: 4 }}>Notas fiscais</h2>
+            <p className="muted small" style={{ margin: 0 }}>Acompanhe aprovações e use filtros para achar notas rapidamente.</p>
+          </div>
           <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 8, width: "100%" }}>
             {STATUS_FILTER_OPTIONS.map((option) => (
               <button
@@ -243,7 +246,7 @@ export default function DashboardPage() {
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={6} className="muted center">Nenhuma nota encontrada para o filtro selecionado.</td>
+                  <td colSpan={6} className="muted center">🔎 Nenhuma nota encontrada para o filtro selecionado.</td>
                 </tr>
               )}
             </tbody>

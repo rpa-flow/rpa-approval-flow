@@ -125,6 +125,8 @@ export default function NotasPage() {
           <h2 style={{ marginBottom: 4 }}>Lançar nota fiscal</h2>
           <span className="chip active" style={{ cursor: "default" }}>Formulário do fornecedor</span>
         </div>
+        <p className="muted small" style={{ marginTop: 2 }}>Campos com * são obrigatórios. Revise os dados antes de enviar para agilizar a aprovação.</p>
+        <div style={{ height: 6 }} />
         <form onSubmit={lançarNotaFiscal} className="grid-2" style={{ marginTop: 16, gap: 14 }}>
           <label>
             Fornecedor*

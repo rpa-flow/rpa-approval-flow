@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 
 type HeaderLink = {
   href: string;
@@ -17,6 +18,7 @@ type AppHeaderProps = {
 
 export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <header className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -43,7 +45,7 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
               <Link
                 key={`${link.href}-${link.label}`}
                 href={link.href}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${pathname === link.href ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-700 hover:bg-slate-50"}`}
                 onClick={() => setOpen(false)}
               >
                 {link.icon ? `${link.icon} ` : ""}
