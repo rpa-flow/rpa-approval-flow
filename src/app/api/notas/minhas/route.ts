@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+function shouldIncludeXml(request: NextRequest) {
+  return request.nextUrl.searchParams.get("includeXml") === "true";
+}
+
+export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
 
   if (!manager) {
@@ -10,6 +14,7 @@ export async function GET() {
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
+  const includeXml = shouldIncludeXml(request);
 
   const invoices = await prisma.invoice.findMany({
     where: manager.role === "ADMIN" ? {} : { fornecedorId: { in: allowedSupplierIds } },
@@ -27,5 +32,11 @@ export async function GET() {
     }
   });
 
-  return NextResponse.json(invoices);
+  return NextResponse.json(
+    invoices.map((invoice) => {
+      if (includeXml) return invoice;
+      const { xmlOriginal, ...rest } = invoice;
+      return rest;
+    })
+  );
 }

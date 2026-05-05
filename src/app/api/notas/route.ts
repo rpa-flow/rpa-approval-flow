@@ -1,8 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { InvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+
+const ALLOWED_STATUSES = Object.values(InvoiceStatus);
+
+type ManualInvoiceData = {
+  numeroNota: string;
+  codigoIdentificador: string;
+  nDfse?: string;
+  localEmissao?: string;
+  localPrestacao?: string;
+  municipioIncidencia?: string;
+  itemTributacaoNac?: string;
+  itemTributacaoMun?: string;
+  nbsDescricao?: string;
+  dataProcessamento?: string;
+  dataEmissao?: string;
+  dataCompetencia?: string;
+  prestadorCnpj?: string;
+  prestadorNome?: string;
+  prestadorEmail?: string;
+  tomadorCnpj?: string;
+  tomadorNome?: string;
+  tomadorEmail?: string;
+  valorBaseCalculo?: number;
+  valorIssqn?: number;
+  valorTotalRetido?: number;
+  valorLiquido?: number;
+  valorServico?: number;
+  aliquota?: number;
+};
+
+function shouldIncludeXml(request: NextRequest) {
+  return request.nextUrl.searchParams.get("includeXml") === "true";
+}
+
+function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(invoice: T, includeXml: boolean) {
+  if (includeXml) return invoice;
+  const { xmlOriginal, ...rest } = invoice;
+  return rest;
+}
 
 function validateInvoiceIngestApiKey(request: NextRequest) {
   const apiKey = process.env.INVOICE_INGEST_API_KEY;
@@ -16,8 +56,22 @@ function validateInvoiceIngestApiKey(request: NextRequest) {
   return null;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const statusParam = request.nextUrl.searchParams.get("status");
+  const includeXml = shouldIncludeXml(request);
+
+  if (statusParam && !ALLOWED_STATUSES.includes(statusParam as InvoiceStatus)) {
+    return NextResponse.json(
+      {
+        error: "Status inválido.",
+        allowed: ALLOWED_STATUSES
+      },
+      { status: 400 }
+    );
+  }
+
   const invoices = await prisma.invoice.findMany({
+    where: statusParam ? { status: statusParam as InvoiceStatus } : undefined,
     include: {
       fornecedor: {
         include: {
@@ -36,12 +90,13 @@ export async function GET() {
     }
   });
 
-  return NextResponse.json(invoices);
+  return NextResponse.json(invoices.map((invoice) => serializeInvoiceResponse(invoice, includeXml)));
 }
 
 export async function POST(request: NextRequest) {
   const unauthorized = validateInvoiceIngestApiKey(request);
   if (unauthorized) return unauthorized;
+  const includeXml = shouldIncludeXml(request);
 
   const json = await request.json();
   const parsed = createInvoiceSchema.safeParse(json);
@@ -53,19 +108,36 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let nfseData:
-    | ReturnType<typeof parseNFSeXml>
-    | {
-        numeroNota: string;
-        codigoIdentificador: string;
-      };
+  let nfseData: ReturnType<typeof parseNFSeXml> | ManualInvoiceData;
 
   try {
     nfseData = parsed.data.xml
       ? parseNFSeXml(parsed.data.xml)
       : {
           numeroNota: parsed.data.numeroNota!,
-          codigoIdentificador: parsed.data.codigoIdentificador ?? `${Date.now()}`.padEnd(44, "0")
+          codigoIdentificador: parsed.data.codigoIdentificador ?? `${Date.now()}`.padEnd(44, "0"),
+          nDfse: parsed.data.nDfse,
+          localEmissao: parsed.data.localEmissao,
+          localPrestacao: parsed.data.localPrestacao,
+          municipioIncidencia: parsed.data.municipioIncidencia,
+          itemTributacaoNac: parsed.data.itemTributacaoNac,
+          itemTributacaoMun: parsed.data.itemTributacaoMun,
+          nbsDescricao: parsed.data.nbsDescricao,
+          dataProcessamento: parsed.data.dataProcessamento,
+          dataEmissao: parsed.data.dataEmissao,
+          dataCompetencia: parsed.data.dataCompetencia,
+          prestadorCnpj: parsed.data.prestadorCnpj,
+          prestadorNome: parsed.data.prestadorNome,
+          prestadorEmail: parsed.data.prestadorEmail,
+          tomadorCnpj: parsed.data.tomadorCnpj,
+          tomadorNome: parsed.data.tomadorNome,
+          tomadorEmail: parsed.data.tomadorEmail,
+          valorBaseCalculo: parsed.data.valorBaseCalculo,
+          valorIssqn: parsed.data.valorIssqn,
+          valorTotalRetido: parsed.data.valorTotalRetido,
+          valorLiquido: parsed.data.valorLiquido,
+          valorServico: parsed.data.valorServico,
+          aliquota: parsed.data.aliquota
         };
   } catch (error) {
     return NextResponse.json(
@@ -119,7 +191,7 @@ export async function POST(request: NextRequest) {
   }
 
   const alreadyExists = await prisma.invoice.findUnique({
-    where: { codigoIdentificador: nfseData.codigoIdentificador }
+    where: { codigoIdentificador: String(nfseData.codigoIdentificador) }
   });
 
   if (alreadyExists) {
@@ -131,8 +203,8 @@ export async function POST(request: NextRequest) {
 
   const invoice = await prisma.invoice.create({
     data: {
-      numeroNota: nfseData.numeroNota,
-      codigoIdentificador: nfseData.codigoIdentificador,
+      numeroNota: String(nfseData.numeroNota),
+      codigoIdentificador: String(nfseData.codigoIdentificador),
       fornecedorId: supplier.id,
       nDfse: "nDfse" in nfseData ? nfseData.nDfse : undefined,
       xmlOriginal: parsed.data.xml,
@@ -176,5 +248,5 @@ export async function POST(request: NextRequest) {
     managers: supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email }))
   });
 
-  return NextResponse.json(invoice, { status: 201 });
+  return NextResponse.json(serializeInvoiceResponse(invoice, includeXml), { status: 201 });
 }

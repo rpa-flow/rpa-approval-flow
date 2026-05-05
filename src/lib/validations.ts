@@ -6,7 +6,29 @@ export const createInvoiceSchema = z
     numeroNota: z.string().min(1).optional(),
     fornecedorId: z.string().min(1).optional(),
     codigoIdentificador: z.string().regex(/^\d{44}$/).optional(),
-    xml: z.string().min(20).optional()
+    xml: z.string().min(20).optional(),
+    nDfse: z.string().optional(),
+    localEmissao: z.string().optional(),
+    localPrestacao: z.string().optional(),
+    municipioIncidencia: z.string().optional(),
+    itemTributacaoNac: z.string().optional(),
+    itemTributacaoMun: z.string().optional(),
+    nbsDescricao: z.string().optional(),
+    dataProcessamento: z.string().datetime().optional(),
+    dataEmissao: z.string().datetime().optional(),
+    dataCompetencia: z.string().datetime().optional(),
+    prestadorCnpj: z.string().optional(),
+    prestadorNome: z.string().optional(),
+    prestadorEmail: z.string().email().optional(),
+    tomadorCnpj: z.string().optional(),
+    tomadorNome: z.string().optional(),
+    tomadorEmail: z.string().email().optional(),
+    valorBaseCalculo: z.number().optional(),
+    valorIssqn: z.number().optional(),
+    valorTotalRetido: z.number().optional(),
+    valorLiquido: z.number().optional(),
+    valorServico: z.number().optional(),
+    aliquota: z.number().optional()
   })
   .refine((data) => Boolean(data.xml) || Boolean(data.fornecedorId && data.numeroNota), {
     message:
@@ -15,6 +37,7 @@ export const createInvoiceSchema = z
 
 export const updateInvoiceSchema = z
   .object({
+    numeroNota: z.string().min(1).optional(),
     status: z.nativeEnum(InvoiceStatus).optional(),
     processada: z.boolean().optional(),
     statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),

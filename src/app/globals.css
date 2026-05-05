@@ -256,6 +256,33 @@ th {
   max-height: 70vh;
 }
 
+.dashboard-filters-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  width: 100%;
+}
+
+.clear-filter-button {
+  width: 100%;
+  min-height: 42px;
+}
+
+.dashboard-table {
+  min-width: 1250px;
+}
+
+.dashboard-table th:nth-child(3),
+.dashboard-table td.identifier-cell {
+  min-width: 360px;
+}
+
+.dashboard-table td.identifier-cell {
+  white-space: normal;
+  word-break: break-all;
+}
+
 @media (max-width: 900px) {
   .topbar {
     flex-direction: column;
@@ -270,6 +297,10 @@ th {
     left: 0;
     right: auto;
     width: 100%;
+  }
+
+  .dashboard-filters-row {
+    grid-template-columns: 1fr;
   }
 }
 

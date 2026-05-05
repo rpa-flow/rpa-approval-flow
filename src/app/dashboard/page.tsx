@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/app/components/app-header";
 
@@ -30,16 +30,26 @@ type Invoice = {
   };
 };
 
-type Filter = "todas" | "pendentes" | "concluidas";
+type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
+
+const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "TODOS", label: "Todos" },
+  { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
+  { value: "APROVADO", label: "Aprovado" },
+  { value: "PROCESSADO", label: "Processado" },
+  { value: "EXPIRADA", label: "Expirada" }
+];
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filter, setFilter] = useState<Filter>("pendentes");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("TODOS");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
       router.push("/login");
@@ -51,11 +61,11 @@ export default function DashboardPage() {
 
     const notesRes = await fetch("/api/notas/minhas");
     if (notesRes.ok) setInvoices(await notesRes.json());
-  }
+  }, [router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const stats = useMemo(() => {
     const pendentes = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO").length;
@@ -65,24 +75,33 @@ export default function DashboardPage() {
   }, [invoices]);
 
   const filtered = useMemo(() => {
-    if (filter === "pendentes") return invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
-    if (filter === "concluidas") return invoices.filter((i) => i.status !== "AGUARDANDO_APROVACAO");
-    return invoices;
-  }, [filter, invoices]);
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
 
-  async function aprovarNota(id: string) {
+    return invoices.filter((invoice) => {
+      if (statusFilter !== "TODOS" && invoice.status !== statusFilter) return false;
+
+      const updatedAt = new Date(invoice.dataAtualizacao);
+      if (start && updatedAt < start) return false;
+      if (end && updatedAt > end) return false;
+
+      return true;
+    });
+  }, [statusFilter, startDate, endDate, invoices]);
+
+  async function atualizarNota(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/notas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "APROVADO" })
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
-      setMessage("Erro ao aprovar nota.");
+      setMessage("Erro ao atualizar nota.");
       return;
     }
 
-    setMessage("Nota aprovada com sucesso.");
+    setMessage("Nota atualizada com sucesso.");
     await loadData();
   }
 
@@ -133,15 +152,57 @@ export default function DashboardPage() {
       <section className="card">
         <div className="filters-header">
           <h2>Notas fiscais</h2>
-          <div className="filter-group">
-            <button className={filter === "pendentes" ? "chip active" : "chip"} onClick={() => setFilter("pendentes")}>Pendentes</button>
-            <button className={filter === "concluidas" ? "chip active" : "chip"} onClick={() => setFilter("concluidas")}>Concluídas</button>
-            <button className={filter === "todas" ? "chip active" : "chip"} onClick={() => setFilter("todas")}>Todas</button>
+          <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 8, width: "100%" }}>
+            {STATUS_FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={statusFilter === option.value ? "chip active" : "chip"}
+                onClick={() => setStatusFilter(option.value)}
+                style={{ width: "100%" }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="filters-header" style={{ marginTop: 12 }}>
+          <div className="dashboard-filters-row">
+            <label className="small muted">
+              De
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                style={{ minHeight: 42 }}
+              />
+            </label>
+            <label className="small muted">
+              Até
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                style={{ minHeight: 42 }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter("TODOS");
+                setStartDate("");
+                setEndDate("");
+              }}
+              className={`clear-filter-button ${statusFilter === "TODOS" && !startDate && !endDate ? "chip active" : "chip"}`}
+            >
+              Limpar filtros
+            </button>
           </div>
         </div>
 
         <div className="table-wrap table-wrap-large">
-          <table>
+          <table className="dashboard-table">
             <thead>
               <tr>
                 <th>Fornecedor</th>
@@ -157,11 +218,15 @@ export default function DashboardPage() {
                 <tr key={invoice.id}>
                   <td>{invoice.fornecedor.nome}</td>
                   <td>{invoice.numeroNota}</td>
-                  <td>{invoice.codigoIdentificador}</td>
+                  <td className="identifier-cell">{invoice.codigoIdentificador}</td>
                   <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
                   <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                   <td>
-                    {invoice.status === "AGUARDANDO_APROVACAO" ? <button onClick={() => aprovarNota(invoice.id)}>Aprovar</button> : <span className="muted">—</span>}
+                    {invoice.status === "AGUARDANDO_APROVACAO" ? (
+                      <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

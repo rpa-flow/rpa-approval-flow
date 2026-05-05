@@ -10,6 +10,7 @@ type Params = {
 };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
   const manager = await getSessionManager();
 
   if (!manager) {
@@ -82,5 +83,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data: dataToUpdate
   });
 
-  return NextResponse.json(updated);
+  if (includeXml) {
+    return NextResponse.json(updated);
+  }
+
+  const { xmlOriginal, ...rest } = updated;
+  return NextResponse.json(rest);
 }
