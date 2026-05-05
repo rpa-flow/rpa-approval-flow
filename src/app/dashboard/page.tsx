@@ -231,7 +231,7 @@ export default function DashboardPage() {
                   <td>{invoice.numeroNota}</td>
                   <td className="identifier-cell">{invoice.codigoIdentificador}</td>
                   <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
-                  <td>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
+                  <td title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}>{new Date(invoice.dataAtualizacao).toLocaleDateString("pt-BR")}</td>
                   <td>
                     {me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO" ? (
                       <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
