@@ -17,7 +17,12 @@ export async function GET(request: NextRequest) {
   const includeXml = shouldIncludeXml(request);
 
   const invoices = await prisma.invoice.findMany({
-    where: manager.role === "ADMIN" ? {} : { fornecedorId: { in: allowedSupplierIds } },
+    where:
+      manager.role === "ADMIN"
+        ? {}
+        : manager.role === "FORNECEDOR"
+          ? { criadoPorId: manager.id }
+          : { fornecedorId: { in: allowedSupplierIds } },
     include: {
       fornecedor: {
         select: {

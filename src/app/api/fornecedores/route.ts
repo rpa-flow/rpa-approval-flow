@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
           data: {
             nome: m.nome,
             email: m.email,
-            senhaHash: hashPassword(m.senha)
+            senhaHash: hashPassword(m.senha),
+            role: "FORNECEDOR"
           }
         });
 
