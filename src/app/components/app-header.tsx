@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
 
 type HeaderLink = {
@@ -14,9 +14,10 @@ type AppHeaderProps = {
   title: string;
   subtitle?: string;
   links: HeaderLink[];
+  action?: ReactNode;
 };
 
-export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, links, action }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -36,7 +37,9 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
           )}
         </div>
 
-        <nav className="hidden max-w-[560px] flex-wrap justify-end gap-2 xl:flex">
+        <div className="hidden items-center gap-3 xl:flex">
+          {action}
+          <nav className="max-w-[560px] flex-wrap justify-end gap-2 xl:flex">
           {normalizedLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -54,9 +57,11 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
               </Link>
             );
           })}
-        </nav>
+          </nav>
+        </div>
 
         <div className="relative xl:hidden">
+          <div className="mb-2 flex justify-end">{action}</div>
           <button
             type="button"
             className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"

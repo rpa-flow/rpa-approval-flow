@@ -126,10 +126,8 @@ export default function DashboardPage() {
           { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
           { href: "/perfil", label: "Perfil", icon: "👤" }
         ]}
+        action={<button className="button-secondary" onClick={logout}>Sair</button>}
       />
-      <div className="actions-row">
-        <button className="button-secondary" onClick={logout}>Sair</button>
-      </div>
 
 
 
