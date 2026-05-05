@@ -26,33 +26,40 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
 
   return (
     <header className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+        <div className="min-w-0">
           <h1 className="m-0 text-2xl font-bold text-slate-900">{title}</h1>
-          {subtitle && <p className="mt-2 text-sm text-slate-500">{subtitle}</p>}
+          {subtitle && (
+            <p className="mt-2 line-clamp-2 max-w-5xl text-sm leading-relaxed text-slate-600" title={subtitle}>
+              {subtitle}
+            </p>
+          )}
         </div>
 
-        <nav className="hidden flex-wrap items-center justify-end gap-2 lg:flex">
-          {normalizedLinks.map((link) => (
-            <Link
-              key={`${link.href}-${link.label}`}
-              href={link.href}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                pathname === link.href
-                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {link.icon ? `${link.icon} ` : ""}
-              {link.label}
-            </Link>
-          ))}
+        <nav className="hidden max-w-[560px] flex-wrap justify-end gap-2 xl:flex">
+          {normalizedLinks.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={`${link.href}-${link.label}`}
+                href={link.href}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                  isActive
+                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
+                }`}
+              >
+                {link.icon ? <span className="text-xs opacity-80">{link.icon}</span> : null}
+                <span>{link.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="relative lg:hidden">
+        <div className="relative xl:hidden">
           <button
             type="button"
-            className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             onClick={() => setOpen((v) => !v)}
           >
             ☰ Menu
@@ -62,21 +69,24 @@ export function AppHeader({ title, subtitle, links }: AppHeaderProps) {
               open ? "flex" : "hidden"
             }`}
           >
-            {normalizedLinks.map((link) => (
-              <Link
-                key={`${link.href}-${link.label}-mobile`}
-                href={link.href}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                  pathname === link.href
-                    ? "border-blue-600 bg-blue-50 text-blue-700"
-                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                }`}
-                onClick={() => setOpen(false)}
-              >
-                {link.icon ? `${link.icon} ` : ""}
-                {link.label}
-              </Link>
-            ))}
+            {normalizedLinks.map((link) => {
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={`${link.href}-${link.label}-mobile`}
+                  href={link.href}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
+                    isActive
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() => setOpen(false)}
+                >
+                  {link.icon ? <span className="text-xs opacity-80">{link.icon}</span> : null}
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>
