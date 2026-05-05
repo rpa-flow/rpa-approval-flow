@@ -117,7 +117,7 @@ export default function NotasPage() {
       />
 
       <div className="actions-row">
-        <button onClick={logout}>Sair</button>
+        <button className="button-secondary" onClick={logout}>Sair</button>
       </div>
 
       <div className="actions-row">

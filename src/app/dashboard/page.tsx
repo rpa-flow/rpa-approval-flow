@@ -128,7 +128,7 @@ export default function DashboardPage() {
         ]}
       />
       <div className="actions-row">
-        <button onClick={logout}>Sair</button>
+        <button className="button-secondary" onClick={logout}>Sair</button>
       </div>
 
 
