@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppHeader } from "@/app/components/app-header";
+import { MainHeader } from "@/app/components/main-header";
 
 type Me = {
   manager: {
@@ -112,20 +112,13 @@ export default function DashboardPage() {
 
   return (
     <main className="container container-wide">
-      <AppHeader
+      <MainHeader
         title="Dashboard de Notas"
         subtitle={
           me
             ? `${me.manager.nome} (${me.manager.email}) — fornecedores: ${me.manager.suppliers.map((s) => s.supplierName).join(", ")}`
             : undefined
         }
-        links={[
-          { href: "/dashboard", label: "Dashboard", icon: "📊" },
-          { href: "/notas", label: "Lançar nota", icon: "🧾" },
-          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
-          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
-          { href: "/perfil", label: "Perfil", icon: "👤" }
-        ]}
         action={<button className="button-secondary" onClick={logout}>Sair</button>}
       />
 
