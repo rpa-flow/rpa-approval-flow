@@ -70,7 +70,7 @@ export default function DashboardPage() {
           <p className="text-sm text-slate-500">{filtered.length} nota(s)</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {FILTERS.map((filter) => <button key={filter.value} onClick={() => setStatusFilter(filter.value)} className={`rounded-full px-4 py-2 text-sm font-medium ${statusFilter === filter.value ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>{filter.label}</button>)}
+          {FILTERS.map((filter) => <button key={filter.value} onClick={() => setStatusFilter(filter.value)} className={`rounded-full px-4 py-2 text-sm font-medium transition ${statusFilter === filter.value ? "bg-slate-800 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}>{filter.label}</button>)}
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full text-sm">
@@ -91,10 +91,10 @@ export default function DashboardPage() {
       </section>
 
       {menuState && (
-        <div className="fixed z-50 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left hover:bg-emerald-50" onClick={() => atualizarNota(menuState.invoice.id, { status: "APROVADO" })}>✅ Aprovar nota</button>}
-          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left hover:bg-rose-50" onClick={() => { const reason = window.prompt("Informe o motivo da recusa (opcional):") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason }); }}>⛔ Recusar nota</button>}
-          <button className="w-full rounded-lg px-3 py-2 text-left hover:bg-slate-100" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico da nota</button>
+        <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl ring-1 ring-black/5" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left text-emerald-700 hover:bg-emerald-50" onClick={() => atualizarNota(menuState.invoice.id, { status: "APROVADO" })}>✅ Aprovar nota</button>}
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left text-rose-700 hover:bg-rose-50" onClick={() => { const reason = window.prompt("Informe o motivo da recusa (opcional):") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason }); }}>⛔ Recusar nota</button>}
+          <button className="w-full rounded-lg px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico da nota</button>
         </div>
       )}
 
