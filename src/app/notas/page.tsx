@@ -110,12 +110,6 @@ export default function NotasPage() {
         action={<button className="button-secondary" onClick={logout}>Sair</button>}
       />
 
-      <div className="actions-row">
-        <button type="button" className="button-secondary" onClick={() => router.push("/dashboard")}>
-          ← Voltar para listagem
-        </button>
-      </div>
-
       <section className="card" style={{ borderRadius: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ marginBottom: 4 }}>Lançar nota fiscal</h2>
