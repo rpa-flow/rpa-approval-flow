@@ -1,3 +1,5 @@
+@import url("https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css");
+
 * {
   box-sizing: border-box;
 }
@@ -379,4 +381,35 @@ th {
   .login-card {
     margin-top: 1rem;
   }
+}
+
+/* UX polish */
+button, input, select {
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(29, 78, 216, 0.25);
+  outline-offset: 2px;
+}
+
+.dashboard-table tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.dashboard-table tbody tr:hover {
+  background: rgba(29, 78, 216, 0.06);
+}
+
+.message {
+  border-left: 4px solid var(--primary);
+  background: #eff6ff;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppHeader } from "@/app/components/app-header";
+import { MainHeader } from "@/app/components/main-header";
 
 type Me = {
   manager: {
@@ -98,15 +98,9 @@ export default function ConfiguracoesPage() {
 
   return (
     <main className="container container-wide">
-      <AppHeader
+      <MainHeader
         title="Configurações"
         subtitle="Gerencie regras globais, lembretes por fornecedor e sua conta."
-        links={[
-          { href: "/dashboard", label: "Dashboard", icon: "📊" },
-          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
-          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
-          { href: "/perfil", label: "Perfil", icon: "👤" }
-        ]}
       />
 
       {me?.manager.role === "ADMIN" && (

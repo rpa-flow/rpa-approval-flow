@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AppHeader } from "@/app/components/app-header";
+import { MainHeader } from "@/app/components/main-header";
 
 export default function PerfilPage() {
   const [passwordForm, setPasswordForm] = useState({
@@ -44,15 +44,9 @@ export default function PerfilPage() {
 
   return (
     <main className="container container-wide">
-      <AppHeader
+      <MainHeader
         title="Perfil"
         subtitle="Gerencie dados da sua conta."
-        links={[
-          { href: "/dashboard", label: "Dashboard", icon: "📊" },
-          { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
-          { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
-          { href: "/perfil", label: "Perfil", icon: "👤" }
-        ]}
       />
 
       <section className="card">

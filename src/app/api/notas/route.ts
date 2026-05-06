@@ -99,8 +99,8 @@ export async function POST(request: NextRequest) {
   const unauthorized = validateInvoiceIngestApiKey(request);
   if (!manager && unauthorized) return unauthorized;
 
-  if (manager && manager.role !== "FORNECEDOR") {
-    return NextResponse.json({ error: "Somente usuários com perfil FORNECEDOR podem lançar notas." }, { status: 403 });
+  if (manager && !["FORNECEDOR", "ADMIN"].includes(manager.role)) {
+    return NextResponse.json({ error: "Somente usuários com perfil FORNECEDOR ou ADMIN podem lançar notas." }, { status: 403 });
   }
   const includeXml = shouldIncludeXml(request);
 
