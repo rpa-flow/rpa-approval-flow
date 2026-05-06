@@ -154,6 +154,7 @@ model NoteAuditLog {
   actorName      String?
   actorEmail     String?
   actionType     String
+  actionDescription String?
   previousStatus InvoiceStatus?
   newStatus      InvoiceStatus?
   reason         String?

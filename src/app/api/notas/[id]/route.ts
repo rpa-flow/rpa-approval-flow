@@ -90,7 +90,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
 
   await prisma.noteStatusHistory.create({ data: { invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: updated.status, reason } });
-  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED", previousStatus: existing.status, newStatus: updated.status, reason, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+  const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
+  const actionDescription =
+    updated.status === "APROVADO"
+      ? `${manager.nome} aprovou a nota`
+      : updated.status === "RECUSADO"
+        ? `${manager.nome} recusou a nota`
+        : existing.status !== updated.status
+          ? `${manager.nome} alterou o status da nota`
+          : `${manager.nome} atualizou os dados da nota`;
+
+  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 
   if (includeXml) {
     return NextResponse.json(updated);

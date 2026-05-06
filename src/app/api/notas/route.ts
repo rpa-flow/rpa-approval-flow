@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
   });
 
   await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status } });
-  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", newStatus: invoice.status, afterData: invoice as unknown as any });
+  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: "Nota criada e encaminhada para aprovação", newStatus: invoice.status, afterData: invoice as unknown as any });
 
   await sendInvoiceCreatedEmail({
     invoiceNumber: invoice.numeroNota,

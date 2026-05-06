@@ -119,7 +119,7 @@ async function processDueReminders(
     }
 
     await prisma.noteNotification.create({ data: { invoiceId: updated.id, recipients, success: emailSent, error: emailError } });
-    await createInvoiceAuditLog({ invoiceId: updated.id, actionType: "NOTIFICATION_RESENT", newStatus: updated.status, comment: "Lembrete recorrente enviado" });
+    await createInvoiceAuditLog({ invoiceId: updated.id, actionType: "NOTIFICATION_RESENT", actionDescription: "Sistema enviou um lembrete de aprovação ao gestor responsável", newStatus: updated.status, comment: "Lembrete recorrente enviado" });
 
     processed.push({
       invoiceId: updated.id,

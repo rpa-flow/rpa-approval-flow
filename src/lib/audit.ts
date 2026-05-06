@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 type AuditInput = {
   invoiceId: string;
   actionType: string;
+  actionDescription?: string | null;
   actorId?: string | null;
   actorName?: string | null;
   actorEmail?: string | null;
@@ -20,6 +21,7 @@ export async function createInvoiceAuditLog(input: AuditInput) {
     data: {
       invoiceId: input.invoiceId,
       actionType: input.actionType,
+      actionDescription: input.actionDescription,
       actorId: input.actorId,
       actorName: input.actorName,
       actorEmail: input.actorEmail,
