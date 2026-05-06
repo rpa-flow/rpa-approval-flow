@@ -5,6 +5,7 @@ import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
+import { createInvoiceAuditLog } from "@/lib/audit";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
@@ -277,6 +278,9 @@ export async function POST(request: NextRequest) {
       fornecedor: true
     }
   });
+
+  await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status } });
+  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", newStatus: invoice.status, afterData: invoice as unknown as any });
 
   await sendInvoiceCreatedEmail({
     invoiceNumber: invoice.numeroNota,

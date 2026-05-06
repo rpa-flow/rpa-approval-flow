@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -30,14 +30,13 @@ type Invoice = {
   };
 };
 
-type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
+type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO";
 
 const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "TODOS", label: "Todos" },
   { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
   { value: "APROVADO", label: "Aprovado" },
-  { value: "PROCESSADO", label: "Processado" },
-  { value: "EXPIRADA", label: "Expirada" }
+  { value: "RECUSADO", label: "Recusada" }
 ];
 
 export default function DashboardPage() {
@@ -47,6 +46,7 @@ export default function DashboardPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
+  const [historyByInvoice, setHistoryByInvoice] = useState<Record<string, any[]>>({});
   const router = useRouter();
 
   const loadData = useCallback(async () => {
@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const stats = useMemo(() => {
     const pendentes = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO").length;
     const aprovadas = invoices.filter((i) => i.status === "APROVADO").length;
-    const encerradas = invoices.filter((i) => i.status === "PROCESSADO" || i.status === "EXPIRADA").length;
+    const encerradas = invoices.filter((i) => i.status === "APROVADO" || i.status === "RECUSADO").length;
     return { total: invoices.length, pendentes, aprovadas, encerradas };
   }, [invoices]);
 
@@ -88,6 +88,11 @@ export default function DashboardPage() {
       return true;
     });
   }, [statusFilter, startDate, endDate, invoices]);
+
+  async function carregarHistorico(id: string) {
+    const res = await fetch(`/api/notas/${id}/historico`);
+    if (res.ok) setHistoryByInvoice((prev) => ({ ...prev, [id]: await res.json() }));
+  }
 
   async function atualizarNota(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/notas/${id}`, {
@@ -136,7 +141,7 @@ export default function DashboardPage() {
           <h3>{stats.aprovadas}</h3>
         </article>
         <article className="card stat-card">
-          <p className="muted small">Encerradas (processadas/expiradas)</p>
+          <p className="muted small">Encerradas (aprovadas/recusadas)</p>
           <h3>{stats.encerradas}</h3>
         </article>
       </section>
@@ -210,20 +215,31 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {filtered.map((invoice) => (
-                <tr key={invoice.id}>
-                  <td>{invoice.fornecedor.nome}</td>
-                  <td>{invoice.numeroNota}</td>
-                  <td className="identifier-cell">{invoice.codigoIdentificador}</td>
-                  <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
-                  <td title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}>{new Date(invoice.dataAtualizacao).toLocaleDateString("pt-BR")}</td>
-                  <td>
-                    {me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO" ? (
-                      <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={invoice.id}>
+                  <tr>
+                    <td>{invoice.fornecedor.nome}</td>
+                    <td>{invoice.numeroNota}</td>
+                    <td className="identifier-cell">{invoice.codigoIdentificador}</td>
+                    <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Pendente" : invoice.status === "APROVADO" ? "Aprovada" : invoice.status === "RECUSADO" ? "Recusada" : invoice.status}</span></td>
+                    <td title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}>{new Date(invoice.dataAtualizacao).toLocaleDateString("pt-BR")}</td>
+                    <td>
+                      {me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO" ? (
+                        <>
+                          <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
+                          <button className="button-secondary" onClick={() => { const reason = window.prompt("Motivo da recusa (opcional):") ?? ""; atualizarNota(invoice.id, { status: "RECUSADO", reason }); }}>Recusar nota</button>
+                          <button className="chip" onClick={() => carregarHistorico(invoice.id)}>Histórico</button>
+                        </>
+                      ) : (
+                        <button className="chip" onClick={() => carregarHistorico(invoice.id)}>Histórico</button>
+                      )}
+                    </td>
+                  </tr>
+                  {historyByInvoice[invoice.id]?.length ? (
+                    <tr><td colSpan={6}><div style={{ padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+                      {historyByInvoice[invoice.id].map((event) => (<div key={event.id} className="small muted" style={{ marginBottom: 6 }}>• {new Date(event.createdAt).toLocaleString("pt-BR")}: {event.actionType} ({event.previousStatus || "-"} → {event.newStatus || "-"}) {event.reason ? `- ${event.reason}` : ""}</div>))}
+                    </div></td></tr>
+                  ) : null}
+                </Fragment>
               ))}
               {!filtered.length && (
                 <tr>
