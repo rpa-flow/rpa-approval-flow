@@ -1,0 +1,53 @@
+"use client";
+
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { AppHeader } from "@/app/components/app-header";
+
+const DEFAULT_HEADER_LINKS = [
+  { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/notas", label: "Lançar nota", icon: "🧾" },
+  { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+  { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
+  { href: "/perfil", label: "Perfil", icon: "👤" }
+] as const;
+
+type ManagerRole = "ADMIN" | "GESTOR" | "FORNECEDOR";
+
+type MainHeaderProps = {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+};
+
+export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
+  const [role, setRole] = useState<ManagerRole | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRole() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted) setRole(data.manager.role as ManagerRole);
+      } catch {
+        // Mantém fallback sem o link de lançamento para perfis não conhecidos.
+      }
+    }
+
+    loadRole();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredLinks = useMemo(() => {
+    return DEFAULT_HEADER_LINKS.filter((link) => {
+      if (link.href !== "/notas") return true;
+      return role === "ADMIN" || role === "FORNECEDOR";
+    });
+  }, [role]);
+
+  return <AppHeader title={title} subtitle={subtitle} links={[...filteredLinks]} action={action} />;
+}
