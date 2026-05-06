@@ -122,16 +122,6 @@ export default function DashboardPage() {
         action={<button className="button-secondary" onClick={logout}>Sair</button>}
       />
 
-
-
-      <section className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", borderRadius: 16 }}>
-        <div>
-          <h2 style={{ marginBottom: 4 }}>Quer lançar uma nova nota?</h2>
-          <p className="muted" style={{ margin: 0 }}>A inserção de notas agora fica em uma tela dedicada para deixar o dashboard mais limpo.</p>
-        </div>
-        <button onClick={() => router.push("/notas")}>Ir para lançamento</button>
-      </section>
-
       <section className="stats-grid">
         <article className="card stat-card">
           <p className="muted small">Total de notas</p>
