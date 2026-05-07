@@ -88,10 +88,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ? undefined
         : payloadToSave.ultimoLembreteEm === null
           ? null
-          : new Date(payloadToSave.ultimoLembreteEm)
+          : new Date(payloadToSave.ultimoLembreteEm),
+    dataLancamentoDelphi:
+      payloadToSave.dataLancamentoDelphi === undefined
+        ? undefined
+        : payloadToSave.dataLancamentoDelphi === null
+          ? null
+          : new Date(payloadToSave.dataLancamentoDelphi)
   };
 
   const reason = typeof payload?.reason === "string" ? payload.reason : null;
+
+  if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
+    dataToUpdate.responsavelValidacao = manager.nome;
+    dataToUpdate.dataValidacao = new Date();
+  }
   const updated = await prisma.$transaction(async (tx) => {
     const invoice = await tx.invoice.update({ where: { id: params.id }, data: dataToUpdate });
 
