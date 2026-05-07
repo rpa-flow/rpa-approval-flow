@@ -154,18 +154,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
               {[1, 2, 3, 4, 5].map((rate) => {
                 const description = rate === 1 ? "Muito insatisfeito" : rate === 2 ? "Insatisfeito" : rate === 3 ? "Regular" : rate === 4 ? "Satisfeito" : "Muito satisfeito";
-                return (
-                  <label key={rate} className={`cursor-pointer rounded-xl border p-2 text-left text-xs ${evaluation.rating === rate ? "border-slate-800 bg-slate-100" : "border-slate-200"}`}>
-                    <input
-                      type="radio"
-                      name="service-rating"
-                      className="sr-only"
-                      checked={evaluation.rating === rate}
-                      onChange={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}
-                    />
-                    <strong>{rate}</strong> — {description}
-                  </label>
-                );
+                return <button key={rate} type="button" aria-pressed={evaluation.rating === rate} className={`rounded-xl border p-2 text-left text-xs ${evaluation.rating === rate ? "!bg-slate-100 border-slate-800 !text-slate-900" : "!bg-white border-slate-200 !text-slate-700"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong>{rate}</strong> — {description}</button>;
               })}
             </div>
           </div>
