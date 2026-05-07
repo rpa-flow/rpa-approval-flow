@@ -155,7 +155,7 @@ export default function DashboardPage() {
               {[1, 2, 3, 4, 5].map((rate) => {
                 const description = rate === 1 ? "Muito insatisfeito" : rate === 2 ? "Insatisfeito" : rate === 3 ? "Regular" : rate === 4 ? "Satisfeito" : "Muito satisfeito";
                 const isSelected = evaluation.rating === rate;
-                return <button key={rate} type="button" aria-pressed={isSelected} className={`rounded-xl border p-2 text-left text-xs transition ${isSelected ? "border-slate-900 !text-slate-900" : "border-slate-200 !bg-white !text-slate-700"}`} style={isSelected ? { backgroundColor: "#dbeafe", boxShadow: "inset 0 0 0 1px #1e3a8a" } : undefined} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{isSelected ? "✅ " : ""}<strong>{rate}</strong> — {description}</button>;
+                return <button key={rate} type="button" aria-pressed={isSelected} className={`rounded-xl border p-2 text-left text-xs transition ${isSelected ? "border-slate-900" : "border-slate-200 !bg-white !text-slate-700"}`} style={isSelected ? { backgroundColor: "#bfdbfe", color: "#0f172a", boxShadow: "inset 0 0 0 1px #1e3a8a" } : undefined} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{isSelected ? "✅ " : ""}<strong>{rate}</strong> — {description}</button>;
               })}
             </div>
           </div>
