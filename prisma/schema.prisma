@@ -22,6 +22,17 @@ enum ProcessingStatus {
   ERRO
 }
 
+enum DelphiIntegrationStatus {
+  AGUARDANDO
+  SUCESSO
+  FALHA
+}
+
+enum InvoiceSituation {
+  AUTORIZADA
+  CANCELADA
+}
+
 enum UserRole {
   ADMIN
   GESTOR
@@ -96,6 +107,14 @@ model Invoice {
   dataProcessamento   DateTime?
   dataEmissao         DateTime?
   dataCompetencia     DateTime?
+  ocContrato          String?
+  dataLancamentoDelphi DateTime?
+  codigoDelphi        String?
+  statusIntegracaoDelphi DelphiIntegrationStatus @default(AGUARDANDO)
+  situacaoNotaFiscal  InvoiceSituation @default(AUTORIZADA)
+  responsavelValidacao String?
+  dataValidacao       DateTime?
+  observacaoValidacao String?
 
   prestadorCnpj       String?
   prestadorNome       String?
