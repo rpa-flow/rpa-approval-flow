@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendApprovalRequestEmail } from "@/lib/email";
+import { createInvoiceAuditLog } from "@/lib/audit";
 
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
@@ -76,7 +77,7 @@ async function processDueReminders(
 
   for (const reminder of reminders) {
     const nextTentativa = reminder.tentativasAtuais + 1;
-    const shouldExpire = nextTentativa >= reminder.maxTentativas;
+    const shouldExpire = false;
 
     const recipients = Array.from(new Set([...reminder.emailsGestores, ...reminder.emailsExtras].filter(Boolean)));
     let emailSent = false;
@@ -101,13 +102,13 @@ async function processDueReminders(
       data: {
         tentativasNotificacao: nextTentativa,
         ultimoLembreteEm: now,
-        status: shouldExpire ? "EXPIRADA" : "AGUARDANDO_APROVACAO",
-        statusProcessamento: shouldExpire ? "ERRO" : "PENDENTE",
-        processada: shouldExpire
+        status: "AGUARDANDO_APROVACAO",
+        statusProcessamento: "PENDENTE",
+        processada: false
       }
     });
 
-    if (!shouldExpire) {
+    if (true) {
       await prisma.supplierNotificationConfig.updateMany({
         where: { supplierId: reminder.fornecedor.id },
         data: {
@@ -116,6 +117,9 @@ async function processDueReminders(
         }
       });
     }
+
+    await prisma.noteNotification.create({ data: { invoiceId: updated.id, recipients, success: emailSent, error: emailError } });
+    await createInvoiceAuditLog({ invoiceId: updated.id, actionType: "NOTIFICATION_RESENT", actionDescription: "Sistema enviou um lembrete de aprovação ao gestor responsável", newStatus: updated.status, comment: "Lembrete recorrente enviado" });
 
     processed.push({
       invoiceId: updated.id,

@@ -4,104 +4,62 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
-type Me = {
-  manager: {
-    nome: string;
-    email: string;
-    role: "ADMIN" | "GESTOR" | "FORNECEDOR";
-    suppliers: Array<{
-      supplierId: string;
-      supplierName: string;
-    }>;
-  };
-};
+type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
+type Invoice = { id: string; numeroNota: string; codigoIdentificador: string; status: string; dataAtualizacao: string; fornecedor: { nome: string } };
+type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
+type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO";
 
-type Invoice = {
-  id: string;
-  numeroNota: string;
-  codigoIdentificador: string;
-  status: string;
-  processada: boolean;
-  statusProcessamento: string;
-  dataAtualizacao: string;
-  fornecedor: {
-    id: string;
-    nome: string;
-  };
-};
-
-type StatusFilter = "TODOS" | "AGUARDANDO_APROVACAO" | "APROVADO" | "PROCESSADO" | "EXPIRADA";
-
-const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
+const FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "TODOS", label: "Todos" },
-  { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
-  { value: "APROVADO", label: "Aprovado" },
-  { value: "PROCESSADO", label: "Processado" },
-  { value: "EXPIRADA", label: "Expirada" }
+  { value: "AGUARDANDO_APROVACAO", label: "Pendentes" },
+  { value: "APROVADO", label: "Aprovadas" },
+  { value: "RECUSADO", label: "Recusadas" }
 ];
+const ACTION_LABELS: Record<string, string> = {
+  NOTE_CREATED: "Criação da nota",
+  STATUS_CHANGED: "Alteração de status",
+  NOTE_UPDATED: "Atualização de dados",
+  NOTIFICATION_RESENT: "Envio de notificação",
+  OWNER_CHANGED: "Alteração de responsável",
+  REOPENED: "Reabertura da nota",
+  COMMENT_ADDED: "Comentário registrado"
+};
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("TODOS");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
+  const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
+  const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const router = useRouter();
 
   const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
-    if (!meRes.ok) {
-      router.push("/login");
-      return;
-    }
-
-    const meData = await meRes.json();
-    setMe(meData);
-
+    if (!meRes.ok) return router.push("/login");
+    setMe(await meRes.json());
     const notesRes = await fetch("/api/notas/minhas");
     if (notesRes.ok) setInvoices(await notesRes.json());
   }, [router]);
 
+  useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const close = () => setMenuState(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, []);
 
-  const stats = useMemo(() => {
-    const pendentes = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO").length;
-    const aprovadas = invoices.filter((i) => i.status === "APROVADO").length;
-    const encerradas = invoices.filter((i) => i.status === "PROCESSADO" || i.status === "EXPIRADA").length;
-    return { total: invoices.length, pendentes, aprovadas, encerradas };
-  }, [invoices]);
-
-  const filtered = useMemo(() => {
-    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
-    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
-
-    return invoices.filter((invoice) => {
-      if (statusFilter !== "TODOS" && invoice.status !== statusFilter) return false;
-
-      const updatedAt = new Date(invoice.dataAtualizacao);
-      if (start && updatedAt < start) return false;
-      if (end && updatedAt > end) return false;
-
-      return true;
-    });
-  }, [statusFilter, startDate, endDate, invoices]);
+  const filtered = useMemo(() => invoices.filter((i) => statusFilter === "TODOS" || i.status === statusFilter), [invoices, statusFilter]);
 
   async function atualizarNota(id: string, payload: Record<string, unknown>) {
-    const res = await fetch(`/api/notas/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      setMessage("Erro ao atualizar nota.");
-      return;
-    }
-
-    setMessage("Nota atualizada com sucesso.");
+    const res = await fetch(`/api/notas/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    setMenuState(null);
+    if (!res.ok) return setMessage("Não foi possível concluir a ação na nota.");
+    setMessage("Ação registrada com sucesso.");
     await loadData();
   }
 
@@ -110,130 +68,58 @@ export default function DashboardPage() {
     router.push("/login");
   }
 
+  async function verHistorico(invoice: Invoice) {
+    const res = await fetch(`/api/notas/${invoice.id}/historico`);
+    if (!res.ok) return setMessage("Não foi possível carregar o histórico da nota.");
+    setHistoryModal({ invoice, events: await res.json() });
+    setMenuState(null);
+  }
+
   return (
-    <main className="container container-wide">
-      <MainHeader
-        title="Dashboard de Notas"
-        subtitle={
-          me
-            ? `${me.manager.nome} (${me.manager.email}) — fornecedores: ${me.manager.suppliers.map((s) => s.supplierName).join(", ")}`
-            : undefined
-        }
-        action={<button className="button-secondary" onClick={logout}>Sair</button>}
-      />
-
-      <section className="stats-grid">
-        <article className="card stat-card">
-          <p className="muted small">Total de notas</p>
-          <h3>{stats.total}</h3>
-        </article>
-        <article className="card stat-card highlight-warning">
-          <p className="muted small">Aguardando aprovação</p>
-          <h3>{stats.pendentes}</h3>
-        </article>
-        <article className="card stat-card highlight-success">
-          <p className="muted small">Aprovadas</p>
-          <h3>{stats.aprovadas}</h3>
-        </article>
-        <article className="card stat-card">
-          <p className="muted small">Encerradas (processadas/expiradas)</p>
-          <h3>{stats.encerradas}</h3>
-        </article>
-      </section>
-
-      <section className="card">
-        <div className="filters-header">
-          <div>
-            <h2 style={{ marginBottom: 4 }}>Notas fiscais</h2>
-            <p className="muted small" style={{ margin: 0 }}>Acompanhe aprovações e use filtros para achar notas rapidamente.</p>
-          </div>
-          <div className="filter-group" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(140px, 1fr))", gap: 8, width: "100%" }}>
-            {STATUS_FILTER_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={statusFilter === option.value ? "chip active" : "chip"}
-                onClick={() => setStatusFilter(option.value)}
-                style={{ width: "100%" }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+    <main className="container container-wide" onClick={() => setMenuState(null)}>
+      <MainHeader title="Aprovação de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button className="button-secondary" onClick={logout}>Sair</button>} />
+      <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Notas fiscais</h2>
+          <p className="text-sm text-slate-500">{filtered.length} nota(s)</p>
         </div>
-
-        <div className="filters-header" style={{ marginTop: 12 }}>
-          <div className="dashboard-filters-row">
-            <label className="small muted">
-              De
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                style={{ minHeight: 42 }}
-              />
-            </label>
-            <label className="small muted">
-              Até
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                style={{ minHeight: 42 }}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusFilter("TODOS");
-                setStartDate("");
-                setEndDate("");
-              }}
-              className={`clear-filter-button ${statusFilter === "TODOS" && !startDate && !endDate ? "chip active" : "chip"}`}
-            >
-              Limpar filtros
-            </button>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((filter) => <button key={filter.value} onClick={() => setStatusFilter(filter.value)} className={`rounded-full px-4 py-2 text-sm font-medium transition ${statusFilter === filter.value ? "bg-slate-800 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}>{filter.label}</button>)}
         </div>
-
-        <div className="table-wrap table-wrap-large">
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Fornecedor</th>
-                <th>Número</th>
-                <th>Identificador</th>
-                <th>Status</th>
-                <th>Atualização</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">Número</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((invoice) => (
                 <tr key={invoice.id}>
-                  <td>{invoice.fornecedor.nome}</td>
-                  <td>{invoice.numeroNota}</td>
-                  <td className="identifier-cell">{invoice.codigoIdentificador}</td>
-                  <td><span className={invoice.status === "AGUARDANDO_APROVACAO" ? "badge warning" : "badge success"}>{invoice.status === "AGUARDANDO_APROVACAO" ? "Aguardando aprovação" : invoice.status === "APROVADO" ? "Aprovado" : invoice.status === "PROCESSADO" ? "Processado" : "Expirada"}</span></td>
-                  <td title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}>{new Date(invoice.dataAtualizacao).toLocaleDateString("pt-BR")}</td>
-                  <td>
-                    {me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO" ? (
-                      <button onClick={() => atualizarNota(invoice.id, { status: "APROVADO" })}>Aprovar</button>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
+                  <td className="px-4 py-3">{invoice.fornecedor.nome}</td>
+                  <td className="px-4 py-3">{invoice.numeroNota}</td>
+                  <td className="px-4 py-3">{invoice.status === "AGUARDANDO_APROVACAO" ? "Pendente" : invoice.status === "APROVADO" ? "Aprovada" : "Recusada"}</td>
+                  <td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
+                  <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={(e) => { const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
                 </tr>
               ))}
-              {!filtered.length && (
-                <tr>
-                  <td colSpan={6} className="muted center">🔎 Nenhuma nota encontrada para o filtro selecionado.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {menuState && (
+        <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl ring-1 ring-black/5" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-emerald-700 hover:!bg-emerald-50" onClick={() => atualizarNota(menuState.invoice.id, { status: "APROVADO" })}>✅ Aprovar nota</button>}
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-rose-700 hover:!bg-rose-50" onClick={() => { const reason = window.prompt("Informe o motivo da recusa (opcional):") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason }); }}>⛔ Recusar nota</button>}
+          <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-zinc-700 hover:!bg-zinc-100" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico da nota</button>
+        </div>
+      )}
+
+      {historyModal && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setHistoryModal(null)} />}
+
+      {historyModal && (
+        <section className="fixed inset-x-0 top-16 z-50 mx-auto max-h-[80vh] w-[92vw] max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Histórico da nota {historyModal.invoice.numeroNota}</h3><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => setHistoryModal(null)}>Fechar</button></div>
+          <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-xl border bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{ACTION_LABELS[event.actionType] || "Ação registrada"}</p><p className="text-sm font-medium">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="text-xs text-rose-700">Motivo: {event.reason}</p>}</article>)}</div>
+        </section>
+      )}
 
       {message && <p className="message">{message}</p>}
     </main>

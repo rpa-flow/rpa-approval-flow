@@ -10,6 +10,7 @@ datasource db {
 enum InvoiceStatus {
   AGUARDANDO_APROVACAO
   APROVADO
+  RECUSADO
   PROCESSADO
   EXPIRADA
 }
@@ -107,10 +108,64 @@ model Invoice {
   fornecedor          Supplier         @relation(fields: [fornecedorId], references: [id])
   criadoPor           Manager?         @relation("InvoiceCreatedBy", fields: [criadoPorId], references: [id])
   criadoPorId         String?
+  statusHistory       NoteStatusHistory[]
+  notifications       NoteNotification[]
+  auditLogs           NoteAuditLog[]
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
   @@index([criadoPorId])
+}
+
+
+model NoteStatusHistory {
+  id             String        @id @default(cuid())
+  invoiceId      String
+  actorId        String?
+  actorName      String?
+  actorEmail     String?
+  previousStatus InvoiceStatus?
+  newStatus      InvoiceStatus
+  reason         String?
+  createdAt      DateTime      @default(now())
+
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
+}
+
+model NoteNotification {
+  id         String   @id @default(cuid())
+  invoiceId  String
+  recipients String[] @default([])
+  sentAt     DateTime @default(now())
+  success    Boolean  @default(true)
+  error      String?
+
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, sentAt])
+}
+
+model NoteAuditLog {
+  id             String        @id @default(cuid())
+  invoiceId      String
+  actorId        String?
+  actorName      String?
+  actorEmail     String?
+  actionType     String
+  actionDescription String?
+  previousStatus InvoiceStatus?
+  newStatus      InvoiceStatus?
+  reason         String?
+  comment        String?
+  beforeData     Json?
+  afterData      Json?
+  createdAt      DateTime      @default(now())
+
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
 }
 
 model NotificationRule {

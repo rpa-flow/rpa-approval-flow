@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
+import { createInvoiceAuditLog } from "@/lib/audit";
 
 type Params = {
   params: {
@@ -67,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "PROCESSANDO";
   }
 
-  if (payloadToSave.status === "EXPIRADA") {
+  if (payloadToSave.status === "RECUSADO") {
     payloadToSave.processada = true;
     payloadToSave.statusProcessamento = "ERRO";
   }
@@ -82,10 +83,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : new Date(payloadToSave.ultimoLembreteEm)
   };
 
+  const reason = typeof payload?.reason === "string" ? payload.reason : null;
   const updated = await prisma.invoice.update({
     where: { id: params.id },
     data: dataToUpdate
   });
+
+  await prisma.noteStatusHistory.create({ data: { invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: updated.status, reason } });
+  const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
+  const actionDescription =
+    updated.status === "APROVADO"
+      ? `${manager.nome} aprovou a nota`
+      : updated.status === "RECUSADO"
+        ? `${manager.nome} recusou a nota`
+        : existing.status !== updated.status
+          ? `${manager.nome} alterou o status da nota`
+          : `${manager.nome} atualizou os dados da nota`;
+
+  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 
   if (includeXml) {
     return NextResponse.json(updated);
