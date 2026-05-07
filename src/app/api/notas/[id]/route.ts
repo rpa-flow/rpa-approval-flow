@@ -10,15 +10,22 @@ type Params = {
   };
 };
 
+function hasIntegrationApiKey(request: NextRequest) {
+  const configured = process.env.INVOICE_INGEST_API_KEY;
+  if (!configured) return false;
+  return request.headers.get("x-api-key") === configured;
+}
+
 export async function PATCH(request: NextRequest, { params }: Params) {
   const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
   const manager = await getSessionManager();
+  const integrationRequest = hasIntegrationApiKey(request);
 
-  if (!manager) {
+  if (!manager && !integrationRequest) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
-  if (manager.role === "FORNECEDOR") {
+  if (manager?.role === "FORNECEDOR") {
     return NextResponse.json({ error: "Perfil FORNECEDOR não pode atualizar notas." }, { status: 403 });
   }
 
@@ -38,9 +45,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
 
-  const allowedSupplierIds = getAllowedSupplierIds(manager);
+  const allowedSupplierIds = manager ? getAllowedSupplierIds(manager) : [];
 
-  if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(existing.fornecedorId)) {
+  if (manager && manager.role !== "ADMIN" && !allowedSupplierIds.includes(existing.fornecedorId)) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
@@ -48,7 +55,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
 
-  if (manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
+  if (manager && manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
     return NextResponse.json(
       { error: "Somente ADMIN pode alterar tentativas de notificação." },
       { status: 403 }
@@ -81,17 +88,28 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
-  const dataToUpdate = {
+  const dataToUpdate: Record<string, unknown> = {
     ...payloadToSave,
     ultimoLembreteEm:
       payloadToSave.ultimoLembreteEm === undefined
         ? undefined
         : payloadToSave.ultimoLembreteEm === null
           ? null
-          : new Date(payloadToSave.ultimoLembreteEm)
+          : new Date(payloadToSave.ultimoLembreteEm),
+    dataLancamentoDelphi:
+      payloadToSave.dataLancamentoDelphi === undefined
+        ? undefined
+        : payloadToSave.dataLancamentoDelphi === null
+          ? null
+          : new Date(payloadToSave.dataLancamentoDelphi)
   };
 
   const reason = typeof payload?.reason === "string" ? payload.reason : null;
+
+  if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
+    dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
+    dataToUpdate.dataValidacao = new Date();
+  }
   const updated = await prisma.$transaction(async (tx) => {
     const invoice = await tx.invoice.update({ where: { id: params.id }, data: dataToUpdate });
 
@@ -102,37 +120,37 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           rating: serviceEvaluation.rating,
           comment: serviceEvaluation.comment,
           riskLevel: serviceEvaluation.riskLevel,
-          managerId: manager.id,
-          managerName: manager.nome,
-          managerEmail: manager.email
+          managerId: manager!.id,
+          managerName: manager!.nome,
+          managerEmail: manager!.email
         },
         create: {
           invoiceId: invoice.id,
           rating: serviceEvaluation.rating,
           comment: serviceEvaluation.comment,
           riskLevel: serviceEvaluation.riskLevel,
-          managerId: manager.id,
-          managerName: manager.nome,
-          managerEmail: manager.email
+          managerId: manager!.id,
+          managerName: manager!.nome,
+          managerEmail: manager!.email
         }
       });
     }
 
-    await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: invoice.status, reason } });
+    await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", previousStatus: existing.status, newStatus: invoice.status, reason } });
     return invoice;
   });
 
   const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
   const actionDescription =
     updated.status === "APROVADO"
-      ? `${manager.nome} aprovou a nota e registrou a avaliação do serviço`
+      ? `${manager?.nome ?? "Integração Delphi"} aprovou a nota e registrou a avaliação do serviço`
       : updated.status === "RECUSADO"
-        ? `${manager.nome} recusou a nota`
+        ? `${manager?.nome ?? "Integração Delphi"} recusou a nota`
         : existing.status !== updated.status
-          ? `${manager.nome} alterou o status da nota`
-          : `${manager.nome} atualizou os dados da nota`;
+          ? `${manager?.nome ?? "Integração Delphi"} alterou o status da nota`
+          : `${manager?.nome ?? "Integração Delphi"} atualizou os dados da nota`;
 
-  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | ${serviceEvaluation.comment}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | ${serviceEvaluation.comment}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 
   if (includeXml) {
     return NextResponse.json(updated);
