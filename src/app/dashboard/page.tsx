@@ -15,6 +15,15 @@ const FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "APROVADO", label: "Aprovadas" },
   { value: "RECUSADO", label: "Recusadas" }
 ];
+const ACTION_LABELS: Record<string, string> = {
+  NOTE_CREATED: "Criação da nota",
+  STATUS_CHANGED: "Alteração de status",
+  NOTE_UPDATED: "Atualização de dados",
+  NOTIFICATION_RESENT: "Envio de notificação",
+  OWNER_CHANGED: "Alteração de responsável",
+  REOPENED: "Reabertura da nota",
+  COMMENT_ADDED: "Comentário registrado"
+};
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -108,7 +117,7 @@ export default function DashboardPage() {
       {historyModal && (
         <section className="fixed inset-x-0 top-16 z-50 mx-auto max-h-[80vh] w-[92vw] max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Histórico da nota {historyModal.invoice.numeroNota}</h3><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => setHistoryModal(null)}>Fechar</button></div>
-          <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-xl border bg-slate-50 p-3"><p className="text-sm font-medium">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="text-xs text-rose-700">Motivo: {event.reason}</p>}</article>)}</div>
+          <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-xl border bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{ACTION_LABELS[event.actionType] || "Ação registrada"}</p><p className="text-sm font-medium">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="text-xs text-rose-700">Motivo: {event.reason}</p>}</article>)}</div>
         </section>
       )}
 
