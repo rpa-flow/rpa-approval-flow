@@ -82,7 +82,7 @@ export default function DashboardPage() {
                   <td className="px-4 py-3">{invoice.numeroNota}</td>
                   <td className="px-4 py-3">{invoice.status === "AGUARDANDO_APROVACAO" ? "Pendente" : invoice.status === "APROVADO" ? "Aprovada" : "Recusada"}</td>
                   <td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
-                  <td className="px-4 py-3 text-right"><button className="rounded-lg border px-3 py-1.5" onClick={(e) => { const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
+                  <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50" onClick={(e) => { const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
                 </tr>
               ))}
             </tbody>
@@ -92,9 +92,9 @@ export default function DashboardPage() {
 
       {menuState && (
         <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl ring-1 ring-black/5" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left text-emerald-700 hover:bg-emerald-50" onClick={() => atualizarNota(menuState.invoice.id, { status: "APROVADO" })}>✅ Aprovar nota</button>}
-          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg px-3 py-2 text-left text-rose-700 hover:bg-rose-50" onClick={() => { const reason = window.prompt("Informe o motivo da recusa (opcional):") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason }); }}>⛔ Recusar nota</button>}
-          <button className="w-full rounded-lg px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico da nota</button>
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg bg-white px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50" onClick={() => atualizarNota(menuState.invoice.id, { status: "APROVADO" })}>✅ Aprovar nota</button>}
+          {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg bg-white px-3 py-2 text-left text-sm text-rose-700 hover:bg-rose-50" onClick={() => { const reason = window.prompt("Informe o motivo da recusa (opcional):") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason }); }}>⛔ Recusar nota</button>}
+          <button className="w-full rounded-lg bg-white px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico da nota</button>
         </div>
       )}
 
@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
       {historyModal && (
         <section className="fixed inset-x-0 top-16 z-50 mx-auto max-h-[80vh] w-[92vw] max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-          <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Histórico da nota {historyModal.invoice.numeroNota}</h3><button className="rounded-lg border px-3 py-1" onClick={() => setHistoryModal(null)}>Fechar</button></div>
+          <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Histórico da nota {historyModal.invoice.numeroNota}</h3><button className="rounded-lg border border-zinc-300 bg-white px-3 py-1 text-sm text-zinc-700 hover:bg-zinc-50" onClick={() => setHistoryModal(null)}>Fechar</button></div>
           <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-xl border bg-slate-50 p-3"><p className="text-sm font-medium">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="text-xs text-rose-700">Motivo: {event.reason}</p>}</article>)}</div>
         </section>
       )}
