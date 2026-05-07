@@ -45,6 +45,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const payloadToSave = { ...parsed.data };
+  const serviceEvaluation = payloadToSave.serviceEvaluation;
+  delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
 
   if (manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
     return NextResponse.json(
@@ -64,6 +66,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   if (payloadToSave.status === "APROVADO") {
+    if (!serviceEvaluation) {
+      return NextResponse.json(
+        { error: "A avaliação do serviço é obrigatória para aprovar a nota." },
+        { status: 400 }
+      );
+    }
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
   }
@@ -84,23 +92,47 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   };
 
   const reason = typeof payload?.reason === "string" ? payload.reason : null;
-  const updated = await prisma.invoice.update({
-    where: { id: params.id },
-    data: dataToUpdate
+  const updated = await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.update({ where: { id: params.id }, data: dataToUpdate });
+
+    if (invoice.status === "APROVADO" && serviceEvaluation) {
+      await tx.serviceEvaluation.upsert({
+        where: { invoiceId: invoice.id },
+        update: {
+          rating: serviceEvaluation.rating,
+          comment: serviceEvaluation.comment,
+          riskLevel: serviceEvaluation.riskLevel,
+          managerId: manager.id,
+          managerName: manager.nome,
+          managerEmail: manager.email
+        },
+        create: {
+          invoiceId: invoice.id,
+          rating: serviceEvaluation.rating,
+          comment: serviceEvaluation.comment,
+          riskLevel: serviceEvaluation.riskLevel,
+          managerId: manager.id,
+          managerName: manager.nome,
+          managerEmail: manager.email
+        }
+      });
+    }
+
+    await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: invoice.status, reason } });
+    return invoice;
   });
 
-  await prisma.noteStatusHistory.create({ data: { invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: updated.status, reason } });
   const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
   const actionDescription =
     updated.status === "APROVADO"
-      ? `${manager.nome} aprovou a nota`
+      ? `${manager.nome} aprovou a nota e registrou a avaliação do serviço`
       : updated.status === "RECUSADO"
         ? `${manager.nome} recusou a nota`
         : existing.status !== updated.status
           ? `${manager.nome} alterou o status da nota`
           : `${manager.nome} atualizou os dados da nota`;
 
-  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | ${serviceEvaluation.comment}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 
   if (includeXml) {
     return NextResponse.json(updated);

@@ -16,6 +16,26 @@ export async function GET(_: Request, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
 
-  const logs = await prisma.noteAuditLog.findMany({ where: { invoiceId: params.id }, orderBy: { createdAt: "asc" } });
-  return NextResponse.json(logs);
+  const [logs, evaluation] = await Promise.all([
+    prisma.noteAuditLog.findMany({ where: { invoiceId: params.id }, orderBy: { createdAt: "asc" } }),
+    prisma.serviceEvaluation.findUnique({ where: { invoiceId: params.id } })
+  ]);
+
+  const evaluationEvent = evaluation
+    ? {
+        id: `service-evaluation-${evaluation.id}`,
+        actionType: "SERVICE_EVALUATION_RECORDED",
+        actionDescription: `${evaluation.managerName} registrou a avaliação do serviço`,
+        actorId: evaluation.managerId,
+        actorName: evaluation.managerName,
+        actorEmail: evaluation.managerEmail,
+        createdAt: evaluation.createdAt,
+        reason: null,
+        comment: `Nota ${evaluation.rating}/5 | Risco ${evaluation.riskLevel} | ${evaluation.comment}`
+      }
+    : null;
+
+  const timeline = evaluationEvent ? [...logs, evaluationEvent] : logs;
+  timeline.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  return NextResponse.json(timeline);
 }

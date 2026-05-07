@@ -28,6 +28,12 @@ enum UserRole {
   FORNECEDOR
 }
 
+enum SupplierRiskLevel {
+  BAIXO
+  MEDIO
+  ALTO
+}
+
 model Supplier {
   id                 String                       @id @default(cuid())
   nome               String
@@ -111,10 +117,29 @@ model Invoice {
   statusHistory       NoteStatusHistory[]
   notifications       NoteNotification[]
   auditLogs           NoteAuditLog[]
+  serviceEvaluation   ServiceEvaluation?
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
   @@index([criadoPorId])
+}
+
+model ServiceEvaluation {
+  id           String            @id @default(cuid())
+  invoiceId    String            @unique
+  managerId    String
+  managerName  String
+  managerEmail String
+  rating       Int
+  comment      String
+  riskLevel    SupplierRiskLevel
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  invoice      Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([managerId])
+  @@index([riskLevel])
 }
 
 
