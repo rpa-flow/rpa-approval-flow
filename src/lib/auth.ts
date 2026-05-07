@@ -30,7 +30,7 @@ export function verifyPassword(password: string, storedHash: string) {
 
 type SessionPayload = {
   managerId: string;
-  role: "ADMIN" | "GESTOR";
+  role: "ADMIN" | "GESTOR" | "FORNECEDOR";
   exp: number;
 };
 

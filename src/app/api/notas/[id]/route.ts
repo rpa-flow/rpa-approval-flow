@@ -88,7 +88,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
-  const dataToUpdate = {
+  const dataToUpdate: Record<string, unknown> = {
     ...payloadToSave,
     ultimoLembreteEm:
       payloadToSave.ultimoLembreteEm === undefined
