@@ -1,4 +1,4 @@
-import { InvoiceStatus, ProcessingStatus } from "@prisma/client";
+import { InvoiceStatus, ProcessingStatus, SupplierRiskLevel } from "@prisma/client";
 import { z } from "zod";
 
 export const createInvoiceSchema = z
@@ -42,7 +42,12 @@ export const updateInvoiceSchema = z
     processada: z.boolean().optional(),
     statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),
     tentativasNotificacao: z.number().int().min(0).optional(),
-    ultimoLembreteEm: z.string().datetime().nullable().optional()
+    ultimoLembreteEm: z.string().datetime().nullable().optional(),
+    serviceEvaluation: z.object({
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().min(5),
+      riskLevel: z.nativeEnum(SupplierRiskLevel)
+    }).optional()
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "Informe ao menos um campo para atualizar."
