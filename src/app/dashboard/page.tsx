@@ -54,6 +54,11 @@ export default function DashboardPage() {
     await loadData();
   }
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+
   async function verHistorico(invoice: Invoice) {
     const res = await fetch(`/api/notas/${invoice.id}/historico`);
     if (!res.ok) return setMessage("Não foi possível carregar o histórico da nota.");
@@ -63,7 +68,7 @@ export default function DashboardPage() {
 
   return (
     <main className="container container-wide" onClick={() => setMenuState(null)}>
-      <MainHeader title="Aprovação de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
+      <MainHeader title="Aprovação de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button className="button-secondary" onClick={logout}>Sair</button>} />
       <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Notas fiscais</h2>
