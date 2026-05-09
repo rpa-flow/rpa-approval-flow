@@ -44,7 +44,7 @@ export default function NotasPage() {
     setMessage("Nota fiscal lançada com sucesso.");
   }
 
-  return <main className="container" style={{ maxWidth: 1120 }}>
+  return <main className="container container-wide">
     <MainHeader title="Lançamento de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     <section className="card mt-4">
