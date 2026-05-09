@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -7,8 +7,8 @@ type Category = { id: string; nome: string; descricao?: string | null; ativo: bo
 type Me = { manager: { role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 
 export default function CategoriasFornecedoresPage() { const [me, setMe] = useState<Me | null>(null); const [categories, setCategories] = useState<Category[]>([]); const [form, setForm] = useState({ nome: "", descricao: "" }); const [message, setMessage] = useState(""); const router = useRouter();
-async function loadData() { const meRes = await fetch("/api/auth/me"); if (!meRes.ok) return router.push("/login"); setMe(await meRes.json()); const res = await fetch("/api/categorias-fornecedores"); if (res.ok) setCategories(await res.json()); }
-useEffect(() => { loadData(); }, []);
+const loadData = useCallback(async () => { const meRes = await fetch("/api/auth/me"); if (!meRes.ok) return router.push("/login"); setMe(await meRes.json()); const res = await fetch("/api/categorias-fornecedores"); if (res.ok) setCategories(await res.json()); }, [router]);
+useEffect(() => { loadData(); }, [loadData]);
 async function createCategory(e: React.FormEvent) { e.preventDefault(); const res = await fetch("/api/categorias-fornecedores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); if (!res.ok) return setMessage("Erro ao criar categoria."); setForm({ nome: "", descricao: "" }); setMessage("Categoria criada com sucesso."); await loadData(); }
 async function toggleCategory(category: Category) { const res = await fetch(`/api/categorias-fornecedores/${category.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: !category.ativo }) }); if (!res.ok) return setMessage("Erro ao atualizar categoria."); await loadData(); }
 if (!me) return null; if (me.manager.role !== "ADMIN") return <main className="container"><p>Acesso restrito a ADMIN.</p></main>;
