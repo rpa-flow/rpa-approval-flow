@@ -94,7 +94,7 @@ export default function FornecedoresPage() {
         </form>
       </section>}
       {editingSupplierId && <div className="fixed inset-0 z-40 bg-slate-950/40 px-4 py-8" onClick={() => setEditingSupplierId(null)}>
-        <section className="card mx-auto flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden p-0" onClick={(e) => e.stopPropagation()}>
+        <section className="card mx-auto flex max-h-[88vh] w-full max-w-3xl flex-col p-0" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h3 className="text-lg font-semibold">Editar fornecedor</h3>
@@ -102,13 +102,13 @@ export default function FornecedoresPage() {
             </div>
             <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Fechar</button>
           </div>
-          <form onSubmit={salvarEdicao} className="flex flex-1 flex-col overflow-hidden">
+          <form onSubmit={salvarEdicao} className="flex flex-1 flex-col">
             <div className="grid-2 overflow-y-auto px-5 pb-4">
             <label>Nome<input required value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} /></label>
             <label>CNPJ<input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))} /></label>
             <label className="md:col-span-2">Categorias<select multiple value={editForm.categoryIds} onChange={(e) => setEditForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
             <label className="md:col-span-2">Buscar gestor<input placeholder="Filtrar por nome ou e-mail" value={managerSearch} onChange={(e) => setManagerSearch(e.target.value)} /></label>
-            <label className="md:col-span-2">Vincular gestor<select value={editForm.selectedManagerEmail} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerEmail: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.email}>{m.nome} ({m.email})</option>)}</select></label>
+            <label className="md:col-span-2">Vincular gestor<select className="w-full" value={editForm.selectedManagerEmail} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerEmail: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.email}>{m.nome} ({m.email})</option>)}</select></label>
             </div>
             <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 bg-white px-5 py-3">
               <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button>
