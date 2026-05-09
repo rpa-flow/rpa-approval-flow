@@ -14,10 +14,13 @@ type Me = {
   };
 };
 
+type CategoryItem = { id: string; nome: string; ativo: boolean };
+
 type SupplierListItem = {
   id: string;
   nome: string;
   cnpj: string | null;
+  categories?: CategoryItem[];
   managers: Array<{
     id: string;
     nome: string;
@@ -39,13 +42,15 @@ export default function FornecedoresPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
   const [managers, setManagers] = useState<ManagerItem[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({
     nome: "",
     cnpj: "",
     managerNome: "",
     managerEmail: "",
-    managerSenha: ""
+    managerSenha: "",
+    categoryIds: [] as string[]
   });
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -55,7 +60,8 @@ export default function FornecedoresPage() {
     createNewManager: false,
     addManagerNome: "",
     addManagerEmail: "",
-    addManagerSenha: ""
+    addManagerSenha: "",
+    categoryIds: [] as string[]
   });
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -76,6 +82,9 @@ export default function FornecedoresPage() {
         const payload = (await suppliersRes.json()) as SupplierListItem[];
         setSuppliers(payload);
       }
+
+      const categoriesRes = await fetch("/api/categorias-fornecedores");
+      if (categoriesRes.ok) setCategories((await categoriesRes.json()).filter((c: CategoryItem) => c.ativo));
 
       const managersRes = await fetch("/api/gestores");
       if (managersRes.ok) {
@@ -107,7 +116,8 @@ export default function FornecedoresPage() {
             email: createForm.managerEmail,
             senha: createForm.managerSenha
           }
-        ]
+        ],
+        categoryIds: createForm.categoryIds
       })
     });
 
@@ -137,7 +147,8 @@ export default function FornecedoresPage() {
       createNewManager: false,
       addManagerNome: "",
       addManagerEmail: "",
-      addManagerSenha: ""
+      addManagerSenha: "",
+      categoryIds: supplier.categories?.map((c) => c.id) ?? []
     });
   }
 
@@ -162,7 +173,8 @@ export default function FornecedoresPage() {
             ? {
                 email: editForm.selectedManagerEmail
               }
-          : undefined
+          : undefined,
+        categoryIds: editForm.categoryIds
       })
     });
 
@@ -199,7 +211,7 @@ export default function FornecedoresPage() {
                   <tr>
                     <th>Fornecedor</th>
                     <th>CNPJ</th>
-                    <th>Gestores</th>
+                    <th>Categorias</th><th>Gestores</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -208,7 +220,7 @@ export default function FornecedoresPage() {
                     <tr key={supplier.id}>
                       <td>{supplier.nome}</td>
                       <td>{supplier.cnpj ?? "—"}</td>
-                      <td>{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td>
+                      <td>{supplier.categories?.map((c) => c.nome).join(", ") || "—"}</td><td>{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td>
                       <td>
                         <button type="button" className="chip" onClick={() => iniciarEdicao(supplier)}>
                           Editar
@@ -218,7 +230,7 @@ export default function FornecedoresPage() {
                   ))}
                   {!suppliers.length && (
                     <tr>
-                      <td colSpan={4} className="muted center">Nenhum fornecedor cadastrado.</td>
+                      <td colSpan={5} className="muted center">Nenhum fornecedor cadastrado.</td>
                     </tr>
                   )}
                 </tbody>
@@ -247,6 +259,12 @@ export default function FornecedoresPage() {
                     value={createForm.cnpj}
                     onChange={(e) => setCreateForm((p) => ({ ...p, cnpj: e.target.value }))}
                   />
+                </label>
+                <label>
+                  Categorias
+                  <select multiple value={createForm.categoryIds} onChange={(e) => setCreateForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
+                    {categories.map((category) => <option key={category.id} value={category.id}>{category.nome}</option>)}
+                  </select>
                 </label>
                 <label>
                   Nome do gestor
@@ -305,6 +323,12 @@ export default function FornecedoresPage() {
                     onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))}
                   />
                 </label>
+                <label>
+                  Categorias
+                  <select multiple value={editForm.categoryIds} onChange={(e) => setEditForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
+                    {categories.map((category) => <option key={category.id} value={category.id}>{category.nome}</option>)}
+                  </select>
+                </label>
                 <h3>Vincular gestor ao fornecedor (opcional)</h3>
                 <p className="muted small">
                   Selecione um gestor existente ou marque a opção para criar um novo.
@@ -347,6 +371,12 @@ export default function FornecedoresPage() {
                     onChange={(e) => setEditForm((p) => ({ ...p, addManagerEmail: e.target.value }))}
                     disabled={!editForm.createNewManager}
                   />
+                </label>
+                <label>
+                  Categorias
+                  <select multiple value={createForm.categoryIds} onChange={(e) => setCreateForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>
+                    {categories.map((category) => <option key={category.id} value={category.id}>{category.nome}</option>)}
+                  </select>
                 </label>
                 <label>
                   Nome do gestor (novo)

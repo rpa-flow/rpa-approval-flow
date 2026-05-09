@@ -54,7 +54,33 @@ model Supplier {
   managerSuppliers   ManagerSupplier[]
   invoices           Invoice[]
   notificationConfig SupplierNotificationConfig?
+  categoryLinks      SupplierCategoryLink[]
 }
+
+model SupplierCategory {
+  id          String   @id @default(cuid())
+  nome        String   @unique
+  descricao   String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  supplierLinks SupplierCategoryLink[]
+}
+
+model SupplierCategoryLink {
+  id         String   @id @default(cuid())
+  supplierId String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  category   SupplierCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, categoryId])
+  @@index([supplierId])
+  @@index([categoryId])
+}
+
 
 model Manager {
   id               String            @id @default(cuid())
@@ -152,6 +178,7 @@ model ServiceEvaluation {
   rating       Int
   comment      String
   riskLevel    SupplierRiskLevel
+  qualifica    Boolean?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
