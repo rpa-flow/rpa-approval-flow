@@ -45,7 +45,7 @@ export default function DashboardPage() {
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
-  const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; comment: string; riskLevel: RiskLevel | "" }>({ rating: null, comment: "", riskLevel: "" });
+  const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const router = useRouter();
 
   const loadData = useCallback(async () => {
@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
 
   async function aprovarComAvaliacao() {
-    if (!approveModal || !evaluation.rating || !evaluation.comment.trim() || !evaluation.riskLevel) {
+    if (!approveModal || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setMessage("Preencha a avaliação completa para aprovar a nota.");
       return;
     }
@@ -90,13 +90,13 @@ export default function DashboardPage() {
       status: "APROVADO",
       serviceEvaluation: {
         rating: evaluation.rating,
-        comment: evaluation.comment.trim(),
+        comment: `Qualifica: ${evaluation.qualifica === "SIM" ? "Sim" : "Não"}`,
         riskLevel: evaluation.riskLevel
       }
     });
 
     setApproveModal(null);
-    setEvaluation({ rating: null, comment: "", riskLevel: "" });
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
   }
 
   async function verHistorico(invoice: Invoice) {
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                 <td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                 <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Qualifica?</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
           </tbody>
         </table>
@@ -151,8 +151,10 @@ export default function DashboardPage() {
           })}
         </div>
       </div>
-      <label className="mt-4 block text-sm font-medium">Comentário
-        <textarea className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" rows={4} value={evaluation.comment} onChange={(event) => setEvaluation((prev) => ({ ...prev, comment: event.target.value }))} />
+      <label className="mt-4 block text-sm font-medium">Qualifica?
+        <select className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}>
+          <option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option>
+        </select>
       </label>
       <label className="mt-4 block text-sm font-medium">Classificação de risco
         <select className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}>
