@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
+  const [updatedFrom, setUpdatedFrom] = useState("");
+  const [updatedTo, setUpdatedTo] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
@@ -53,10 +55,16 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = useMemo(() => invoices.filter((i) =>
-    (statusFilter === "TODOS" || i.status === statusFilter) &&
-    (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter)
-  ), [invoices, statusFilter, supplierFilter]);
+  const filtered = useMemo(() => invoices.filter((i) => {
+    const updatedAt = new Date(i.dataAtualizacao);
+    const fromDate = updatedFrom ? new Date(`${updatedFrom}T00:00:00`) : null;
+    const toDate = updatedTo ? new Date(`${updatedTo}T23:59:59`) : null;
+
+    return (statusFilter === "TODOS" || i.status === statusFilter) &&
+      (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter) &&
+      (!fromDate || updatedAt >= fromDate) &&
+      (!toDate || updatedAt <= toDate);
+  }), [invoices, statusFilter, supplierFilter, updatedFrom, updatedTo]);
 
   const suppliers = useMemo(() => Array.from(new Set(invoices.map((i) => i.fornecedor.nome))), [invoices]);
 
