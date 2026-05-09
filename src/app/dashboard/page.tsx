@@ -6,7 +6,6 @@ import { MainHeader } from "@/app/components/main-header";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
-type InvoiceSituation = "AUTORIZADA" | "CANCELADA";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
 
 type Invoice = {
@@ -21,7 +20,6 @@ type Invoice = {
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
   observacaoValidacao?: string | null;
-  situacaoNotaFiscal?: InvoiceSituation | null;
   codigoDelphi?: string | null;
   statusIntegracaoDelphi?: IntegrationStatus | null;
   ocContrato?: string | null;
@@ -39,7 +37,6 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
-  const [situacaoFilter, setSituacaoFilter] = useState("TODOS");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
@@ -58,9 +55,8 @@ export default function DashboardPage() {
 
   const filtered = useMemo(() => invoices.filter((i) =>
     (statusFilter === "TODOS" || i.status === statusFilter) &&
-    (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter) &&
-    (situacaoFilter === "TODOS" || (i.situacaoNotaFiscal ?? "AUTORIZADA") === situacaoFilter)
-  ), [invoices, statusFilter, supplierFilter, situacaoFilter]);
+    (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter)
+  ), [invoices, statusFilter, supplierFilter]);
 
   const suppliers = useMemo(() => Array.from(new Set(invoices.map((i) => i.fornecedor.nome))), [invoices]);
 
@@ -85,20 +81,19 @@ export default function DashboardPage() {
       <div className="flex flex-wrap gap-2">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option></select>
         <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-        <select value={situacaoFilter} onChange={(e) => setSituacaoFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todas situações</option><option value="AUTORIZADA">Autorizada</option><option value="CANCELADA">Cancelada</option></select>
-      </div>
+              </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">NF</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Situação</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">NF</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((invoice) => <div key={invoice.id} className="contents">
               <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
                 <td className="px-4 py-3">{invoice.fornecedor.nome}</td><td className="px-4 py-3">{invoice.numeroNota}</td><td className="px-4 py-3">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="px-4 py-3">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_COLORS[invoice.status] ?? "bg-zinc-100 text-zinc-700"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
-                <td className="px-4 py-3">{invoice.situacaoNotaFiscal ?? "AUTORIZADA"}</td><td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
+                <td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                 <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </div>)}
           </tbody>
         </table>
