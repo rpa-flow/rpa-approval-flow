@@ -8,6 +8,8 @@ type InvoiceLike = {
   dataAtualizacao: Date;
   status: InvoiceStatus;
   processada: boolean;
+  dataLancamentoDelphi?: Date | null;
+  codigoDelphi?: string | null;
   fornecedor: { nome: string };
   criadoPor: { nome: string } | null;
 };
@@ -20,7 +22,7 @@ export function createdVsProcessedByMonth(invoices: InvoiceLike[]) {
     const key = monthKey(inv.createdAt);
     const row = map.get(key) ?? { month: key, created: 0, processed: 0 };
     row.created += 1;
-    if (inv.status === "PROCESSADO" || inv.processada) row.processed += 1;
+    if (inv.status === "PROCESSADO" || inv.processada || Boolean(inv.dataLancamentoDelphi) || Boolean(inv.codigoDelphi)) row.processed += 1;
     map.set(key, row);
   }
 
