@@ -8,6 +8,7 @@ const DEFAULT_HEADER_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/notas", label: "Lançar nota", icon: "🧾" },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+  { href: "/categorias-fornecedores", label: "Categorias", icon: "🗂️" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
   { href: "/perfil", label: "Perfil", icon: "👤" }
 ] as const;
@@ -46,8 +47,15 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
 
   const filteredLinks = useMemo(() => {
     return DEFAULT_HEADER_LINKS.filter((link) => {
-      if (link.href !== "/notas") return true;
-      return role === "ADMIN" || role === "FORNECEDOR";
+      if (link.href === "/notas") {
+        return role === "ADMIN" || role === "FORNECEDOR";
+      }
+
+      if (link.href === "/categorias-fornecedores") {
+        return role === "ADMIN";
+      }
+
+      return true;
     });
   }, [role]);
 
