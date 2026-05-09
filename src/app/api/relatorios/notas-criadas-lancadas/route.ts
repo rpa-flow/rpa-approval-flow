@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionManager } from "@/lib/auth";
-import { APPROVAL_SLA_HOURS, getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
+import { getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
+import { createdVsProcessedByMonth } from "@/lib/reports-aggregations";
 
 export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+
   const filters = parseFilters(request);
   const invoices = await loadInvoices(getReportsScope(manager), filters);
-  const total = invoices.length;
-  const approved = invoices.filter((i) => i.status === "APROVADO");
-  const refused = invoices.filter((i) => i.status === "RECUSADO");
-  const processed = invoices.filter((i) => i.status === "PROCESSADO" || i.processada);
-  const pending = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
-  const avgHours = approved.length ? approved.reduce((s, i) => s + ((new Date(i.dataValidacao || i.dataAtualizacao).getTime() - new Date(i.createdAt).getTime()) / 3600000), 0) / approved.length : 0;
-  const totalValue = invoices.reduce((s, i) => s + Number(i.valorServico || 0), 0);
-  const highRisk = invoices.filter((i) => i.serviceEvaluation?.riskLevel === "ALTO");
+  const monthly = createdVsProcessedByMonth(invoices);
 
-  return NextResponse.json({ total, approved: approved.length, refused: refused.length, processed: processed.length, pending: pending.length, avgHours, totalValue, highRisk: highRisk.length, slaHours: APPROVAL_SLA_HOURS, invoices });
+  const totals = monthly.reduce((acc, row) => ({
+    created: acc.created + row.created,
+    processed: acc.processed + row.processed
+  }), { created: 0, processed: 0 });
+
+  return NextResponse.json({
+    summary: {
+      created: totals.created,
+      processed: totals.processed,
+      difference: totals.created - totals.processed,
+      conversionRate: totals.created ? Number(((totals.processed / totals.created) * 100).toFixed(2)) : 0
+    },
+    monthly
+  });
 }

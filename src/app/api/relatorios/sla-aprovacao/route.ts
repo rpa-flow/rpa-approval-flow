@@ -1,20 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionManager } from "@/lib/auth";
 import { APPROVAL_SLA_HOURS, getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
+import { slaEvolution } from "@/lib/reports-aggregations";
 
 export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+
   const filters = parseFilters(request);
   const invoices = await loadInvoices(getReportsScope(manager), filters);
-  const total = invoices.length;
-  const approved = invoices.filter((i) => i.status === "APROVADO");
-  const refused = invoices.filter((i) => i.status === "RECUSADO");
-  const processed = invoices.filter((i) => i.status === "PROCESSADO" || i.processada);
-  const pending = invoices.filter((i) => i.status === "AGUARDANDO_APROVACAO");
-  const avgHours = approved.length ? approved.reduce((s, i) => s + ((new Date(i.dataValidacao || i.dataAtualizacao).getTime() - new Date(i.createdAt).getTime()) / 3600000), 0) / approved.length : 0;
-  const totalValue = invoices.reduce((s, i) => s + Number(i.valorServico || 0), 0);
-  const highRisk = invoices.filter((i) => i.serviceEvaluation?.riskLevel === "ALTO");
+  const monthly = slaEvolution(invoices, APPROVAL_SLA_HOURS);
+  const approved = invoices.filter((invoice) => invoice.status === "APROVADO");
 
-  return NextResponse.json({ total, approved: approved.length, refused: refused.length, processed: processed.length, pending: pending.length, avgHours, totalValue, highRisk: highRisk.length, slaHours: APPROVAL_SLA_HOURS, invoices });
+  const ranking = approved
+    .map((invoice) => {
+      const approvalAt = invoice.dataValidacao ?? invoice.dataAtualizacao;
+      const approvalHours = (approvalAt.getTime() - invoice.createdAt.getTime()) / 3600000;
+      return {
+        invoiceId: invoice.id,
+        numeroNota: invoice.numeroNota,
+        fornecedor: invoice.fornecedor.nome,
+        gestor: invoice.criadoPor?.nome ?? "Não informado",
+        approvalHours: Number(approvalHours.toFixed(2)),
+        outOfSla: approvalHours > APPROVAL_SLA_HOURS
+      };
+    })
+    .sort((a, b) => b.approvalHours - a.approvalHours)
+    .slice(0, 10);
+
+  return NextResponse.json({
+    slaHours: APPROVAL_SLA_HOURS,
+    monthly,
+    outOfSlaCount: ranking.filter((item) => item.outOfSla).length,
+    ranking
+  });
 }

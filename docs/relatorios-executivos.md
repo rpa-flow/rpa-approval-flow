@@ -21,3 +21,9 @@ Todos os endpoints aplicam autenticação e escopo por perfil:
 - Filtros e escopo ficam em `src/lib/reports.ts`.
 - Cálculo/agregação no backend para evitar carga no frontend.
 - Componentes reutilizáveis em `src/app/components/reports/report-components.tsx`.
+
+
+## Relatórios históricos implementados
+- Notas criadas x lançadas com série mensal, diferença e taxa de conversão.
+- Evolução mensal de SLA com percentual fora do limite configurado.
+- Ranking de maiores atrasos por nota aprovada.
