@@ -44,6 +44,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     });
 
+    if (parsed.data.categoryIds) {
+      await prisma.supplierCategoryLink.deleteMany({ where: { supplierId: params.id } });
+      if (parsed.data.categoryIds.length) {
+        await prisma.supplierCategoryLink.createMany({ data: parsed.data.categoryIds.map((categoryId) => ({ supplierId: params.id, categoryId })), skipDuplicates: true });
+      }
+    }
+
     if (parsed.data.addManager) {
       const { email, nome, senha } = parsed.data.addManager;
 
@@ -83,7 +90,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const fullSupplier = await prisma.supplier.findUnique({
       where: { id: params.id },
       include: {
-        managerSuppliers: {
+        categoryLinks: { include: { category: true } },
+      managerSuppliers: {
           include: {
             manager: {
               select: {
@@ -103,7 +111,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       id: fullSupplier?.id,
       nome: fullSupplier?.nome,
       cnpj: fullSupplier?.cnpj,
-      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? []
+      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? [],
+      categories: fullSupplier?.categoryLinks.map((cl) => cl.category) ?? []
     });
   } catch (error) {
     return NextResponse.json(

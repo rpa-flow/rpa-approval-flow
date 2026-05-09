@@ -22,6 +22,7 @@ export async function GET() {
 
   const suppliers = await prisma.supplier.findMany({
     include: {
+      categoryLinks: { include: { category: true } },
       managerSuppliers: {
         include: {
           manager: {
@@ -46,7 +47,8 @@ export async function GET() {
       id: s.id,
       nome: s.nome,
       cnpj: s.cnpj,
-      managers: s.managerSuppliers.map((ms) => ms.manager)
+      managers: s.managerSuppliers.map((ms) => ms.manager),
+      categories: s.categoryLinks.map((cl) => cl.category)
     }))
   );
 }
@@ -71,6 +73,10 @@ export async function POST(request: NextRequest) {
       cnpj: parsed.data.cnpj
     }
   });
+
+  if (parsed.data.categoryIds?.length) {
+    await prisma.supplierCategoryLink.createMany({ data: parsed.data.categoryIds.map((categoryId) => ({ supplierId: supplier.id, categoryId })), skipDuplicates: true });
+  }
 
   for (const m of parsed.data.managers) {
     const existingManager = await prisma.manager.findUnique({ where: { email: m.email } });
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
   const fullSupplier = await prisma.supplier.findUnique({
     where: { id: supplier.id },
     include: {
+      categoryLinks: { include: { category: true } },
       managerSuppliers: {
         include: {
           manager: {
@@ -125,7 +132,8 @@ export async function POST(request: NextRequest) {
       id: fullSupplier?.id,
       nome: fullSupplier?.nome,
       cnpj: fullSupplier?.cnpj,
-      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? []
+      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? [],
+      categories: fullSupplier?.categoryLinks.map((cl) => cl.category) ?? []
     },
     { status: 201 }
   );

@@ -63,6 +63,7 @@ export const updateInvoiceSchema = z
 export const supplierSchema = z.object({
   nome: z.string().min(2),
   cnpj: z.string().regex(/^\d{14}$/).optional(),
+  categoryIds: z.array(z.string().min(1)).optional(),
   managers: z.array(
     z.object({
       nome: z.string().min(2),
@@ -75,6 +76,7 @@ export const supplierSchema = z.object({
 export const updateSupplierSchema = z.object({
   nome: z.string().min(2),
   cnpj: z.string().regex(/^\d{14}$/).nullable().optional(),
+  categoryIds: z.array(z.string().min(1)).optional(),
   addManager: z.object({
     nome: z.string().min(2).optional(),
     email: z.string().email(),
@@ -106,4 +108,11 @@ export const notificationRuleSchema = z.object({
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(6)
+});
+
+
+export const supplierCategorySchema = z.object({
+  nome: z.string().min(2),
+  descricao: z.string().max(200).optional().nullable(),
+  ativo: z.boolean().optional()
 });
