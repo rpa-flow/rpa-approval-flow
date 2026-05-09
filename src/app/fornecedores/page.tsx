@@ -87,16 +87,24 @@ export default function FornecedoresPage() {
           <div className="flex items-end"><button className="btn-primary" type="submit">Cadastrar fornecedor</button></div>
         </form>
       </section>}
-      {editingSupplierId && <section className="card mt-4">
-        <h3 className="mb-3 text-base font-semibold">Editar fornecedor</h3>
-        <form onSubmit={salvarEdicao} className="grid-2">
-          <label>Nome<input required value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} /></label>
-          <label>CNPJ<input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))} /></label>
-          <label className="md:col-span-2">Categorias<select multiple value={editForm.categoryIds} onChange={(e) => setEditForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
-          <label>Vincular gestor<select value={editForm.selectedManagerEmail} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerEmail: e.target.value }))}><option value="">Nenhum</option>{managers.map((m) => <option key={m.id} value={m.email}>{m.nome} ({m.email})</option>)}</select></label>
-          <div className="flex items-end gap-2"><button className="btn-primary" type="submit">Salvar</button><button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button></div>
-        </form>
-      </section>}
+      {editingSupplierId && <div className="fixed inset-0 z-40 bg-slate-950/40 px-4 py-8" onClick={() => setEditingSupplierId(null)}>
+        <section className="card mx-auto max-h-[88vh] w-full max-w-3xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-lg font-semibold">Editar fornecedor</h3>
+              <p className="text-sm text-slate-500">Atualize dados cadastrais sem sair da listagem.</p>
+            </div>
+            <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Fechar</button>
+          </div>
+          <form onSubmit={salvarEdicao} className="grid-2">
+            <label>Nome<input required value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} /></label>
+            <label>CNPJ<input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))} /></label>
+            <label className="md:col-span-2">Categorias<select multiple value={editForm.categoryIds} onChange={(e) => setEditForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
+            <label>Vincular gestor<select value={editForm.selectedManagerEmail} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerEmail: e.target.value }))}><option value="">Nenhum</option>{managers.map((m) => <option key={m.id} value={m.email}>{m.nome} ({m.email})</option>)}</select></label>
+            <div className="flex items-end gap-2"><button className="btn-primary" type="submit">Salvar</button><button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button></div>
+          </form>
+        </section>
+      </div>}
     </> : null}
     {message && <p className="message">{message}</p>}
   </main>;
