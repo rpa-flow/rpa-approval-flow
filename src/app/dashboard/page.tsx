@@ -108,7 +108,7 @@ export default function DashboardPage() {
   }
 
   return <main className="container container-wide" onClick={() => setMenuState(null)}>
-    <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button className="button-secondary" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); router.push("/login"); }}>Sair</button>} />
+    <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
     <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
       <div className="flex flex-wrap gap-2">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option></select>
