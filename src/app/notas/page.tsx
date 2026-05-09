@@ -8,7 +8,7 @@ type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "
 type LaunchMode = "XML" | "MANUAL";
 
 const INITIAL_FORM = {
-  fornecedorId: "", numeroNota: "", codigoIdentificador: "", dataEmissao: "", dataCompetencia: "", valorServico: "", valorLiquido: "", tomadorNome: "", tomadorCnpj: ""
+  fornecedorId: "", numeroNota: "", codigoIdentificador: "", dataEmissao: "", dataCompetencia: "", valorServico: "", valorLiquido: "", tomadorNome: "", tomadorCnpj: "", tomadorEmail: "", nDfse: "", localEmissao: "", localPrestacao: "", municipioIncidencia: "", itemTributacaoNac: "", itemTributacaoMun: "", nbsDescricao: "", dataProcessamento: "", prestadorCnpj: "", prestadorNome: "", prestadorEmail: "", valorBaseCalculo: "", valorIssqn: "", valorTotalRetido: "", aliquota: ""
 };
 
 export default function NotasPage() {
@@ -50,7 +50,23 @@ export default function NotasPage() {
             valorServico: invoiceForm.valorServico ? Number(invoiceForm.valorServico) : undefined,
             valorLiquido: invoiceForm.valorLiquido ? Number(invoiceForm.valorLiquido) : undefined,
             tomadorNome: invoiceForm.tomadorNome || undefined,
-            tomadorCnpj: invoiceForm.tomadorCnpj || undefined
+            tomadorCnpj: invoiceForm.tomadorCnpj || undefined,
+            tomadorEmail: invoiceForm.tomadorEmail || undefined,
+            nDfse: invoiceForm.nDfse || undefined,
+            localEmissao: invoiceForm.localEmissao || undefined,
+            localPrestacao: invoiceForm.localPrestacao || undefined,
+            municipioIncidencia: invoiceForm.municipioIncidencia || undefined,
+            itemTributacaoNac: invoiceForm.itemTributacaoNac || undefined,
+            itemTributacaoMun: invoiceForm.itemTributacaoMun || undefined,
+            nbsDescricao: invoiceForm.nbsDescricao || undefined,
+            dataProcessamento: invoiceForm.dataProcessamento ? new Date(invoiceForm.dataProcessamento).toISOString() : undefined,
+            prestadorCnpj: invoiceForm.prestadorCnpj || undefined,
+            prestadorNome: invoiceForm.prestadorNome || undefined,
+            prestadorEmail: invoiceForm.prestadorEmail || undefined,
+            valorBaseCalculo: invoiceForm.valorBaseCalculo ? Number(invoiceForm.valorBaseCalculo) : undefined,
+            valorIssqn: invoiceForm.valorIssqn ? Number(invoiceForm.valorIssqn) : undefined,
+            valorTotalRetido: invoiceForm.valorTotalRetido ? Number(invoiceForm.valorTotalRetido) : undefined,
+            aliquota: invoiceForm.aliquota ? Number(invoiceForm.aliquota) : undefined
           })
         });
 
@@ -98,6 +114,22 @@ export default function NotasPage() {
             <label>Valor líquido<input type="number" step="0.01" min="0" value={invoiceForm.valorLiquido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorLiquido: e.target.value }))} /></label>
             <label>Tomador<input value={invoiceForm.tomadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorNome: e.target.value }))} /></label>
             <label>CNPJ do tomador<input value={invoiceForm.tomadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
+            <label>Email do tomador<input type="email" value={invoiceForm.tomadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorEmail: e.target.value }))} /></label>
+            <label>nDFSe<input value={invoiceForm.nDfse} onChange={(e) => setInvoiceForm((p) => ({ ...p, nDfse: e.target.value }))} /></label>
+            <label>Local de emissão<input value={invoiceForm.localEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localEmissao: e.target.value }))} /></label>
+            <label>Local de prestação<input value={invoiceForm.localPrestacao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localPrestacao: e.target.value }))} /></label>
+            <label>Município incidência<input value={invoiceForm.municipioIncidencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, municipioIncidencia: e.target.value }))} /></label>
+            <label>Tributação nacional<input value={invoiceForm.itemTributacaoNac} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoNac: e.target.value }))} /></label>
+            <label>Tributação municipal<input value={invoiceForm.itemTributacaoMun} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoMun: e.target.value }))} /></label>
+            <label>Descrição NBS<input value={invoiceForm.nbsDescricao} onChange={(e) => setInvoiceForm((p) => ({ ...p, nbsDescricao: e.target.value }))} /></label>
+            <label>Data processamento<input type="datetime-local" value={invoiceForm.dataProcessamento} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataProcessamento: e.target.value }))} /></label>
+            <label>CNPJ prestador<input value={invoiceForm.prestadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
+            <label>Nome prestador<input value={invoiceForm.prestadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorNome: e.target.value }))} /></label>
+            <label>Email prestador<input type="email" value={invoiceForm.prestadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorEmail: e.target.value }))} /></label>
+            <label>Base de cálculo<input type="number" step="0.01" min="0" value={invoiceForm.valorBaseCalculo} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorBaseCalculo: e.target.value }))} /></label>
+            <label>Valor ISSQN<input type="number" step="0.01" min="0" value={invoiceForm.valorIssqn} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorIssqn: e.target.value }))} /></label>
+            <label>Valor total retido<input type="number" step="0.01" min="0" value={invoiceForm.valorTotalRetido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorTotalRetido: e.target.value }))} /></label>
+            <label>Alíquota (%)<input type="number" step="0.01" min="0" value={invoiceForm.aliquota} onChange={(e) => setInvoiceForm((p) => ({ ...p, aliquota: e.target.value }))} /></label>
           </>
         )}
 
