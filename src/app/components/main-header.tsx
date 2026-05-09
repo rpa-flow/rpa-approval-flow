@@ -6,6 +6,7 @@ import { AppHeader } from "@/app/components/app-header";
 
 const DEFAULT_HEADER_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/relatorios", label: "Relatórios", icon: "📈" },
   { href: "/notas", label: "Lançar nota", icon: "🧾" },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
   { href: "/categorias-fornecedores", label: "Categorias", icon: "🗂️" },
