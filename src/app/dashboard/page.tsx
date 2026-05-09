@@ -115,6 +115,7 @@ export default function DashboardPage() {
         <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
         <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização de" />
         <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização até" />
+        <button type="button" className="rounded-lg border border-zinc-300 !bg-white px-3 py-2 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="min-w-full text-sm">
