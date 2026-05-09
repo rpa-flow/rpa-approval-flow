@@ -21,78 +21,54 @@ export function AppHeader({ title, subtitle, links, action }: AppHeaderProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const normalizedLinks = links.some((link) => link.href === "/configuracoes")
-    ? links
-    : [...links, { href: "/configuracoes", label: "Configurações", icon: "⚙️" }];
-
   return (
-    <header className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+    <header className="card mt-2">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
-          <h1 className="m-0 text-2xl font-bold text-slate-900">{title}</h1>
-          {subtitle && (
-            <p className="mt-2 line-clamp-2 max-w-5xl text-sm leading-relaxed text-slate-600" title={subtitle}>
-              {subtitle}
-            </p>
-          )}
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Plataforma de aprovação</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+          {subtitle && <p className="mt-2 max-w-4xl text-sm leading-relaxed text-slate-600">{subtitle}</p>}
         </div>
 
-        <div className="hidden items-center gap-3 xl:flex">
+        <div className="hidden xl:flex xl:flex-col xl:items-end xl:gap-3">
           {action}
-          <nav className="max-w-[560px] flex-wrap justify-end gap-2 xl:flex">
-          {normalizedLinks.map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={`${link.href}-${link.label}`}
-                href={link.href}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                  isActive
-                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
-                }`}
-              >
-                {link.icon ? <span className="text-xs opacity-80">{link.icon}</span> : null}
-                <span>{link.label}</span>
-              </Link>
-            );
-          })}
-          </nav>
-        </div>
-
-        <div className="relative xl:hidden">
-          <div className="mb-2 flex justify-end">{action}</div>
-          <button
-            type="button"
-            className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-            onClick={() => setOpen((v) => !v)}
-          >
-            ☰ Menu
-          </button>
-          <nav
-            className={`absolute right-0 top-[calc(100%+0.45rem)] z-20 min-w-56 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl ${
-              open ? "flex" : "hidden"
-            }`}
-          >
-            {normalizedLinks.map((link) => {
+          <nav className="flex flex-wrap justify-end gap-2">
+            {links.map((link) => {
               const isActive = pathname === link.href;
               return (
                 <Link
-                  key={`${link.href}-${link.label}-mobile`}
+                  key={link.href}
                   href={link.href}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
-                    isActive
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                    isActive ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                   }`}
-                  onClick={() => setOpen(false)}
                 >
-                  {link.icon ? <span className="text-xs opacity-80">{link.icon}</span> : null}
-                  <span>{link.label}</span>
+                  {link.icon && <span className="text-xs">{link.icon}</span>}
+                  {link.label}
                 </Link>
               );
             })}
           </nav>
+        </div>
+
+        <div className="xl:hidden">
+          <div className="mb-2 flex justify-end">{action}</div>
+          <button className="btn-secondary" type="button" onClick={() => setOpen((prev) => !prev)}>Menu</button>
+          {open && (
+            <nav className="mt-2 grid gap-1 rounded-xl border border-slate-200 bg-white p-2">
+              {links.map((link) => (
+                <Link
+                  key={`${link.href}-mobile`}
+                  href={link.href}
+                  className={`rounded-lg px-3 py-2 text-sm ${pathname === link.href ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                  onClick={() => setOpen(false)}
+                >
+                  {link.icon ? `${link.icon} ` : ""}
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
         </div>
       </div>
     </header>
