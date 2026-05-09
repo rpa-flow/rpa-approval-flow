@@ -99,6 +99,12 @@ export const approvalNotificationSchema = z.object({
   message: "Informe invoiceId ou codigoIdentificador."
 });
 
+export const testEmailSchema = z.object({
+  destinatario: z.string().trim().email().optional(),
+  assunto: z.string().trim().min(3).max(120).optional(),
+  mensagem: z.string().trim().min(3).max(1000).optional()
+});
+
 export const notificationRuleSchema = z.object({
   diasLembrete: z.number().int().min(0).max(60),
   ativo: z.boolean(),

@@ -1,4 +1,12 @@
 import nodemailer from "nodemailer";
+
+type EmailSendResult = {
+  simulated: boolean;
+  messageId?: string;
+  accepted?: string[];
+  rejected?: string[];
+};
+
 function buildTransport() {
   if (
     process.env.SMTP_HOST &&
@@ -18,6 +26,12 @@ function buildTransport() {
   }
 
   return null;
+}
+
+function normalizeMailAddresses(value: unknown): string[] | undefined {
+  if (!value) return undefined;
+  if (Array.isArray(value)) return value.map(String);
+  return [String(value)];
 }
 
 export async function sendInvoiceCreatedEmail(params: {
@@ -44,6 +58,41 @@ export async function sendInvoiceCreatedEmail(params: {
     subject: `Nova nota fiscal recebida: ${params.invoiceNumber}`,
     text: `Uma nova nota fiscal foi recebida para ${params.supplierName}. Número: ${params.invoiceNumber}.`
   });
+}
+
+export async function sendTestEmail(params: {
+  recipient: string;
+  subject?: string;
+  message?: string;
+}): Promise<EmailSendResult> {
+  const subject = params.subject ?? "Teste de recebimento de e-mail";
+  const text =
+    params.message ??
+    [
+      "Este é um e-mail de teste do RPA Approval Flow.",
+      "Se você recebeu esta mensagem, a configuração SMTP está funcionando."
+    ].join("\n");
+
+  const transport = buildTransport();
+
+  if (!transport) {
+    console.log(`[email:simulado] ${subject} -> ${params.recipient}\n${text}`);
+    return { simulated: true, accepted: [params.recipient], rejected: [] };
+  }
+
+  const info = await transport.sendMail({
+    from: process.env.SMTP_FROM ?? "notificacoes@rpa-flow.local",
+    to: params.recipient,
+    subject,
+    text
+  });
+
+  return {
+    simulated: false,
+    messageId: info.messageId,
+    accepted: normalizeMailAddresses(info.accepted),
+    rejected: normalizeMailAddresses(info.rejected)
+  };
 }
 
 export async function sendApprovalRequestEmail(params: {
