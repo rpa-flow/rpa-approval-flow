@@ -44,8 +44,8 @@ export default function NotasPage() {
     setMessage("Nota fiscal lançada com sucesso.");
   }
 
-  return <main className="container" style={{ maxWidth: 1120 }}>
-    <MainHeader title="Lançamento de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button className="btn-secondary" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); router.push("/login"); }}>Sair</button>} />
+  return <main className="container container-wide">
+    <MainHeader title="Lançamento de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     <section className="card mt-4">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">

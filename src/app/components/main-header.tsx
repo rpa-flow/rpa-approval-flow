@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppHeader } from "@/app/components/app-header";
 
 const DEFAULT_HEADER_LINKS = [
@@ -21,6 +22,7 @@ type MainHeaderProps = {
 
 export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
   const [role, setRole] = useState<ManagerRole | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let isMounted = true;
@@ -49,5 +51,17 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
     });
   }, [role]);
 
-  return <AppHeader title={title} subtitle={subtitle} links={[...filteredLinks]} action={action} />;
+  const logoutButton = (
+    <button
+      className="button-secondary"
+      onClick={async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        router.push("/login");
+      }}
+    >
+      Sair
+    </button>
+  );
+
+  return <AppHeader title={title} subtitle={subtitle} links={[...filteredLinks]} action={action ?? logoutButton} />;
 }
