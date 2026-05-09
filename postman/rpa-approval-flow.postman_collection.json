@@ -692,6 +692,39 @@
               }
             }
           }
+        },
+        {
+          "name": "Testar recebimento de e-mail",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notificacoes/teste-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notificacoes",
+                "teste-email"
+              ]
+            },
+            "description": "Requer login. Se destinatario não for enviado, usa o e-mail do usuário autenticado. Apenas ADMIN pode informar outro destinatário.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinatario\": \"seu.email@empresa.com\",\n  \"assunto\": \"Teste de recebimento\",\n  \"mensagem\": \"Mensagem enviada pela rota de teste do RPA Approval Flow.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     }

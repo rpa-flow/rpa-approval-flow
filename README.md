@@ -45,6 +45,17 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 
 ### Notificações
 - `POST /api/notificacoes/aprovacao` (requer login)
+- `POST /api/notificacoes/teste-email` (requer login; envia um e-mail simples para validar recebimento; `ADMIN` pode informar outro destinatário)
+
+Payload opcional para teste de e-mail:
+
+```json
+{
+  "destinatario": "seu.email@empresa.com",
+  "assunto": "Teste de recebimento",
+  "mensagem": "Mensagem enviada pela rota de teste do RPA Approval Flow."
+}
+```
 
 ### Fornecedores
 - `GET /api/fornecedores` (requer `ADMIN`)
