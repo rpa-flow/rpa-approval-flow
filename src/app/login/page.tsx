@@ -71,11 +71,11 @@ export default function LoginPage() {
               required
             />
           </label>
-          <button type="submit" disabled={loading}>
+          <button className="btn-primary" type="submit" disabled={loading}>
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-        {erro && <p className="message">{erro}</p>}
+        {erro && <p className="login-error">{erro}</p>}
       </section>
     </main>
   );
