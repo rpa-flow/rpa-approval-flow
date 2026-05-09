@@ -41,7 +41,7 @@ export function invoiceWhere(scope: ReportsScope, filters: ReturnType<typeof par
 
 
 export function isInvoiceLaunched(invoice: { status: InvoiceStatus; processada: boolean; dataLancamentoDelphi?: Date | null; codigoDelphi?: string | null }) {
-  return invoice.status === "PROCESSADO" || invoice.processada || Boolean(invoice.dataLancamentoDelphi) || Boolean(invoice.codigoDelphi);
+  return invoice.status === "PROCESSADO" || Boolean(invoice.dataLancamentoDelphi);
 }
 
 export async function loadInvoices(scope: ReportsScope, filters: ReturnType<typeof parseFilters>) {

@@ -1,4 +1,5 @@
 import { InvoiceStatus } from "@prisma/client";
+import { isInvoiceLaunched } from "@/lib/reports";
 
 type InvoiceLike = {
   id: string;
@@ -22,7 +23,7 @@ export function createdVsProcessedByMonth(invoices: InvoiceLike[]) {
     const key = monthKey(inv.createdAt);
     const row = map.get(key) ?? { month: key, created: 0, processed: 0 };
     row.created += 1;
-    if (inv.status === "PROCESSADO" || inv.processada || Boolean(inv.dataLancamentoDelphi) || Boolean(inv.codigoDelphi)) row.processed += 1;
+    if (isInvoiceLaunched(inv)) row.processed += 1;
     map.set(key, row);
   }
 
