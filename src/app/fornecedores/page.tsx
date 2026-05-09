@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -26,7 +26,7 @@ export default function FornecedoresPage() {
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) return router.push("/login");
     const meData = (await meRes.json()) as Me;
@@ -36,9 +36,9 @@ export default function FornecedoresPage() {
     if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
     if (categoriesRes.ok) setCategories((await categoriesRes.json()).filter((c: CategoryItem) => c.ativo));
     if (managersRes.ok) setManagers(await managersRes.json());
-  }
+  }, [router]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filteredSuppliers = useMemo(() => suppliers.filter((s) => {
     const byCategory = categoryFilter === "TODAS" || (s.categories ?? []).some((c) => c.id === categoryFilter);

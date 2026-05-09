@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -36,7 +36,7 @@ export default function CadastrosPage() {
   const [message, setMessage] = useState("");
   const router = useRouter();
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
       router.push("/login");
@@ -56,11 +56,11 @@ export default function CadastrosPage() {
       const payload = (await suppliersRes.json()) as SupplierListItem[];
       setSuppliers(payload);
     }
-  }
+  }, [router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   async function cadastrarFornecedor(e: React.FormEvent) {
     e.preventDefault();

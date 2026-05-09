@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -27,7 +27,7 @@ export default function ConfiguracoesPage() {
     return me?.manager.suppliers.find((s) => s.supplierId === selectedSupplierId)?.supplierName ?? "Fornecedor";
   }, [me, selectedSupplierId]);
 
-  async function loadSupplierConfig(supplierId: string) {
+  const loadSupplierConfig = useCallback(async (supplierId: string) => {
     const supplierRes = await fetch(`/api/configuracoes/fornecedores/${supplierId}/avisos`);
     if (supplierRes.ok) {
       const payload = await supplierRes.json();
@@ -38,9 +38,9 @@ export default function ConfiguracoesPage() {
         emailsExtras: (payload.config.emailsExtras ?? []).join(", ")
       });
     }
-  }
+  }, []);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
       router.push("/login");
@@ -57,11 +57,11 @@ export default function ConfiguracoesPage() {
     if (globalRes.ok) setRule(await globalRes.json());
 
     if (firstSupplierId) await loadSupplierConfig(firstSupplierId);
-  }
+  }, [loadSupplierConfig, router]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   async function salvarRegraGlobal(e: React.FormEvent) {
     e.preventDefault();
