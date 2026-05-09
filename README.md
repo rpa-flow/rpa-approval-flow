@@ -137,3 +137,16 @@ O repositório agora inclui migration SQL versionada em `prisma/migrations/` par
 
 
 Notas de exemplo criadas pelo seed (todas vinculadas ao gestor `gestor.teste@empresa.com`): `NF-1001`, `NF-1002`, `NF-2001`, `NF-2002`.
+
+## Governança para AI-assisted development
+
+Para manter consistência arquitetural, visual e de qualidade, consulte sempre:
+
+- `docs/ai-guidelines.md`
+- `docs/frontend-standards.md`
+- `docs/design-system.md`
+- `docs/component-patterns.md`
+- `docs/clean-code.md`
+- `docs/architecture-guidelines.md`
+
+Esses documentos são a base de decisões para evoluções com Codex/Claude/Lovable em ambiente Vercel.

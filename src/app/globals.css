@@ -1,5 +1,6 @@
 @import url("https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css");
 
+/* Design tokens aligned with docs/design-system.md */
 :root {
   --bg: #f8fafc;
   --surface: #ffffff;
@@ -116,3 +117,11 @@ button { border: 0; cursor: pointer; }
   .login-brand { padding: 1.6rem; }
   .login-card { margin: 0; }
 }
+
+
+/* Reusable UI utilities */
+.ds-section-title { font-size: 1.125rem; font-weight: 700; color: var(--text); }
+.ds-subtitle { font-size: 0.95rem; color: var(--muted); }
+.ds-stack { display: grid; gap: 1rem; }
+.ds-actions { display: flex; gap: 0.75rem; align-items: center; justify-content: flex-end; }
+.ds-empty-state { border: 1px dashed var(--line); border-radius: 12px; padding: 1rem; color: var(--muted); background: #fff; }
