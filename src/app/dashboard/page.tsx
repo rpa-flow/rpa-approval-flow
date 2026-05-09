@@ -145,7 +145,10 @@ export default function DashboardPage() {
       <div className="mt-4">
         <p className="mb-2 text-sm font-medium">Pontuação do serviço</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((rate) => <button key={rate} type="button" className={`rounded-xl border p-2 text-left text-xs transition ${evaluation.rating === rate ? "border-slate-900 bg-blue-100 text-slate-900" : "border-slate-200 !bg-white !text-slate-700"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong>{rate}</strong></button>)}
+          {[1, 2, 3, 4, 5].map((rate) => {
+            const description = rate === 1 ? "Muito insatisfeito" : rate === 2 ? "Insatisfeito" : rate === 3 ? "Regular" : rate === 4 ? "Satisfeito" : "Muito satisfeito";
+            return <button key={rate} type="button" className={`rounded-xl border p-2 text-left text-xs transition ${evaluation.rating === rate ? "border-slate-900 bg-blue-100 text-slate-900" : "border-slate-200 !bg-white !text-slate-700"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong>{rate}</strong> — {description}</button>;
+          })}
         </div>
       </div>
       <label className="mt-4 block text-sm font-medium">Comentário
