@@ -90,8 +90,9 @@ export default function DashboardPage() {
       status: "APROVADO",
       serviceEvaluation: {
         rating: evaluation.rating,
-        comment: `Qualifica: ${evaluation.qualifica === "SIM" ? "Sim" : "Não"}`,
-        riskLevel: evaluation.riskLevel
+        comment: `Qualificação registrada`,
+        riskLevel: evaluation.riskLevel,
+        qualifica: evaluation.qualifica
       }
     });
 
@@ -132,7 +133,7 @@ export default function DashboardPage() {
     </section>
     {menuState && <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
       {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-emerald-700 hover:!bg-emerald-50" onClick={() => { setApproveModal(menuState.invoice); setMenuState(null); }}>✅ Aprovar</button>}
-      {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-rose-700 hover:!bg-rose-50" onClick={() => { const reason = window.prompt("Motivo da reprovação:") ?? ""; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason, observacaoValidacao: reason }); }}>⛔ Reprovar</button>}
+      {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
       <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => { setExpandedId(menuState.invoice.id); setMenuState(null); }}>🔎 Ver detalhes</button>
       <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico</button>
     </div>}

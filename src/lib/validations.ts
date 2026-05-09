@@ -52,7 +52,8 @@ export const updateInvoiceSchema = z
     serviceEvaluation: z.object({
       rating: z.number().int().min(1).max(5),
       comment: z.string().min(5),
-      riskLevel: z.nativeEnum(SupplierRiskLevel)
+      riskLevel: z.nativeEnum(SupplierRiskLevel),
+      qualifica: z.enum(["SIM", "NAO"]).optional()
     }).optional()
   })
   .refine((v) => Object.keys(v).length > 0, {

@@ -120,18 +120,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           rating: serviceEvaluation.rating,
           comment: serviceEvaluation.comment,
           riskLevel: serviceEvaluation.riskLevel,
-          managerId: manager!.id,
-          managerName: manager!.nome,
-          managerEmail: manager!.email
+          managerId: manager?.id ?? "integracao-delphi",
+          managerName: manager?.nome ?? "Integração Delphi",
+          managerEmail: manager?.email ?? "integracao@delphi.local",
+          qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM"
         },
         create: {
           invoiceId: invoice.id,
           rating: serviceEvaluation.rating,
           comment: serviceEvaluation.comment,
           riskLevel: serviceEvaluation.riskLevel,
-          managerId: manager!.id,
-          managerName: manager!.nome,
-          managerEmail: manager!.email
+          managerId: manager?.id ?? "integracao-delphi",
+          managerName: manager?.nome ?? "Integração Delphi",
+          managerEmail: manager?.email ?? "integracao@delphi.local",
+          qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM"
         }
       });
     }
@@ -150,7 +152,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           ? `${manager?.nome ?? "Integração Delphi"} alterou o status da nota`
           : `${manager?.nome ?? "Integração Delphi"} atualizou os dados da nota`;
 
-  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | ${serviceEvaluation.comment}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 
   if (includeXml) {
     return NextResponse.json(updated);

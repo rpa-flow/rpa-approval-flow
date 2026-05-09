@@ -31,7 +31,7 @@ export async function GET(_: Request, { params }: Params) {
         actorEmail: evaluation.managerEmail,
         createdAt: evaluation.createdAt,
         reason: null,
-        comment: `Nota ${evaluation.rating}/5 | Risco ${evaluation.riskLevel} | ${evaluation.comment}`
+        comment: `Nota ${evaluation.rating}/5 | Risco ${evaluation.riskLevel} | Qualifica: ${evaluation.qualifica === null ? "-" : evaluation.qualifica ? "Sim" : "Não"}`
       }
     : null;
 
