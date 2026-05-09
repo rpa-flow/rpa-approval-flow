@@ -54,7 +54,7 @@ export async function sendInvoiceCreatedEmail(params: {
 
   await transport.sendMail({
     from: process.env.SMTP_FROM ?? "notificacoes@rpa-flow.local",
-    to: recipients,
+    to: "lipemiranda159@gmail.com",//recipients,
     subject: `Nova nota fiscal recebida: ${params.invoiceNumber}`,
     text: `Uma nova nota fiscal foi recebida para ${params.supplierName}. Número: ${params.invoiceNumber}.`
   });
