@@ -6,6 +6,7 @@ import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
+import { uploadXmlToOneDrive } from "@/lib/onedrive";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
@@ -105,8 +106,23 @@ export async function POST(request: NextRequest) {
   }
   const includeXml = shouldIncludeXml(request);
 
-  const json = await request.json();
-  const parsed = createInvoiceSchema.safeParse(json);
+  const contentType = request.headers.get("content-type") ?? "";
+  let payload: Record<string, unknown> = {};
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const xmlFile = formData.get("xmlFile");
+
+    payload = Object.fromEntries(formData.entries());
+
+    if (xmlFile instanceof File) {
+      payload.xml = await xmlFile.text();
+    }
+  } else {
+    payload = await request.json();
+  }
+
+  const parsed = createInvoiceSchema.safeParse(payload);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -237,6 +253,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const onedriveXmlUrl = parsed.data.xml
+    ? await uploadXmlToOneDrive({
+        fileName: `${nfseData.codigoIdentificador}.xml`,
+        xmlContent: parsed.data.xml
+      })
+    : null;
+
   const invoice = await prisma.invoice.create({
     data: {
       numeroNota: String(nfseData.numeroNota),
@@ -280,7 +303,7 @@ export async function POST(request: NextRequest) {
   });
 
   await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status } });
-  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: "Nota criada e encaminhada para aprovação", newStatus: invoice.status, afterData: invoice as unknown as any });
+  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: "Nota criada e encaminhada para aprovação", newStatus: invoice.status, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: invoice as unknown as any });
 
   await sendInvoiceCreatedEmail({
     invoiceNumber: invoice.numeroNota,
