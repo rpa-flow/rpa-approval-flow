@@ -30,8 +30,13 @@ type Invoice = {
 const STATUS_COLORS: Record<string, string> = {
   AGUARDANDO_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADO: "bg-emerald-100 text-emerald-800",
-  RECUSADO: "bg-rose-100 text-rose-800"
+  RECUSADO: "bg-rose-100 text-rose-800",
+  PROCESSADO: "bg-blue-100 text-blue-800"
 };
+
+function isInvoiceLaunched(invoice: Invoice) {
+  return invoice.status === "PROCESSADO" || Boolean(invoice.dataLancamentoDelphi);
+}
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -63,7 +68,11 @@ export default function DashboardPage() {
     const fromDate = updatedFrom ? new Date(`${updatedFrom}T00:00:00`) : null;
     const toDate = updatedTo ? new Date(`${updatedTo}T23:59:59`) : null;
 
-    return (statusFilter === "TODOS" || i.status === statusFilter) &&
+    const matchesStatus = statusFilter === "TODOS"
+      || (statusFilter === "LANCADAS" && isInvoiceLaunched(i))
+      || i.status === statusFilter;
+
+    return matchesStatus &&
       (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter) &&
       (!fromDate || updatedAt >= fromDate) &&
       (!toDate || updatedAt <= toDate);
@@ -111,7 +120,7 @@ export default function DashboardPage() {
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
     <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
       <div className="flex flex-wrap gap-2">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option></select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option></select>
         <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
         <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização de" />
         <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização até" />
