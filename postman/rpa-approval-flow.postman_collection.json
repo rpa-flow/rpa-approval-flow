@@ -423,6 +423,44 @@
           }
         },
         {
+          "name": "Atualizar nota (Minerium)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{invoiceIngestApiKey}}",
+                "description": "Obrigatório para integração Minerium."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notas/minerium",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notas",
+                "minerium"
+              ]
+            },
+            "description": "Fluxo da integração Minerium: o id da nota é enviado no payload no campo `id`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{invoiceId}}\",\n  \"status\": \"PROCESSADO\",\n  \"statusProcessamento\": \"CONCLUIDO\",\n  \"codigoDelphi\": \"DEL-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Minhas notas",
           "request": {
             "method": "GET",

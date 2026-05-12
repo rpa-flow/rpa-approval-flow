@@ -30,6 +30,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const payload = await request.json();
+  const integrationInvoiceId = typeof payload?.id === "string" && payload.id.length > 0 ? payload.id : null;
+  const targetInvoiceId = integrationRequest && params.id === "minerium" ? integrationInvoiceId : params.id;
+
+  if (!targetInvoiceId) {
+    return NextResponse.json({ error: "Informe o id da nota para atualização." }, { status: 400 });
+  }
+
   const parsed = updateInvoiceSchema.safeParse(payload);
 
   if (!parsed.success) {
@@ -39,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
-  const existing = await prisma.invoice.findUnique({ where: { id: params.id } });
+  const existing = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } });
 
   if (!existing) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
@@ -111,7 +118,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     dataToUpdate.dataValidacao = new Date();
   }
   const updated = await prisma.$transaction(async (tx) => {
-    const invoice = await tx.invoice.update({ where: { id: params.id }, data: dataToUpdate });
+    const invoice = await tx.invoice.update({ where: { id: targetInvoiceId }, data: dataToUpdate });
 
     if (invoice.status === "APROVADO" && serviceEvaluation) {
       await tx.serviceEvaluation.upsert({
