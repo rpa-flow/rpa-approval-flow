@@ -3,7 +3,7 @@ import { InvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validations";
 import { sendInvoiceCreatedEmail } from "@/lib/email";
-import { parseNFSeXml } from "@/lib/nfse-parser";
+import { groupExtrasByFieldName, parseNFSeXml, simplifyExtrasByFieldName } from "@/lib/nfse-parser";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { uploadXmlToOneDrive } from "@/lib/onedrive";
@@ -41,6 +41,10 @@ function shouldIncludeXml(request: NextRequest) {
   return request.nextUrl.searchParams.get("includeXml") === "true";
 }
 
+function shouldIncludeExtras(request: NextRequest) {
+  return request.nextUrl.searchParams.get("includeExtras") === "true";
+}
+
 function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(invoice: T, includeXml: boolean) {
   if (includeXml) return invoice;
   const { xmlOriginal, ...rest } = invoice;
@@ -73,6 +77,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const includeExtras = shouldIncludeExtras(request);
   const invoices = await prisma.invoice.findMany({
     where: statusParam ? { status: statusParam as InvoiceStatus } : undefined,
     include: {
@@ -93,7 +98,35 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  return NextResponse.json(invoices.map((invoice) => serializeInvoiceResponse(invoice, includeXml)));
+  const response = invoices.map((invoice) => {
+    const base = serializeInvoiceResponse(invoice, includeXml);
+
+    if (!includeExtras || !invoice.xmlOriginal) {
+      return base;
+    }
+
+    try {
+      const parsed = parseNFSeXml(invoice.xmlOriginal);
+      return {
+        ...base,
+        serie: parsed.serie ?? null,
+        extras: parsed.extras,
+        extrasByFieldName: groupExtrasByFieldName(parsed.extras),
+        extrasSimple: simplifyExtrasByFieldName(parsed.extras)
+      };
+    } catch {
+      return {
+        ...base,
+        serie: null,
+        extras: {},
+        extrasByFieldName: {},
+        extrasSimple: {},
+        extrasError: "Não foi possível extrair extras do XML armazenado."
+      };
+    }
+  });
+
+  return NextResponse.json(response);
 }
 
 export async function POST(request: NextRequest) {

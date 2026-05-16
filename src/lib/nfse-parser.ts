@@ -1,5 +1,34 @@
 import { XMLParser } from "fast-xml-parser";
 
+export type NormalizedInvoiceDto = {
+  codigoIdentificador: string;
+  numeroNota: string;
+  serie?: string;
+  nDfse?: string;
+  localEmissao?: string;
+  localPrestacao?: string;
+  municipioIncidencia?: string;
+  itemTributacaoNac?: string;
+  itemTributacaoMun?: string;
+  nbsDescricao?: string;
+  dataProcessamento?: string;
+  dataEmissao?: string;
+  dataCompetencia?: string;
+  prestadorCnpj?: string;
+  prestadorNome?: string;
+  prestadorEmail?: string;
+  tomadorCnpj?: string;
+  tomadorNome?: string;
+  tomadorEmail?: string;
+  valorBaseCalculo?: string;
+  valorIssqn?: string;
+  valorTotalRetido?: string;
+  valorLiquido?: string;
+  valorServico?: string;
+  aliquota?: string;
+  extras: Record<string, string>;
+};
+
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -13,7 +42,67 @@ function getByPath(obj: any, path: string[]): unknown {
   return path.reduce((acc: any, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 }
 
-export function parseNFSeXml(xml: string) {
+const EXTRAS_BLOCKED_PATH_PREFIXES = [
+  "?xml",
+  "NFSe.Signature"
+];
+
+function shouldSkipExtrasPath(path: string) {
+  return EXTRAS_BLOCKED_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}.`));
+}
+
+function flattenXmlFields(value: unknown, path: string, output: Record<string, string>) {
+  if (value === null || value === undefined) return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => flattenXmlFields(item, `${path}[${index}]`, output));
+    return;
+  }
+  if (typeof value === "object") {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (key.startsWith("@_")) continue;
+      const nextPath = path ? `${path}.${key}` : key;
+      if (shouldSkipExtrasPath(nextPath)) continue;
+      flattenXmlFields(nested, nextPath, output);
+    }
+    return;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized || !path || shouldSkipExtrasPath(path)) return;
+  output[path] = normalized;
+}
+
+
+export function groupExtrasByFieldName(extras: Record<string, string>) {
+  const grouped: Record<string, Array<{ path: string; value: string }>> = {};
+
+  for (const [path, value] of Object.entries(extras)) {
+    const fieldName = path.split(".").pop()?.replace(/\[\d+\]$/g, "") ?? path;
+    if (!grouped[fieldName]) grouped[fieldName] = [];
+    grouped[fieldName].push({ path, value });
+  }
+
+  return grouped;
+}
+
+
+export function simplifyExtrasByFieldName(extras: Record<string, string>) {
+  const grouped = groupExtrasByFieldName(extras);
+  const simplified: Record<string, string | string[]> = {};
+
+  for (const [fieldName, entries] of Object.entries(grouped)) {
+    if (entries.length === 1) {
+      simplified[fieldName] = entries[0].value;
+      continue;
+    }
+
+    simplified[fieldName] = entries.map((entry) => entry.value);
+  }
+
+  return simplified;
+}
+
+export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "",
@@ -36,10 +125,47 @@ export function parseNFSeXml(xml: string) {
   }
 
   const codigoIdentificador = numericId.slice(0, 44);
+  const extras: Record<string, string> = {};
+  flattenXmlFields(doc, "", extras);
+
+  const knownPaths = [
+    "NFSe.infNFSe.Id",
+    "NFSe.infNFSe.nNFSe",
+    "NFSe.infNFSe.nDFSe",
+    "NFSe.infNFSe.xLocEmi",
+    "NFSe.infNFSe.xLocPrestacao",
+    "NFSe.infNFSe.xLocIncid",
+    "NFSe.infNFSe.xTribNac",
+    "NFSe.infNFSe.xTribMun",
+    "NFSe.infNFSe.xNBS",
+    "NFSe.infNFSe.dhProc",
+    "NFSe.infNFSe.DPS.infDPS.serie",
+    "NFSe.infNFSe.DPS.infDPS.dhEmi",
+    "NFSe.infNFSe.DPS.infDPS.dCompet",
+    "NFSe.infNFSe.emit.CNPJ",
+    "NFSe.infNFSe.emit.xNome",
+    "NFSe.infNFSe.emit.email",
+    "NFSe.infNFSe.DPS.infDPS.prest.CNPJ",
+    "NFSe.infNFSe.DPS.infDPS.prest.email",
+    "NFSe.infNFSe.DPS.infDPS.toma.CNPJ",
+    "NFSe.infNFSe.DPS.infDPS.toma.xNome",
+    "NFSe.infNFSe.DPS.infDPS.toma.email",
+    "NFSe.infNFSe.valores.vBC",
+    "NFSe.infNFSe.valores.vISSQN",
+    "NFSe.infNFSe.valores.vTotalRet",
+    "NFSe.infNFSe.valores.vLiq",
+    "NFSe.infNFSe.DPS.infDPS.valores.vServPrest.vServ",
+    "NFSe.infNFSe.valores.pAliqAplic"
+  ];
+
+  for (const knownPath of knownPaths) {
+    delete extras[knownPath];
+  }
 
   return {
     codigoIdentificador,
     numeroNota: text(infNfse.nNFSe) ?? "SEM_NUMERO",
+    serie: text(dps?.serie),
     nDfse: text(infNfse.nDFSe),
     localEmissao: text(infNfse.xLocEmi),
     localPrestacao: text(infNfse.xLocPrestacao),
@@ -61,6 +187,7 @@ export function parseNFSeXml(xml: string) {
     valorTotalRetido: decimal(getByPath(infNfse, ["valores", "vTotalRet"])),
     valorLiquido: decimal(getByPath(infNfse, ["valores", "vLiq"])),
     valorServico: decimal(getByPath(dps, ["valores", "vServPrest", "vServ"])),
-    aliquota: decimal(getByPath(infNfse, ["valores", "pAliqAplic"]))
+    aliquota: decimal(getByPath(infNfse, ["valores", "pAliqAplic"])),
+    extras
   };
 }
