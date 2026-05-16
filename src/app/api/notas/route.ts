@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
       const parsed = parseNFSeXml(invoice.xmlOriginal);
       return {
         ...base,
+        serie: parsed.serie ?? null,
         extras: parsed.extras,
         extrasByFieldName: groupExtrasByFieldName(parsed.extras),
         extrasSimple: simplifyExtrasByFieldName(parsed.extras)
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
     } catch {
       return {
         ...base,
+        serie: null,
         extras: {},
         extrasByFieldName: {},
         extrasSimple: {},

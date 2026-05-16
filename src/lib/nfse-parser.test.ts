@@ -40,3 +40,13 @@ test("simplifies extras by field name", () => {
   assert.equal(simple.codigo, "ABC");
   assert.deepEqual(simple.descricao, ["Primeira", "Segunda"]);
 });
+
+
+test("ignores technical xml/signature fields in extras", () => {
+  const xml = `<?xml version="1.0" encoding="utf-8"?><NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><campoLivre>ok</campoLivre></infDPS></DPS></infNFSe><Signature><SignedInfo><CanonicalizationMethod><Algorithm>x</Algorithm></CanonicalizationMethod></SignedInfo><SignatureValue>abc</SignatureValue></Signature></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+  assert.equal(parsed.extras["NFSe.Signature.SignatureValue"], undefined);
+  assert.equal(parsed.extras["NFSe.Signature.SignedInfo.CanonicalizationMethod.Algorithm"], undefined);
+  assert.equal(parsed.extras["?xml.version"], undefined);
+  assert.equal(parsed.extras["NFSe.infNFSe.DPS.infDPS.campoLivre"], "ok");
+});

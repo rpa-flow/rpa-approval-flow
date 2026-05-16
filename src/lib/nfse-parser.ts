@@ -42,6 +42,15 @@ function getByPath(obj: any, path: string[]): unknown {
   return path.reduce((acc: any, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 }
 
+const EXTRAS_BLOCKED_PATH_PREFIXES = [
+  "?xml",
+  "NFSe.Signature"
+];
+
+function shouldSkipExtrasPath(path: string) {
+  return EXTRAS_BLOCKED_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}.`));
+}
+
 function flattenXmlFields(value: unknown, path: string, output: Record<string, string>) {
   if (value === null || value === undefined) return;
   if (Array.isArray(value)) {
@@ -51,13 +60,15 @@ function flattenXmlFields(value: unknown, path: string, output: Record<string, s
   if (typeof value === "object") {
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
       if (key.startsWith("@_")) continue;
-      flattenXmlFields(nested, path ? `${path}.${key}` : key, output);
+      const nextPath = path ? `${path}.${key}` : key;
+      if (shouldSkipExtrasPath(nextPath)) continue;
+      flattenXmlFields(nested, nextPath, output);
     }
     return;
   }
 
   const normalized = String(value).trim();
-  if (!normalized || !path) return;
+  if (!normalized || !path || shouldSkipExtrasPath(path)) return;
   output[path] = normalized;
 }
 
