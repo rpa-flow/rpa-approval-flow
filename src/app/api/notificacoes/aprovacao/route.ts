@@ -4,6 +4,18 @@ import { approvalNotificationSchema } from "@/lib/validations";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 
+function formatCurrency(value: unknown) {
+  if (value === null || value === undefined) return undefined;
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return undefined;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numeric);
+}
+
+function formatDate(value: Date | null | undefined) {
+  if (!value) return undefined;
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(value);
+}
+
 export async function POST(request: NextRequest) {
   const manager = await getSessionManager();
 
@@ -65,6 +77,10 @@ export async function POST(request: NextRequest) {
     codigoIdentificador: invoice.codigoIdentificador,
     supplierName: invoice.fornecedor.nome,
     recipients,
+    invoiceValue: formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo),
+    issueDate: formatDate(invoice.dataEmissao),
+    competenceDate: formatDate(invoice.dataCompetencia),
+    prestadorCnpj: invoice.prestadorCnpj ?? undefined,
     extraMessage: parsed.data.extraMessage
   });
 
