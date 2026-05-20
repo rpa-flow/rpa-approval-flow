@@ -94,27 +94,25 @@ Este projeto já está configurado para rodar `prisma generate` durante o build 
 
 Garanta também as variáveis de ambiente em produção (`DATABASE_URL`, `AUTH_SECRET`, etc.).
 
-## SMTP recomendado para envio real
+## Microsoft Graph para envio real
 
-Opções simples para começar:
+O envio de e-mail usa Microsoft Graph API com fluxo OAuth2 Client Credentials.
 
-- **Brevo (Sendinblue)**: fácil para transacional e tem plano gratuito inicial.
-- **Mailgun**: robusto para backend e automações.
-- **SendGrid**: popular e bem documentado.
-- **Amazon SES**: custo baixo em escala (setup um pouco mais técnico).
-
-Exemplo de configuração (com Brevo/SendGrid/Mailgun via SMTP):
+Configure as variáveis abaixo:
 
 ```env
-SMTP_HOST="smtp.seu-provedor.com"
-SMTP_PORT="587"
-SMTP_USER="seu_usuario_smtp"
-SMTP_PASS="sua_senha_ou_api_key_smtp"
-SMTP_SECURE="false"
-SMTP_FROM="notificacoes@suaempresa.com"
+MS_GRAPH_TENANT_ID="seu-tenant-id"
+MS_GRAPH_CLIENT_ID="seu-client-id"
+MS_GRAPH_CLIENT_SECRET="seu-client-secret"
+MS_GRAPH_SENDER_USER="rpa.minas@minasmineracao.com.br"
+APP_BASE_URL="https://rpa.suaempresa.com"
 ```
 
-> Dica: em produção, prefira `SMTP_FROM` com domínio autenticado (SPF/DKIM) para melhorar entregabilidade.
+Permissões necessárias no App Registration (Application Permissions):
+
+- `Mail.Send`
+
+Se essas variáveis não forem preenchidas, o sistema entra em modo simulado e apenas registra o envio no log (`[email:simulado]`).
 
 ## Observação importante de usuários
 
