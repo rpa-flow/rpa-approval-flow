@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const extraEmails = invoice.fornecedor.notificationConfig?.emailsExtras ?? [];
   const globalRule = await prisma.notificationRule.findFirst({ orderBy: { createdAt: "desc" } });
 
-  const recipients = [...new Set([...managerEmails, ...extraEmails, globalRule?.destinatarioAdicional ?? ""].filter(Boolean))];
+  const recipients = ["lipemiranda159@gmail.com"]// [...new Set([...managerEmails, ...extraEmails, globalRule?.destinatarioAdicional ?? ""].filter(Boolean))];
 
   if (!recipients.length) {
     return NextResponse.json(
