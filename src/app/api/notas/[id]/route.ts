@@ -88,6 +88,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
+    if (payloadToSave.dataPagamento === undefined) {
+      const nextDay = new Date();
+      nextDay.setDate(nextDay.getDate() + 1);
+      payloadToSave.dataPagamento = nextDay.toISOString();
+    }
   }
 
   if (payloadToSave.status === "RECUSADO") {
@@ -108,7 +113,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ? undefined
         : payloadToSave.dataLancamentoDelphi === null
           ? null
-          : new Date(payloadToSave.dataLancamentoDelphi)
+          : new Date(payloadToSave.dataLancamentoDelphi),
+    dataPagamento:
+      payloadToSave.dataPagamento === undefined
+        ? undefined
+        : payloadToSave.dataPagamento === null
+          ? null
+          : new Date(payloadToSave.dataPagamento)
   };
 
   const reason = typeof payload?.reason === "string" ? payload.reason : null;
