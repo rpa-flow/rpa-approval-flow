@@ -25,6 +25,7 @@ type Invoice = {
   statusIntegracaoDelphi?: IntegrationStatus | null;
   ocContrato?: string | null;
   dataLancamentoDelphi?: string | null;
+  dataPagamento?: string | null;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -51,6 +52,7 @@ export default function DashboardPage() {
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
+  const [paymentDate, setPaymentDate] = useState("");
   const router = useRouter();
 
   const loadData = useCallback(async () => {
@@ -97,6 +99,7 @@ export default function DashboardPage() {
 
     await atualizarNota(approveModal.id, {
       status: "APROVADO",
+      dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
       serviceEvaluation: {
         rating: evaluation.rating,
         comment: `Qualificação registrada`,
@@ -107,6 +110,7 @@ export default function DashboardPage() {
 
     setApproveModal(null);
     setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+    setPaymentDate("");
   }
 
   async function verHistorico(invoice: Invoice) {
@@ -144,7 +148,7 @@ export default function DashboardPage() {
       </div>
     </section>
     {menuState && <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-      {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-emerald-700 hover:!bg-emerald-50" onClick={() => { setApproveModal(menuState.invoice); setMenuState(null); }}>✅ Aprovar</button>}
+      {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-emerald-700 hover:!bg-emerald-50" onClick={() => { const nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1); setPaymentDate(nextDay.toISOString().slice(0, 10)); setApproveModal(menuState.invoice); setMenuState(null); }}>✅ Aprovar</button>}
       {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
       <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => { setExpandedId(menuState.invoice.id); setMenuState(null); }}>🔎 Ver detalhes</button>
       <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico</button>
@@ -173,6 +177,9 @@ export default function DashboardPage() {
         <select className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}>
           <option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option>
         </select>
+      </label>
+      <label className="mt-4 block text-sm font-medium">Data de pagamento
+        <input type="date" className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
       </label>
       <div className="mt-5 flex justify-end gap-2"><button className="button-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button onClick={aprovarComAvaliacao}>Confirmar aprovação</button></div>
     </section>}

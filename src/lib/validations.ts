@@ -45,6 +45,7 @@ export const updateInvoiceSchema = z
     ultimoLembreteEm: z.string().datetime().nullable().optional(),
     ocContrato: z.string().min(1).optional(),
     dataLancamentoDelphi: z.string().datetime().nullable().optional(),
+    dataPagamento: z.string().datetime().nullable().optional(),
     codigoDelphi: z.string().min(1).nullable().optional(),
     statusIntegracaoDelphi: z.nativeEnum(DelphiIntegrationStatus).optional(),
     situacaoNotaFiscal: z.nativeEnum(InvoiceSituation).optional(),
