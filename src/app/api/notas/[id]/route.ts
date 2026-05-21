@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
+import { sendApprovalRequestEmail } from "@/lib/email";
 
 type Params = {
   params: {
@@ -59,6 +60,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const payloadToSave = { ...parsed.data };
+  const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
 
@@ -88,6 +90,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
+    payloadToSave.tentativasNotificacao = 0;
+    payloadToSave.ultimoLembreteEm = null;
     if (payloadToSave.dataPagamento === undefined) {
       const nextDay = new Date();
       nextDay.setDate(nextDay.getDate() + 1);
@@ -176,6 +180,44 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : `${manager?.nome ?? "Integração Delphi"} atualizou os dados da nota`;
 
   await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+
+
+  if (reapprovedFromError) {
+    const invoiceWithContacts = await prisma.invoice.findUnique({
+      where: { id: updated.id },
+      include: {
+        fornecedor: {
+          include: {
+            notificationConfig: true,
+            managerSuppliers: {
+              include: {
+                manager: { select: { email: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (invoiceWithContacts) {
+      const recipients = Array.from(
+        new Set([
+          ...invoiceWithContacts.fornecedor.managerSuppliers.map((ms) => ms.manager.email),
+          ...(invoiceWithContacts.fornecedor.notificationConfig?.emailsExtras ?? [])
+        ].filter(Boolean))
+      );
+
+      if (recipients.length) {
+        await sendApprovalRequestEmail({
+          invoiceNumber: invoiceWithContacts.numeroNota,
+          codigoIdentificador: invoiceWithContacts.codigoIdentificador,
+          supplierName: invoiceWithContacts.fornecedor.nome,
+          recipients,
+          extraMessage: "Nota reprovada por erro de processamento e reenviada para aprovação."
+        });
+      }
+    }
+  }
 
   if (includeXml) {
     return NextResponse.json(updated);
