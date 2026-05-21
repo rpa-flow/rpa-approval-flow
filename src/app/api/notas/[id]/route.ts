@@ -100,6 +100,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
+  if (payloadToSave.status === "DADOS_INCONSISTENTES") {
+    payloadToSave.processada = true;
+    payloadToSave.statusProcessamento = "ERRO";
+  }
+
   const dataToUpdate: Record<string, unknown> = {
     ...payloadToSave,
     ultimoLembreteEm:
