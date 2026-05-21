@@ -32,7 +32,8 @@ const STATUS_COLORS: Record<string, string> = {
   AGUARDANDO_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADO: "bg-emerald-100 text-emerald-800",
   RECUSADO: "bg-rose-100 text-rose-800",
-  PROCESSADO: "bg-blue-100 text-blue-800"
+  PROCESSADO: "bg-blue-100 text-blue-800",
+  DADOS_INCONSISTENTES: "bg-orange-100 text-orange-800"
 };
 
 function isInvoiceLaunched(invoice: Invoice) {
@@ -131,7 +132,7 @@ export default function DashboardPage() {
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
     <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
       <div className="flex flex-wrap gap-2">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option></select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option></select>
         <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
         <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização de" />
         <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização até" />

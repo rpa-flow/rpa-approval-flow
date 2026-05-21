@@ -13,6 +13,7 @@ enum InvoiceStatus {
   RECUSADO
   PROCESSADO
   EXPIRADA
+  DADOS_INCONSISTENTES
 }
 
 enum ProcessingStatus {
