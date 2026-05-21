@@ -60,6 +60,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const payloadToSave = { ...parsed.data };
+  const reason = typeof parsed.data.reason === "string" && parsed.data.reason.trim().length > 0 ? parsed.data.reason.trim() : null;
   const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
@@ -136,7 +137,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : new Date(payloadToSave.dataPagamento)
   };
 
-  const reason = typeof parsed.data.reason === "string" && parsed.data.reason.trim().length > 0 ? parsed.data.reason.trim() : null;
 
   if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
     dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
