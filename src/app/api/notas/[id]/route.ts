@@ -63,6 +63,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
+  delete (payloadToSave as Record<string, unknown>).reason;
 
   if (manager && manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
     return NextResponse.json(
@@ -109,6 +110,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
+  if ((payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES") && reason && payloadToSave.observacaoValidacao === undefined) {
+    payloadToSave.observacaoValidacao = reason;
+  }
+
   const dataToUpdate: Record<string, unknown> = {
     ...payloadToSave,
     ultimoLembreteEm:
@@ -131,7 +136,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : new Date(payloadToSave.dataPagamento)
   };
 
-  const reason = typeof payload?.reason === "string" ? payload.reason : null;
+  const reason = typeof parsed.data.reason === "string" && parsed.data.reason.trim().length > 0 ? parsed.data.reason.trim() : null;
 
   if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
     dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
