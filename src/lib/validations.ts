@@ -50,6 +50,7 @@ export const updateInvoiceSchema = z
     statusIntegracaoDelphi: z.nativeEnum(DelphiIntegrationStatus).optional(),
     situacaoNotaFiscal: z.nativeEnum(InvoiceSituation).optional(),
     observacaoValidacao: z.string().max(500).nullable().optional(),
+    reason: z.string().trim().max(500).optional(),
     serviceEvaluation: z.object({
       rating: z.number().int().min(1).max(5),
       comment: z.string().min(5),

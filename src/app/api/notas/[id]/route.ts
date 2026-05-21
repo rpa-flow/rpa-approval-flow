@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
+import { sendApprovalRequestEmail } from "@/lib/email";
 
 type Params = {
   params: {
@@ -59,8 +60,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const payloadToSave = { ...parsed.data };
+  const reason = typeof parsed.data.reason === "string" && parsed.data.reason.trim().length > 0 ? parsed.data.reason.trim() : null;
+  const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
+  delete (payloadToSave as Record<string, unknown>).reason;
 
   if (manager && manager.role !== "ADMIN" && (payloadToSave.tentativasNotificacao !== undefined || payloadToSave.ultimoLembreteEm !== undefined)) {
     return NextResponse.json(
@@ -88,6 +92,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
+    payloadToSave.tentativasNotificacao = 0;
+    payloadToSave.ultimoLembreteEm = null;
     if (payloadToSave.dataPagamento === undefined) {
       const nextDay = new Date();
       nextDay.setDate(nextDay.getDate() + 1);
@@ -103,6 +109,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (payloadToSave.status === "DADOS_INCONSISTENTES") {
     payloadToSave.processada = true;
     payloadToSave.statusProcessamento = "ERRO";
+  }
+
+  if ((payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES") && reason && payloadToSave.observacaoValidacao === undefined) {
+    payloadToSave.observacaoValidacao = reason;
   }
 
   const dataToUpdate: Record<string, unknown> = {
@@ -127,7 +137,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : new Date(payloadToSave.dataPagamento)
   };
 
-  const reason = typeof payload?.reason === "string" ? payload.reason : null;
 
   if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
     dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
@@ -176,6 +185,44 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : `${manager?.nome ?? "Integração Delphi"} atualizou os dados da nota`;
 
   await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
+
+
+  if (reapprovedFromError) {
+    const invoiceWithContacts = await prisma.invoice.findUnique({
+      where: { id: updated.id },
+      include: {
+        fornecedor: {
+          include: {
+            notificationConfig: true,
+            managerSuppliers: {
+              include: {
+                manager: { select: { email: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (invoiceWithContacts) {
+      const recipients = Array.from(
+        new Set([
+          ...invoiceWithContacts.fornecedor.managerSuppliers.map((ms) => ms.manager.email),
+          ...(invoiceWithContacts.fornecedor.notificationConfig?.emailsExtras ?? [])
+        ].filter(Boolean))
+      );
+
+      if (recipients.length) {
+        await sendApprovalRequestEmail({
+          invoiceNumber: invoiceWithContacts.numeroNota,
+          codigoIdentificador: invoiceWithContacts.codigoIdentificador,
+          supplierName: invoiceWithContacts.fornecedor.nome,
+          recipients,
+          extraMessage: "Nota reprovada por erro de processamento e reenviada para aprovação."
+        });
+      }
+    }
+  }
 
   if (includeXml) {
     return NextResponse.json(updated);
