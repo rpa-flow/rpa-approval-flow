@@ -51,7 +51,10 @@ export async function uploadXmlToOneDrive(params: {
 
   const token = await getAccessToken(config);
   const sanitizedFileName = params.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${config.targetFolder}/${sanitizedFileName}`;
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const path = `${config.targetFolder}/XML/${year}/${month}/${sanitizedFileName}`;
 
   const uploadResponse = await fetch(
     `${GRAPH_BASE_URL}/drives/${config.driveId}/root:/${encodeURIComponent(path).replace(/%2F/g, "/") }:/content`,
