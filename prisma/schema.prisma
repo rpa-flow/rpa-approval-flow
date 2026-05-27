@@ -50,6 +50,7 @@ model Supplier {
   id                 String                       @id @default(cuid())
   nome               String
   cnpj               String?                      @unique
+  codigoExterno      String?
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
   managerSuppliers   ManagerSupplier[]

@@ -17,7 +17,7 @@ type Invoice = {
   dataAtualizacao: string;
   dataEmissao?: string | null;
   valorServico?: number | null;
-  fornecedor: { nome: string; cnpj?: string | null };
+  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null };
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
   observacaoValidacao?: string | null;
@@ -149,7 +149,7 @@ export default function DashboardPage() {
                 <td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                 <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
           </tbody>
         </table>
@@ -167,6 +167,7 @@ export default function DashboardPage() {
     {approveModal && <section className="fixed inset-x-0 top-16 z-50 mx-auto w-[92vw] max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
       <h3 className="text-lg font-semibold">Avaliação obrigatória do serviço</h3>
       <p className="mt-1 text-sm text-slate-600">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p>
+      <p className="mt-1 text-sm text-slate-600">Código externo do fornecedor: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p>
       <div className="mt-4">
         <p className="mb-2 text-sm font-medium">Pontuação do serviço</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">

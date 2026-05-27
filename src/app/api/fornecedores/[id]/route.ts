@@ -40,7 +40,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       where: { id: params.id },
       data: {
         nome: parsed.data.nome,
-        cnpj: parsed.data.cnpj ?? null
+        cnpj: parsed.data.cnpj ?? null,
+        codigoExterno: parsed.data.codigoExterno ?? null
       }
     });
 
@@ -111,6 +112,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       id: fullSupplier?.id,
       nome: fullSupplier?.nome,
       cnpj: fullSupplier?.cnpj,
+      codigoExterno: fullSupplier?.codigoExterno,
       managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? [],
       categories: fullSupplier?.categoryLinks.map((cl) => cl.category) ?? []
     });
