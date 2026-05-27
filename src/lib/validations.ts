@@ -65,6 +65,7 @@ export const updateInvoiceSchema = z
 export const supplierSchema = z.object({
   nome: z.string().min(2),
   cnpj: z.string().regex(/^\d{14}$/).optional(),
+  codigoExterno: z.string().trim().min(1).max(120).optional(),
   categoryIds: z.array(z.string().min(1)).optional(),
   managers: z.array(
     z.object({
@@ -78,6 +79,7 @@ export const supplierSchema = z.object({
 export const updateSupplierSchema = z.object({
   nome: z.string().min(2),
   cnpj: z.string().regex(/^\d{14}$/).nullable().optional(),
+  codigoExterno: z.string().trim().min(1).max(120).nullable().optional(),
   categoryIds: z.array(z.string().min(1)).optional(),
   addManager: z.object({
     nome: z.string().min(2).optional(),

@@ -47,6 +47,7 @@ export async function GET() {
       id: s.id,
       nome: s.nome,
       cnpj: s.cnpj,
+      codigoExterno: s.codigoExterno,
       managers: s.managerSuppliers.map((ms) => ms.manager),
       categories: s.categoryLinks.map((cl) => cl.category)
     }))
@@ -70,7 +71,8 @@ export async function POST(request: NextRequest) {
   const supplier = await prisma.supplier.create({
     data: {
       nome: parsed.data.nome,
-      cnpj: parsed.data.cnpj
+      cnpj: parsed.data.cnpj,
+      codigoExterno: parsed.data.codigoExterno
     }
   });
 
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest) {
       id: fullSupplier?.id,
       nome: fullSupplier?.nome,
       cnpj: fullSupplier?.cnpj,
+      codigoExterno: fullSupplier?.codigoExterno,
       managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? [],
       categories: fullSupplier?.categoryLinks.map((cl) => cl.category) ?? []
     },

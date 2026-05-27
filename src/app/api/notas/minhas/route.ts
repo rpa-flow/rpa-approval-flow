@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           nome: true,
-          cnpj: true
+          cnpj: true,
+          codigoExterno: true
         }
       }
     },
