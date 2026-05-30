@@ -222,6 +222,9 @@ export async function POST(request: NextRequest) {
             include: {
               manager: { select: { id: true, nome: true, email: true } }
             }
+          },
+          notificationConfig: {
+            select: { emailsExtras: true }
           }
         }
       })
@@ -237,6 +240,9 @@ export async function POST(request: NextRequest) {
           include: {
             manager: { select: { id: true, nome: true, email: true } }
           }
+        },
+        notificationConfig: {
+          select: { emailsExtras: true }
         }
       }
     });
@@ -270,6 +276,9 @@ export async function POST(request: NextRequest) {
           include: {
             manager: { select: { id: true, nome: true, email: true } }
           }
+        },
+        notificationConfig: {
+          select: { emailsExtras: true }
         }
       }
     });
@@ -338,11 +347,21 @@ export async function POST(request: NextRequest) {
   await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status } });
   await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: "Nota criada e encaminhada para aprovação", newStatus: invoice.status, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: invoice as unknown as any });
 
-  await sendInvoiceCreatedEmail({
-    invoiceNumber: invoice.numeroNota,
-    supplierName: supplier.nome,
-    managers: supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email }))
-  });
+  try {
+    await sendInvoiceCreatedEmail({
+      invoiceNumber: invoice.numeroNota,
+      supplierName: supplier.nome,
+      managers: [
+        ...supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email })),
+        ...((supplier.notificationConfig?.emailsExtras ?? []).map((email) => ({ email })))
+      ]
+    });
+  } catch (error) {
+    console.error("[notas:create] Falha ao enviar e-mail de nova nota", {
+      invoiceId: invoice.id,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
 
   return NextResponse.json(serializeInvoiceResponse(invoice, includeXml), { status: 201 });
 }

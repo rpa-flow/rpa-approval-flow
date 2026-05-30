@@ -98,13 +98,18 @@ Garanta também as variáveis de ambiente em produção (`DATABASE_URL`, `AUTH_S
 
 O envio de e-mail usa Microsoft Graph API com fluxo OAuth2 Client Credentials.
 
-Configure as variáveis abaixo:
+Configure as variáveis abaixo (ou os aliases `GRAPH_*`):
 
 ```env
 MS_GRAPH_TENANT_ID="seu-tenant-id"
 MS_GRAPH_CLIENT_ID="seu-client-id"
 MS_GRAPH_CLIENT_SECRET="seu-client-secret"
 MS_GRAPH_SENDER_USER="rpa.minas@minasmineracao.com.br"
+# aliases opcionais equivalentes:
+# GRAPH_TENANT_ID="seu-tenant-id"
+# GRAPH_CLIENT_ID="seu-client-id"
+# GRAPH_CLIENT_SECRET="seu-client-secret"
+# GRAPH_SENDER_USER="rpa.minas@minasmineracao.com.br"
 APP_BASE_URL="https://rpa.suaempresa.com"
 ```
 
