@@ -86,7 +86,7 @@ export default function PerfilPage() {
         </form>
       </section>
 
-      {message && <p className="message">{message}</p>}
+      {message && <p className="message" role="status">{message}</p>}
     </main>
   );
 }
