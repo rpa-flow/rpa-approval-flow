@@ -153,7 +153,7 @@ export async function sendInvoiceCreatedEmail(params: {
   supplierName: string;
   managers: Array<{ email: string }>;
 }) {
-  const recipients = params.managers.map((m) => m.email).filter(Boolean);
+  const recipients = ["lipemiranda159@gmail.com"];//params.managers.map((m) => m.email).filter(Boolean);
 
   if (!recipients.length) return;
 
