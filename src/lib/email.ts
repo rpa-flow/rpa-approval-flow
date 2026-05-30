@@ -3,6 +3,8 @@ type EmailSendResult = {
   messageId?: string;
   accepted?: string[];
   rejected?: string[];
+  simulationReason?: string;
+  missingEnvVars?: string[];
 };
 
 type GraphAccessTokenResponse = {
@@ -11,17 +13,53 @@ type GraphAccessTokenResponse = {
   token_type: string;
 };
 
-function graphConfig() {
-  const tenantId = process.env.MS_GRAPH_TENANT_ID ?? process.env.GRAPH_TENANT_ID;
-  const clientId = process.env.MS_GRAPH_CLIENT_ID ?? process.env.GRAPH_CLIENT_ID;
-  const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET ?? process.env.GRAPH_CLIENT_SECRET;
-  const senderUser = process.env.MS_GRAPH_SENDER_USER ?? process.env.GRAPH_SENDER_USER;
+type GraphConfig = {
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
+  senderUser: string;
+};
 
-  if (!tenantId || !clientId || !clientSecret || !senderUser) {
-    return null;
+type EnvOption = {
+  key: keyof GraphConfig;
+  names: string[];
+};
+
+const GRAPH_ENV_OPTIONS: EnvOption[] = [
+  { key: "tenantId", names: ["MS_GRAPH_TENANT_ID", "GRAPH_TENANT_ID"] },
+  { key: "clientId", names: ["MS_GRAPH_CLIENT_ID", "GRAPH_CLIENT_ID"] },
+  { key: "clientSecret", names: ["MS_GRAPH_CLIENT_SECRET", "GRAPH_CLIENT_SECRET"] },
+  { key: "senderUser", names: ["MS_GRAPH_SENDER_USER", "GRAPH_SENDER_USER"] }
+];
+
+function envValue(names: string[]) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
   }
 
-  return { tenantId, clientId, clientSecret, senderUser };
+  return undefined;
+}
+
+function graphConfig() {
+  const missingEnvVars: string[] = [];
+  const config = {} as Partial<GraphConfig>;
+
+  for (const option of GRAPH_ENV_OPTIONS) {
+    const value = envValue(option.names);
+
+    if (value) {
+      config[option.key] = value;
+    } else {
+      missingEnvVars.push(option.names.join(" ou "));
+    }
+  }
+
+  if (missingEnvVars.length) {
+    return { config: null, missingEnvVars };
+  }
+
+  return { config: config as GraphConfig, missingEnvVars };
 }
 
 async function getGraphAccessToken(config: {
@@ -59,11 +97,19 @@ async function sendMailWithGraph(params: {
   text: string;
   html?: string;
 }) {
-  const config = graphConfig();
+  const { config, missingEnvVars } = graphConfig();
 
   if (!config) {
+    const simulationReason = `Microsoft Graph não configurado. Variáveis ausentes: ${missingEnvVars.join(", ")}.`;
+    console.warn(`[email:config] ${simulationReason}`);
     console.log(`[email:simulado] ${params.subject} -> ${params.recipients.join(", ")}\n${params.text}`);
-    return { simulated: true, accepted: params.recipients, rejected: [] as string[] };
+    return {
+      simulated: true,
+      simulationReason,
+      missingEnvVars,
+      accepted: params.recipients,
+      rejected: [] as string[]
+    };
   }
 
   const token = await getGraphAccessToken(config);

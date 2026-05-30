@@ -117,7 +117,7 @@ Permissões necessárias no App Registration (Application Permissions):
 
 - `Mail.Send`
 
-Se essas variáveis não forem preenchidas, o sistema entra em modo simulado e apenas registra o envio no log (`[email:simulado]`).
+As quatro variáveis `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET` e `MS_GRAPH_SENDER_USER` são obrigatórias para envio real. Se qualquer uma delas não for preenchida no ambiente em execução, o sistema entra em modo simulado e registra no log quais variáveis estão ausentes antes do envio (`[email:config]` e `[email:simulado]`).
 
 ## Observação importante de usuários
 
