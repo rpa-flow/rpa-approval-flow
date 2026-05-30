@@ -89,7 +89,8 @@ async function processDueReminders(
           invoiceNumber: reminder.numeroNota,
           codigoIdentificador: reminder.codigoIdentificador,
           supplierName: reminder.fornecedor.nome,
-          recipients
+          recipients,
+          invoiceId: reminder.invoiceId
         });
         emailSent = true;
       } catch (error) {

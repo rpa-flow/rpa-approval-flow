@@ -17,6 +17,50 @@ function hasIntegrationApiKey(request: NextRequest) {
   return request.headers.get("x-api-key") === configured;
 }
 
+function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(invoice: T, includeXml: boolean) {
+  if (includeXml) return invoice;
+  const { xmlOriginal, ...rest } = invoice;
+  return rest;
+}
+
+async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: string | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
+  const allowedSupplierIds = getAllowedSupplierIds(manager);
+  return manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id;
+}
+
+export async function GET(request: NextRequest, { params }: Params) {
+  const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
+  const manager = await getSessionManager();
+
+  if (!manager) {
+    return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: params.id },
+    include: {
+      fornecedor: {
+        select: {
+          id: true,
+          nome: true,
+          cnpj: true,
+          codigoExterno: true
+        }
+      }
+    }
+  });
+
+  if (!invoice) {
+    return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
+  }
+
+  if (!(await canAccessInvoice(invoice, manager))) {
+    return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
+  }
+
+  return NextResponse.json(serializeInvoiceResponse(invoice, includeXml));
+}
+
 export async function PATCH(request: NextRequest, { params }: Params) {
   const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
   const manager = await getSessionManager();
@@ -53,9 +97,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
 
-  const allowedSupplierIds = manager ? getAllowedSupplierIds(manager) : [];
-
-  if (manager && manager.role !== "ADMIN" && !allowedSupplierIds.includes(existing.fornecedorId)) {
+  if (manager && !(await canAccessInvoice(existing, manager))) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
@@ -218,6 +260,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           codigoIdentificador: invoiceWithContacts.codigoIdentificador,
           supplierName: invoiceWithContacts.fornecedor.nome,
           recipients,
+          invoiceId: invoiceWithContacts.id,
           extraMessage: "Nota reprovada por erro de processamento e reenviada para aprovação."
         });
       }
@@ -228,6 +271,5 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json(updated);
   }
 
-  const { xmlOriginal, ...rest } = updated;
-  return NextResponse.json(rest);
+  return NextResponse.json(serializeInvoiceResponse(updated, includeXml));
 }

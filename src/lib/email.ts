@@ -13,6 +13,19 @@ type GraphAccessTokenResponse = {
   token_type: string;
 };
 
+function appBaseUrl() {
+  return (process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 type GraphConfig = {
   tenantId: string;
   clientId: string;
@@ -189,6 +202,7 @@ export async function sendApprovalRequestEmail(params: {
   codigoIdentificador: string;
   supplierName: string;
   recipients: string[];
+  invoiceId?: string;
   invoiceValue?: string;
   issueDate?: string;
   competenceDate?: string;
@@ -200,7 +214,7 @@ export async function sendApprovalRequestEmail(params: {
   }
 
   const subject = `Aprovação pendente NF ${params.invoiceNumber}`;
-  const loginUrl = `${(process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/login`;
+  const approvalUrl = params.invoiceId ? `${appBaseUrl()}/notas/${params.invoiceId}` : `${appBaseUrl()}/dashboard`;
   const text = [
     `Solicitação de aprovação para a nota fiscal ${params.invoiceNumber}.`,
     `Fornecedor: ${params.supplierName}.`,
@@ -215,17 +229,17 @@ export async function sendApprovalRequestEmail(params: {
     .join("\n");
 
   const html = [
-    `<p>Solicitação de aprovação para a nota fiscal <strong>${params.invoiceNumber}</strong>.</p>`,
+    `<p>Solicitação de aprovação para a nota fiscal <strong>${escapeHtml(params.invoiceNumber)}</strong>.</p>`,
     "<ul>",
-    `<li><strong>Fornecedor:</strong> ${params.supplierName}</li>`,
-    `<li><strong>Código identificador:</strong> ${params.codigoIdentificador}</li>`,
-    params.invoiceValue ? `<li><strong>Valor da nota:</strong> ${params.invoiceValue}</li>` : "",
-    params.issueDate ? `<li><strong>Data de emissão:</strong> ${params.issueDate}</li>` : "",
-    params.competenceDate ? `<li><strong>Data de competência:</strong> ${params.competenceDate}</li>` : "",
-    params.prestadorCnpj ? `<li><strong>CNPJ do prestador:</strong> ${params.prestadorCnpj}</li>` : "",
+    `<li><strong>Fornecedor:</strong> ${escapeHtml(params.supplierName)}</li>`,
+    `<li><strong>Código identificador:</strong> ${escapeHtml(params.codigoIdentificador)}</li>`,
+    params.invoiceValue ? `<li><strong>Valor da nota:</strong> ${escapeHtml(params.invoiceValue)}</li>` : "",
+    params.issueDate ? `<li><strong>Data de emissão:</strong> ${escapeHtml(params.issueDate)}</li>` : "",
+    params.competenceDate ? `<li><strong>Data de competência:</strong> ${escapeHtml(params.competenceDate)}</li>` : "",
+    params.prestadorCnpj ? `<li><strong>CNPJ do prestador:</strong> ${escapeHtml(params.prestadorCnpj)}</li>` : "",
     "</ul>",
-    params.extraMessage ? `<p><strong>Mensagem adicional:</strong> ${params.extraMessage}</p>` : "",
-    `<p><a href=\"${loginUrl}\">Acessar o sistema para aprovar a nota</a></p>`
+    params.extraMessage ? `<p><strong>Mensagem adicional:</strong> ${escapeHtml(params.extraMessage)}</p>` : "",
+    `<p><a href=\"${approvalUrl}\">Abrir a nota e aprovar</a></p>`
   ]
     .filter(Boolean)
     .join("");
@@ -233,7 +247,7 @@ export async function sendApprovalRequestEmail(params: {
   await sendMailWithGraph({
     recipients: params.recipients,
     subject,
-    text: `${text}\n\nAcesse o sistema para aprovar a nota: ${loginUrl}`,
+    text: `${text}\n\nAbra a nota para ver os detalhes, consultar o histórico e aprovar: ${approvalUrl}`,
     html
   });
 }

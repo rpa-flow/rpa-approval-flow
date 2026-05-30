@@ -28,7 +28,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
+    const redirectTo = new URLSearchParams(window.location.search).get("redirect");
+    router.push(redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/dashboard");
     router.refresh();
   }
 
