@@ -51,8 +51,10 @@ export async function POST(request: NextRequest) {
     messageId: result.messageId ?? null,
     accepted: result.accepted ?? [],
     rejected: result.rejected ?? [],
+    simulationReason: result.simulationReason ?? null,
+    missingEnvVars: result.missingEnvVars ?? [],
     message: result.simulated
-      ? "SMTP não configurado. E-mail simulado no console do servidor."
+      ? result.simulationReason ?? "Microsoft Graph não configurado. E-mail simulado no console do servidor."
       : "E-mail de teste enviado com sucesso."
   });
 }
