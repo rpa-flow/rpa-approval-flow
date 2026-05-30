@@ -62,7 +62,7 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
 
   const logoutButton = (
     <button
-      className="button-secondary"
+      className="btn-secondary"
       onClick={async () => {
         await fetch("/api/auth/logout", { method: "POST" });
         router.push("/login");
