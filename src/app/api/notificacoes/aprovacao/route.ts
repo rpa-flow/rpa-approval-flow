@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
     codigoIdentificador: invoice.codigoIdentificador,
     supplierName: invoice.fornecedor.nome,
     recipients,
+    invoiceId: invoice.id,
     invoiceValue: formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo),
     issueDate: formatDate(invoice.dataEmissao),
     competenceDate: formatDate(invoice.dataCompetencia),
