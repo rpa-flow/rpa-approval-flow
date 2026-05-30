@@ -351,6 +351,7 @@ export async function POST(request: NextRequest) {
     await sendInvoiceCreatedEmail({
       invoiceNumber: invoice.numeroNota,
       supplierName: supplier.nome,
+      invoiceId: invoice.id,
       managers: [
         ...supplier.managerSuppliers.map((ms) => ({ email: ms.manager.email })),
         ...((supplier.notificationConfig?.emailsExtras ?? []).map((email) => ({ email })))
