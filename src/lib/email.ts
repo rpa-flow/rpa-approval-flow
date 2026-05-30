@@ -12,10 +12,10 @@ type GraphAccessTokenResponse = {
 };
 
 function graphConfig() {
-  const tenantId = process.env.MS_GRAPH_TENANT_ID;
-  const clientId = process.env.MS_GRAPH_CLIENT_ID;
-  const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET;
-  const senderUser = process.env.MS_GRAPH_SENDER_USER;
+  const tenantId = process.env.MS_GRAPH_TENANT_ID ?? process.env.GRAPH_TENANT_ID;
+  const clientId = process.env.MS_GRAPH_CLIENT_ID ?? process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET ?? process.env.GRAPH_CLIENT_SECRET;
+  const senderUser = process.env.MS_GRAPH_SENDER_USER ?? process.env.GRAPH_SENDER_USER;
 
   if (!tenantId || !clientId || !clientSecret || !senderUser) {
     return null;
