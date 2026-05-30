@@ -165,15 +165,27 @@ export async function sendInvoiceCreatedEmail(params: {
   invoiceNumber: string;
   supplierName: string;
   managers: Array<{ email: string }>;
+  invoiceId?: string;
 }) {
   const recipients = ["lipemiranda159@gmail.com"];//params.managers.map((m) => m.email).filter(Boolean);
 
   if (!recipients.length) return;
 
+  const invoiceUrl = params.invoiceId ? `${appBaseUrl()}/notas/${params.invoiceId}` : `${appBaseUrl()}/dashboard`;
+
   await sendMailWithGraph({
     recipients,
     subject: `Nova nota fiscal recebida: ${params.invoiceNumber}`,
-    text: `Uma nova nota fiscal foi recebida para ${params.supplierName}. Número: ${params.invoiceNumber}.`
+    text: `Uma nova nota fiscal foi recebida para ${params.supplierName}. Número: ${params.invoiceNumber}.
+
+Abra a nota para ver os detalhes, consultar o histórico e aprovar: ${invoiceUrl}`,
+    html: [
+      `<p>Uma nova nota fiscal foi recebida para <strong>${escapeHtml(params.supplierName)}</strong>.</p>`,
+      "<ul>",
+      `<li><strong>Número:</strong> ${escapeHtml(params.invoiceNumber)}</li>`,
+      "</ul>",
+      `<p><a href="${invoiceUrl}">Abrir a nota e aprovar</a></p>`
+    ].join("")
   });
 }
 
