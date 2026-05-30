@@ -75,6 +75,17 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!menuState) return;
+
+    function closeMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuState(null);
+    }
+
+    window.addEventListener("keydown", closeMenuOnEscape);
+    return () => window.removeEventListener("keydown", closeMenuOnEscape);
+  }, [menuState]);
+
   const filtered = useMemo(() => invoices.filter((i) => {
     const updatedAt = new Date(i.dataAtualizacao);
     const fromDate = updatedFrom ? new Date(`${updatedFrom}T00:00:00`) : null;
@@ -197,6 +208,7 @@ export default function DashboardPage() {
       </div>
     </section>
 
+    {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
     {menuState && <div className="fixed z-50 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
       {['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onClick={() => { const nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1); setPaymentDate(toLocalDateInputValue(nextDay)); setApproveModal(menuState.invoice); setMenuState(null); }}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
       {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
