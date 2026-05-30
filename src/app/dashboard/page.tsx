@@ -75,6 +75,17 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!menuState) return;
+
+    function closeMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuState(null);
+    }
+
+    window.addEventListener("keydown", closeMenuOnEscape);
+    return () => window.removeEventListener("keydown", closeMenuOnEscape);
+  }, [menuState]);
+
   const filtered = useMemo(() => invoices.filter((i) => {
     const updatedAt = new Date(i.dataAtualizacao);
     const fromDate = updatedFrom ? new Date(`${updatedFrom}T00:00:00`) : null;
@@ -135,74 +146,91 @@ export default function DashboardPage() {
 
   return <main className="container container-wide" onClick={() => setMenuState(null)}>
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
-    <section className="card space-y-4" onClick={(e) => e.stopPropagation()}>
-      <div className="flex flex-wrap gap-2">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option></select>
-        <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-        <input value={takerFilter} onChange={(e) => setTakerFilter(e.target.value)} className="min-w-52 rounded-lg border p-2 text-sm" placeholder="Filtrar por tomador" aria-label="Filtrar por tomador" />
-        <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização de" />
-        <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização até" />
-        <button type="button" className="rounded-lg border border-zinc-300 !bg-white px-3 py-2 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
+
+    <section className="card mt-4 space-y-5" onClick={(e) => e.stopPropagation()}>
+      <div className="section-header">
+        <div>
+          <h2 className="section-title">Notas em acompanhamento</h2>
+          <p className="section-description">Filtre, analise detalhes e execute aprovações sem sair da central operacional.</p>
+        </div>
+        <span className="badge badge-slate">{filtered.length} de {invoices.length} nota(s)</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-3 xl:grid-cols-6">
+        <label>
+          Status
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option>
+          </select>
+        </label>
+        <label>
+          Fornecedor
+          <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+            <option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label>
+          Tomador
+          <input value={takerFilter} onChange={(e) => setTakerFilter(e.target.value)} placeholder="Buscar por tomador" />
+        </label>
+        <label>
+          Atualização de
+          <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} />
+        </label>
+        <label>
+          Atualização até
+          <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} />
+        </label>
+        <div className="flex items-end">
+          <button type="button" className="btn-secondary w-full" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
+        </div>
+      </div>
+
+      <div className="table-shell">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">Tomador</th><th className="px-4 py-3 text-left">NF</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+          <thead><tr><th className="px-4 py-3 text-left">Fornecedor / NF</th><th className="px-4 py-3 text-left">Tomador</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((invoice) => <Fragment key={invoice.id}>
-              <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                <td className="px-4 py-3">{invoice.fornecedor.nome}</td><td className="px-4 py-3">{invoice.tomadorNome ?? "-"}</td><td className="px-4 py-3">{invoice.numeroNota}</td><td className="px-4 py-3">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="px-4 py-3">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
-                <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_COLORS[invoice.status] ?? "bg-zinc-100 text-zinc-700"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
-                <td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
-                <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
+              <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
+                <td className="px-4 py-3"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
+                <td className="px-4 py-3 text-slate-700">{invoice.tomadorNome ?? "-"}</td>
+                <td className="px-4 py-3 font-medium text-slate-800">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className="px-4 py-3 text-slate-700">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
+                <td className="px-4 py-3"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
+                <td className="px-4 py-3 text-slate-700">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3 text-slate-600">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
+                <td className="px-4 py-3 text-right"><button className="btn-secondary min-h-0 px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
+            {!filtered.length && <tr><td colSpan={8} className="px-4 py-10"><div className="empty-state">Nenhuma nota encontrada para os filtros selecionados.</div></td></tr>}
           </tbody>
         </table>
       </div>
     </section>
-    {menuState && <div className="fixed z-50 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-2xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-      {["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(menuState.invoice.status) && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-emerald-700 hover:!bg-emerald-50" onClick={() => { const nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1); setPaymentDate(toLocalDateInputValue(nextDay)); setApproveModal(menuState.invoice); setMenuState(null); }}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
-      {menuState.invoice.status === "AGUARDANDO_APROVACAO" && me?.manager.role !== "FORNECEDOR" && <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
-      <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => { setExpandedId(menuState.invoice.id); setMenuState(null); }}>🔎 Ver detalhes</button>
-      <button className="w-full rounded-lg !bg-white px-3 py-2 text-left text-sm" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico</button>
+
+    {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
+    {menuState && <div className="fixed z-50 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
+      {['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onClick={() => { const nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1); setPaymentDate(toLocalDateInputValue(nextDay)); setApproveModal(menuState.invoice); setMenuState(null); }}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
+      {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
+      <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={() => { setExpandedId(menuState.invoice.id); setMenuState(null); }}>🔎 Ver detalhes</button>
+      <button className="w-full rounded-xl !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico</button>
     </div>}
 
-
-    {approveModal && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setApproveModal(null)} />}
-    {approveModal && <section className="fixed inset-x-0 top-16 z-50 mx-auto w-[92vw] max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
-      <h3 className="text-lg font-semibold">Avaliação obrigatória do serviço</h3>
-      <p className="mt-1 text-sm text-slate-600">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p>
-      <p className="mt-1 text-sm text-slate-600">Código externo do fornecedor: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p>
-      <div className="mt-4">
-        <p className="mb-2 text-sm font-medium">Pontuação do serviço</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((rate) => {
-            const description = rate === 1 ? "Muito insatisfeito" : rate === 2 ? "Insatisfeito" : rate === 3 ? "Regular" : rate === 4 ? "Satisfeito" : "Muito satisfeito";
-            return <button key={rate} type="button" className={`rounded-xl border p-2 text-left text-xs transition ${evaluation.rating === rate ? "border-slate-900 bg-blue-100 text-slate-900" : "border-slate-200 !bg-white !text-slate-700"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong>{rate}</strong> — {description}</button>;
-          })}
-        </div>
+    {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setApproveModal(null)} />}
+    {approveModal && <section role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" className="fixed inset-x-0 top-8 z-50 mx-auto max-h-[90vh] w-[92vw] max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">Avaliação obrigatória do serviço</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p><p className="section-description">Código externo: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p></div><span className="badge badge-blue">Aprovação</span></div>
+      <div className="space-y-4">
+        <div><p className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = rate === 1 ? "Muito insatisfeito" : rate === 2 ? "Insatisfeito" : rate === 3 ? "Regular" : rate === 4 ? "Satisfeito" : "Muito satisfeito"; return <button key={rate} type="button" className={`rounded-xl border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
+        <div className="grid gap-3 sm:grid-cols-3"><label>Qualifica?<select value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></label><label>Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label>Data de pagamento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label></div>
       </div>
-      <label className="mt-4 block text-sm font-medium">Qualifica?
-        <select className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}>
-          <option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option>
-        </select>
-      </label>
-      <label className="mt-4 block text-sm font-medium">Classificação de risco
-        <select className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}>
-          <option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option>
-        </select>
-      </label>
-      <label className="mt-4 block text-sm font-medium">Data de pagamento
-        <input type="date" className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
-      </label>
-      <div className="mt-5 flex justify-end gap-2"><button className="button-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button onClick={aprovarComAvaliacao}>Confirmar aprovação</button></div>
+      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao}>Confirmar aprovação</button></div>
     </section>}
-    {historyModal && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setHistoryModal(null)} />}
-    {historyModal && <section className="fixed inset-x-0 top-16 z-50 mx-auto max-h-[80vh] w-[92vw] max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-      <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-semibold">Histórico da nota {historyModal.invoice.numeroNota}</h3><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1 text-sm" onClick={() => setHistoryModal(null)}>Fechar</button></div>
-      <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-xl border bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{event.actionType}</p><p className="text-sm font-medium">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="text-xs text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="text-xs text-slate-700">{event.comment}</p>}</article>)}</div>
+
+    {historyModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setHistoryModal(null)} />}
+    {historyModal && <section role="dialog" aria-modal="true" aria-labelledby="history-modal-title" className="fixed inset-x-0 top-8 z-50 mx-auto max-h-[88vh] w-[92vw] max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="section-header"><div><h3 id="history-modal-title" className="section-title">Histórico da nota {historyModal.invoice.numeroNota}</h3><p className="section-description">Linha do tempo de interações e auditoria.</p></div><button type="button" className="btn-secondary" onClick={() => setHistoryModal(null)}>Fechar</button></div>
+      <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{event.actionType}</p><p className="mt-1 text-sm font-semibold text-slate-900">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="mt-2 text-xs font-semibold text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="mt-1 text-xs text-slate-700">{event.comment}</p>}</article>)}</div>
     </section>}
-    {message && <p className="message">{message}</p>}
+    {message && <p className="message" role="status">{message}</p>}
   </main>;
 }

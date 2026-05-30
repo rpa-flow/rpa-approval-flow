@@ -82,60 +82,88 @@ export default function NotasPage() {
     <MainHeader title="Lançamento de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     <section className="card mt-4">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+      <div className="section-header">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Nova nota fiscal</h2>
-          <p className="mt-1 text-sm text-slate-600">Escolha como deseja lançar a nota: via arquivo XML (automático) ou digitando os dados manualmente.</p>
+          <h2 className="section-title">Nova nota fiscal</h2>
+          <p className="section-description">Escolha entre o envio automático por XML ou o preenchimento manual em etapas organizadas.</p>
         </div>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Fornecedor</span>
+        <span className="badge badge-blue">Fornecedor</span>
       </div>
 
-      <form onSubmit={lançarNotaFiscal} className="grid-2">
-        <label>Modo de envio *
-          <select value={mode} onChange={(e) => setMode(e.target.value as LaunchMode)}>
-            <option value="XML">Arquivo XML (automático)</option>
-            <option value="MANUAL">Digitar dados manualmente</option>
-          </select>
-        </label>
-
-        <label>Fornecedor *<select value={invoiceForm.fornecedorId} onChange={(e) => setInvoiceForm((p) => ({ ...p, fornecedorId: e.target.value }))} required><option value="">Selecione</option>{me?.manager.suppliers.map((s) => <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>)}</select></label>
+      <form onSubmit={lançarNotaFiscal} className="space-y-4">
+        <div className="form-section">
+          <h3 className="form-section-title">Forma de envio</h3>
+          <div className="grid-2">
+            <label>Modo de envio *
+              <select value={mode} onChange={(e) => setMode(e.target.value as LaunchMode)}>
+                <option value="XML">Arquivo XML (automático)</option>
+                <option value="MANUAL">Digitar dados manualmente</option>
+              </select>
+            </label>
+            <label>Fornecedor *<select value={invoiceForm.fornecedorId} onChange={(e) => setInvoiceForm((p) => ({ ...p, fornecedorId: e.target.value }))} required><option value="">Selecione</option>{me?.manager.suppliers.map((s) => <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>)}</select></label>
+          </div>
+        </div>
 
         {mode === "XML" ? (
-          <label className="col-span-2">Arquivo XML da NFSe *
-            <input type="file" accept=".xml,text/xml,application/xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} required />
-          </label>
+          <div className="form-section bg-blue-50/40">
+            <h3 className="form-section-title">Upload do XML da NFSe</h3>
+            <p className="section-description">Envie o arquivo XML para preencher os dados principais automaticamente.</p>
+            <label>Arquivo XML da NFSe *
+              <input type="file" accept=".xml,text/xml,application/xml" onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)} required />
+            </label>
+          </div>
         ) : (
           <>
-            <label>Número da nota *<input value={invoiceForm.numeroNota} onChange={(e) => setInvoiceForm((p) => ({ ...p, numeroNota: e.target.value }))} required /></label>
-            <label>Chave de acesso (44 dígitos) *<input value={invoiceForm.codigoIdentificador} onChange={(e) => setInvoiceForm((p) => ({ ...p, codigoIdentificador: e.target.value.replace(/\D/g, "").slice(0, 44) }))} minLength={44} maxLength={44} required /></label>
-            <label>Data de emissão<input type="date" value={invoiceForm.dataEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataEmissao: e.target.value }))} /></label>
-            <label>Data de competência<input type="date" value={invoiceForm.dataCompetencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataCompetencia: e.target.value }))} /></label>
-            <label>Valor do serviço<input type="number" step="0.01" min="0" value={invoiceForm.valorServico} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorServico: e.target.value }))} /></label>
-            <label>Valor líquido<input type="number" step="0.01" min="0" value={invoiceForm.valorLiquido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorLiquido: e.target.value }))} /></label>
-            <label>Tomador<input value={invoiceForm.tomadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorNome: e.target.value }))} /></label>
-            <label>CNPJ do tomador<input value={invoiceForm.tomadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
-            <label>Email do tomador<input type="email" value={invoiceForm.tomadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorEmail: e.target.value }))} /></label>
-            <label>nDFSe<input value={invoiceForm.nDfse} onChange={(e) => setInvoiceForm((p) => ({ ...p, nDfse: e.target.value }))} /></label>
-            <label>Local de emissão<input value={invoiceForm.localEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localEmissao: e.target.value }))} /></label>
-            <label>Local de prestação<input value={invoiceForm.localPrestacao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localPrestacao: e.target.value }))} /></label>
-            <label>Município incidência<input value={invoiceForm.municipioIncidencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, municipioIncidencia: e.target.value }))} /></label>
-            <label>Tributação nacional<input value={invoiceForm.itemTributacaoNac} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoNac: e.target.value }))} /></label>
-            <label>Tributação municipal<input value={invoiceForm.itemTributacaoMun} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoMun: e.target.value }))} /></label>
-            <label>Descrição NBS<input value={invoiceForm.nbsDescricao} onChange={(e) => setInvoiceForm((p) => ({ ...p, nbsDescricao: e.target.value }))} /></label>
-            <label>Data processamento<input type="datetime-local" value={invoiceForm.dataProcessamento} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataProcessamento: e.target.value }))} /></label>
-            <label>CNPJ prestador<input value={invoiceForm.prestadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
-            <label>Nome prestador<input value={invoiceForm.prestadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorNome: e.target.value }))} /></label>
-            <label>Email prestador<input type="email" value={invoiceForm.prestadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorEmail: e.target.value }))} /></label>
-            <label>Base de cálculo<input type="number" step="0.01" min="0" value={invoiceForm.valorBaseCalculo} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorBaseCalculo: e.target.value }))} /></label>
-            <label>Valor ISSQN<input type="number" step="0.01" min="0" value={invoiceForm.valorIssqn} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorIssqn: e.target.value }))} /></label>
-            <label>Valor total retido<input type="number" step="0.01" min="0" value={invoiceForm.valorTotalRetido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorTotalRetido: e.target.value }))} /></label>
-            <label>Alíquota (%)<input type="number" step="0.01" min="0" value={invoiceForm.aliquota} onChange={(e) => setInvoiceForm((p) => ({ ...p, aliquota: e.target.value }))} /></label>
+            <div className="form-section">
+              <h3 className="form-section-title">Identificação da nota</h3>
+              <div className="grid-2">
+                <label>Número da nota *<input value={invoiceForm.numeroNota} onChange={(e) => setInvoiceForm((p) => ({ ...p, numeroNota: e.target.value }))} required /></label>
+                <label>Chave de acesso (44 dígitos) *<input value={invoiceForm.codigoIdentificador} onChange={(e) => setInvoiceForm((p) => ({ ...p, codigoIdentificador: e.target.value.replace(/\D/g, "").slice(0, 44) }))} minLength={44} maxLength={44} required /></label>
+                <label>Data de emissão<input type="date" value={invoiceForm.dataEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataEmissao: e.target.value }))} /></label>
+                <label>Data de competência<input type="date" value={invoiceForm.dataCompetencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataCompetencia: e.target.value }))} /></label>
+              </div>
+            </div>
+            <div className="form-section">
+              <h3 className="form-section-title">Valores</h3>
+              <div className="grid-2">
+                <label>Valor do serviço<input type="number" step="0.01" min="0" value={invoiceForm.valorServico} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorServico: e.target.value }))} /></label>
+                <label>Valor líquido<input type="number" step="0.01" min="0" value={invoiceForm.valorLiquido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorLiquido: e.target.value }))} /></label>
+                <label>Base de cálculo<input type="number" step="0.01" min="0" value={invoiceForm.valorBaseCalculo} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorBaseCalculo: e.target.value }))} /></label>
+                <label>Valor ISSQN<input type="number" step="0.01" min="0" value={invoiceForm.valorIssqn} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorIssqn: e.target.value }))} /></label>
+                <label>Valor total retido<input type="number" step="0.01" min="0" value={invoiceForm.valorTotalRetido} onChange={(e) => setInvoiceForm((p) => ({ ...p, valorTotalRetido: e.target.value }))} /></label>
+                <label>Alíquota (%)<input type="number" step="0.01" min="0" value={invoiceForm.aliquota} onChange={(e) => setInvoiceForm((p) => ({ ...p, aliquota: e.target.value }))} /></label>
+              </div>
+            </div>
+            <div className="form-section">
+              <h3 className="form-section-title">Tomador e prestador</h3>
+              <div className="grid-2">
+                <label>Tomador<input value={invoiceForm.tomadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorNome: e.target.value }))} /></label>
+                <label>CNPJ do tomador<input value={invoiceForm.tomadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
+                <label>Email do tomador<input type="email" value={invoiceForm.tomadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, tomadorEmail: e.target.value }))} /></label>
+                <label>CNPJ prestador<input value={invoiceForm.prestadorCnpj} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorCnpj: e.target.value.replace(/\D/g, "").slice(0, 14) }))} maxLength={14} /></label>
+                <label>Nome prestador<input value={invoiceForm.prestadorNome} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorNome: e.target.value }))} /></label>
+                <label>Email prestador<input type="email" value={invoiceForm.prestadorEmail} onChange={(e) => setInvoiceForm((p) => ({ ...p, prestadorEmail: e.target.value }))} /></label>
+              </div>
+            </div>
+            <div className="form-section">
+              <h3 className="form-section-title">Dados complementares</h3>
+              <div className="grid-2">
+                <label>nDFSe<input value={invoiceForm.nDfse} onChange={(e) => setInvoiceForm((p) => ({ ...p, nDfse: e.target.value }))} /></label>
+                <label>Local de emissão<input value={invoiceForm.localEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localEmissao: e.target.value }))} /></label>
+                <label>Local de prestação<input value={invoiceForm.localPrestacao} onChange={(e) => setInvoiceForm((p) => ({ ...p, localPrestacao: e.target.value }))} /></label>
+                <label>Município incidência<input value={invoiceForm.municipioIncidencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, municipioIncidencia: e.target.value }))} /></label>
+                <label>Tributação nacional<input value={invoiceForm.itemTributacaoNac} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoNac: e.target.value }))} /></label>
+                <label>Tributação municipal<input value={invoiceForm.itemTributacaoMun} onChange={(e) => setInvoiceForm((p) => ({ ...p, itemTributacaoMun: e.target.value }))} /></label>
+                <label>Descrição NBS<input value={invoiceForm.nbsDescricao} onChange={(e) => setInvoiceForm((p) => ({ ...p, nbsDescricao: e.target.value }))} /></label>
+                <label>Data processamento<input type="datetime-local" value={invoiceForm.dataProcessamento} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataProcessamento: e.target.value }))} /></label>
+              </div>
+            </div>
           </>
         )}
 
-        <div className="flex items-end gap-2"><button className="btn-primary" type="submit" disabled={isSubmittingInvoice}>{isSubmittingInvoice ? "Enviando..." : "Enviar nota"}</button><button className="btn-secondary" type="button" onClick={() => { setInvoiceForm(INITIAL_FORM); setXmlFile(null); }}>Limpar</button></div>
+        <div className="form-actions"><button className="btn-primary" type="submit" disabled={isSubmittingInvoice}>{isSubmittingInvoice ? "Enviando..." : "Enviar nota"}</button><button className="btn-secondary" type="button" onClick={() => { setInvoiceForm(INITIAL_FORM); setXmlFile(null); }}>Limpar</button></div>
       </form>
     </section>
-    {message && <p className="message">{message}</p>}
+    {message && <p className="message" role="status">{message}</p>}
   </main>;
 }

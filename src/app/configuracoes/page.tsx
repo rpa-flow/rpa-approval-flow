@@ -107,7 +107,7 @@ export default function ConfiguracoesPage() {
         <section className="card">
           <h2>Cadastros administrativos</h2>
           <p className="muted small">Para melhorar a experiência, o cadastro de fornecedores e gestores fica em uma tela separada.</p>
-          <Link href="/fornecedores" className="button-secondary">
+          <Link href="/fornecedores" className="btn-secondary">
             Ir para tela de cadastros
           </Link>
         </section>
@@ -217,7 +217,7 @@ export default function ConfiguracoesPage() {
         </article>
       </section>
 
-      {message && <p className="message">{message}</p>}
+      {message && <p className="message" role="status">{message}</p>}
     </main>
   );
 }

@@ -179,9 +179,9 @@ export default function CategoriasFornecedoresPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="table-shell">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50">
+            <thead>
               <tr>
                 <th className="px-4 py-3 text-left">Nome</th>
                 <th className="px-4 py-3 text-left">Descrição</th>
@@ -191,7 +191,7 @@ export default function CategoriasFornecedoresPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredCategories.map((category) => (
-                <tr key={category.id} className="hover:bg-slate-50">
+                <tr key={category.id} >
                   <td className="px-4 py-3 font-medium text-slate-800">{category.nome}</td>
                   <td className="px-4 py-3 text-slate-600">{category.descricao || "—"}</td>
                   <td className="px-4 py-3">
@@ -222,7 +222,7 @@ export default function CategoriasFornecedoresPage() {
         </div>
       </section>
 
-      {message && <p className="message">{message}</p>}
+      {message && <p className="message" role="status">{message}</p>}
     </main>
   );
 }
