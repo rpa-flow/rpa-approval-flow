@@ -17,6 +17,7 @@ type Invoice = {
   dataAtualizacao: string;
   dataEmissao?: string | null;
   valorServico?: number | null;
+  tomadorNome?: string | null;
   fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null };
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
+  const [takerFilter, setTakerFilter] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -81,12 +83,15 @@ export default function DashboardPage() {
     const matchesStatus = statusFilter === "TODOS"
       || (statusFilter === "LANCADAS" && isInvoiceLaunched(i))
       || i.status === statusFilter;
+    const normalizedTaker = takerFilter.trim().toLowerCase();
+    const matchesTaker = !normalizedTaker || (i.tomadorNome ?? "").toLowerCase().includes(normalizedTaker);
 
     return matchesStatus &&
       (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter) &&
+      matchesTaker &&
       (!fromDate || updatedAt >= fromDate) &&
       (!toDate || updatedAt <= toDate);
-  }), [invoices, statusFilter, supplierFilter, updatedFrom, updatedTo]);
+  }), [invoices, statusFilter, supplierFilter, takerFilter, updatedFrom, updatedTo]);
 
   const suppliers = useMemo(() => Array.from(new Set(invoices.map((i) => i.fornecedor.nome))), [invoices]);
 
@@ -134,22 +139,23 @@ export default function DashboardPage() {
       <div className="flex flex-wrap gap-2">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option></select>
         <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="rounded-lg border p-2 text-sm"><option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+        <input value={takerFilter} onChange={(e) => setTakerFilter(e.target.value)} className="min-w-52 rounded-lg border p-2 text-sm" placeholder="Filtrar por tomador" aria-label="Filtrar por tomador" />
         <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização de" />
         <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} className="rounded-lg border p-2 text-sm" aria-label="Atualização até" />
-        <button type="button" className="rounded-lg border border-zinc-300 !bg-white px-3 py-2 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
+        <button type="button" className="rounded-lg border border-zinc-300 !bg-white px-3 py-2 text-sm !text-zinc-700 hover:!bg-zinc-50" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">NF</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+          <thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">Tomador</th><th className="px-4 py-3 text-left">NF</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((invoice) => <Fragment key={invoice.id}>
               <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                <td className="px-4 py-3">{invoice.fornecedor.nome}</td><td className="px-4 py-3">{invoice.numeroNota}</td><td className="px-4 py-3">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="px-4 py-3">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
+                <td className="px-4 py-3">{invoice.fornecedor.nome}</td><td className="px-4 py-3">{invoice.tomadorNome ?? "-"}</td><td className="px-4 py-3">{invoice.numeroNota}</td><td className="px-4 py-3">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td><td className="px-4 py-3">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_COLORS[invoice.status] ?? "bg-zinc-100 text-zinc-700"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
                 <td className="px-4 py-3">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
                 <td className="px-4 py-3 text-right"><button className="rounded-lg border border-zinc-300 !bg-white px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.min(r.right - 208, window.innerWidth - 224), y: r.bottom + 6 }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-2 px-4 py-3 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
           </tbody>
         </table>
