@@ -104,6 +104,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const payloadToSave = { ...parsed.data };
   const reason = typeof parsed.data.reason === "string" && parsed.data.reason.trim().length > 0 ? parsed.data.reason.trim() : null;
   const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
+  const isChangingApprovedStatus = existing.status === "APROVADO" && payloadToSave.status !== undefined && payloadToSave.status !== "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).reason;
@@ -112,6 +113,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json(
       { error: "Somente ADMIN pode alterar tentativas de notificação." },
       { status: 403 }
+    );
+  }
+
+  if (isChangingApprovedStatus && !reason) {
+    return NextResponse.json(
+      { error: "Informe o motivo para alterar ou cancelar uma aprovação." },
+      { status: 400 }
     );
   }
 
@@ -153,7 +161,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     payloadToSave.statusProcessamento = "ERRO";
   }
 
-  if ((payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES") && reason && payloadToSave.observacaoValidacao === undefined) {
+  if (payloadToSave.status === "EXPIRADA") {
+    payloadToSave.processada = true;
+    payloadToSave.statusProcessamento = "ERRO";
+  }
+
+  if ((payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES" || isChangingApprovedStatus) && reason && payloadToSave.observacaoValidacao === undefined) {
     payloadToSave.observacaoValidacao = reason;
   }
 
@@ -180,9 +193,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   };
 
 
-  if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO") {
+  if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES" || payloadToSave.status === "EXPIRADA") {
     dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
     dataToUpdate.dataValidacao = new Date();
+  }
+
+  if (isChangingApprovedStatus && payloadToSave.status === "AGUARDANDO_APROVACAO") {
+    dataToUpdate.responsavelValidacao = null;
+    dataToUpdate.dataValidacao = null;
   }
   const updated = await prisma.$transaction(async (tx) => {
     const invoice = await tx.invoice.update({ where: { id: targetInvoiceId }, data: dataToUpdate });
@@ -217,14 +235,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
 
   const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
+  const actorName = manager?.nome ?? "Integração Delphi";
   const actionDescription =
-    updated.status === "APROVADO"
-      ? `${manager?.nome ?? "Integração Delphi"} aprovou a nota e registrou a avaliação do serviço`
-      : updated.status === "RECUSADO"
-        ? `${manager?.nome ?? "Integração Delphi"} recusou a nota`
-        : existing.status !== updated.status
-          ? `${manager?.nome ?? "Integração Delphi"} alterou o status da nota`
-          : `${manager?.nome ?? "Integração Delphi"} atualizou os dados da nota`;
+    isChangingApprovedStatus && updated.status === "AGUARDANDO_APROVACAO"
+      ? `${actorName} cancelou a aprovação da nota`
+      : isChangingApprovedStatus
+        ? `${actorName} alterou uma nota aprovada para ${updated.status.replaceAll("_", " ")}`
+        : updated.status === "APROVADO"
+          ? `${actorName} aprovou a nota e registrou a avaliação do serviço`
+          : updated.status === "RECUSADO"
+            ? `${actorName} recusou a nota`
+            : existing.status !== updated.status
+              ? `${actorName} alterou o status da nota`
+              : `${actorName} atualizou os dados da nota`;
 
   await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
 

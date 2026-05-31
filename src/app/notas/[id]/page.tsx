@@ -6,13 +6,14 @@ import { MainHeader } from "@/app/components/main-header";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
+type InvoiceStatus = "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO" | "PROCESSADO" | "EXPIRADA" | "DADOS_INCONSISTENTES";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
 
 type Invoice = {
   id: string;
   numeroNota: string;
   codigoIdentificador: string;
-  status: string;
+  status: InvoiceStatus;
   dataAtualizacao: string;
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
@@ -44,13 +45,22 @@ type Invoice = {
   fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null };
 };
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<InvoiceStatus, string> = {
   AGUARDANDO_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADO: "bg-emerald-100 text-emerald-800",
   RECUSADO: "bg-rose-100 text-rose-800",
   PROCESSADO: "bg-blue-100 text-blue-800",
+  EXPIRADA: "bg-slate-100 text-slate-800",
   DADOS_INCONSISTENTES: "bg-orange-100 text-orange-800"
 };
+
+const APPROVED_STATUS_CHANGE_OPTIONS: Array<{ value: Exclude<InvoiceStatus, "APROVADO">; label: string; description: string }> = [
+  { value: "AGUARDANDO_APROVACAO", label: "Cancelar aprovação", description: "Volta a nota para a fila de aprovação." },
+  { value: "RECUSADO", label: "Recusar nota", description: "Marca a nota como recusada por erro identificado após aprovação." },
+  { value: "DADOS_INCONSISTENTES", label: "Dados inconsistentes", description: "Sinaliza que a nota precisa de correção de dados." },
+  { value: "PROCESSADO", label: "Marcar processada", description: "Confirma manualmente que a nota já foi processada." },
+  { value: "EXPIRADA", label: "Expirada", description: "Indica que a aprovação não deve mais seguir o fluxo atual." }
+];
 
 function formatCurrency(value?: number | null) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -89,6 +99,8 @@ export default function NotaDetalhePage() {
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [isApproving, setIsApproving] = useState(false);
+  const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -132,6 +144,12 @@ export default function NotaDetalhePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!loading && invoice && window.location.hash === "#revogar-aprovacao") {
+      document.getElementById("revogar-aprovacao")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [invoice, loading]);
+
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setMessage("Preencha a avaliação completa para aprovar a nota.");
@@ -165,7 +183,39 @@ export default function NotaDetalhePage() {
     await loadData();
   }
 
+  async function alterarStatusAprovado() {
+    if (!invoice) return;
+
+    const reason = statusChange.reason.trim();
+    if (!reason) {
+      setMessage("Informe o motivo para alterar ou cancelar uma aprovação.");
+      return;
+    }
+
+    setIsChangingStatus(true);
+    const res = await fetch(`/api/notas/${invoice.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: statusChange.status,
+        reason
+      })
+    });
+    setIsChangingStatus(false);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível alterar o status da nota aprovada.");
+      return;
+    }
+
+    setMessage(statusChange.status === "AGUARDANDO_APROVACAO" ? "Aprovação cancelada com sucesso." : "Status da nota aprovada alterado com sucesso.");
+    setStatusChange({ status: "AGUARDANDO_APROVACAO", reason: "" });
+    await loadData();
+  }
+
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
 
   return <main className="container container-wide">
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>} />
@@ -224,6 +274,18 @@ export default function NotaDetalhePage() {
       </section>
 
       <aside className="space-y-4">
+
+        {canChangeApprovedStatus && <section id="revogar-aprovacao" className="card space-y-4 border-amber-200 bg-amber-50/50 scroll-mt-6 ring-1 ring-amber-100">
+          <div>
+            <h3 className="section-title">Revogar ou alterar aprovação</h3>
+            <p className="section-description">Escolha “Cancelar aprovação” para voltar a nota para a fila, ou selecione outro status quando a aprovação anterior foi feita com erro. A alteração será registrada no histórico.</p>
+          </div>
+          <label>Novo status<select value={statusChange.status} onChange={(event) => setStatusChange((prev) => ({ ...prev, status: event.target.value as Exclude<InvoiceStatus, "APROVADO"> }))}>{APPROVED_STATUS_CHANGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <p className="rounded-2xl border border-amber-200 bg-white p-3 text-xs font-semibold text-amber-900">{APPROVED_STATUS_CHANGE_OPTIONS.find((option) => option.value === statusChange.status)?.description}</p>
+          <label>Motivo da alteração<textarea value={statusChange.reason} onChange={(event) => setStatusChange((prev) => ({ ...prev, reason: event.target.value }))} rows={4} maxLength={500} placeholder="Descreva o erro ou motivo para cancelar/alterar a aprovação" /></label>
+          <button type="button" className="btn-secondary w-full" onClick={alterarStatusAprovado} disabled={isChangingStatus}>{isChangingStatus ? "Registrando..." : statusChange.status === "AGUARDANDO_APROVACAO" ? "Cancelar aprovação" : "Alterar status"}</button>
+        </section>}
+
         {canApprove && <section className="card space-y-4">
           <div>
             <h3 className="section-title">Aprovar nota</h3>
