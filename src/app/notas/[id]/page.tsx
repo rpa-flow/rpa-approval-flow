@@ -144,6 +144,12 @@ export default function NotaDetalhePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!loading && invoice && window.location.hash === "#revogar-aprovacao") {
+      document.getElementById("revogar-aprovacao")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [invoice, loading]);
+
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setMessage("Preencha a avaliação completa para aprovar a nota.");
@@ -269,10 +275,10 @@ export default function NotaDetalhePage() {
 
       <aside className="space-y-4">
 
-        {canChangeApprovedStatus && <section className="card space-y-4 border-amber-200 bg-amber-50/50">
+        {canChangeApprovedStatus && <section id="revogar-aprovacao" className="card space-y-4 border-amber-200 bg-amber-50/50 scroll-mt-6 ring-1 ring-amber-100">
           <div>
-            <h3 className="section-title">Alterar aprovação</h3>
-            <p className="section-description">Use esta ação quando uma nota já aprovada precisar voltar para correção. A alteração será registrada no histórico.</p>
+            <h3 className="section-title">Revogar ou alterar aprovação</h3>
+            <p className="section-description">Escolha “Cancelar aprovação” para voltar a nota para a fila, ou selecione outro status quando a aprovação anterior foi feita com erro. A alteração será registrada no histórico.</p>
           </div>
           <label>Novo status<select value={statusChange.status} onChange={(event) => setStatusChange((prev) => ({ ...prev, status: event.target.value as Exclude<InvoiceStatus, "APROVADO"> }))}>{APPROVED_STATUS_CHANGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <p className="rounded-2xl border border-amber-200 bg-white p-3 text-xs font-semibold text-amber-900">{APPROVED_STATUS_CHANGE_OPTIONS.find((option) => option.value === statusChange.status)?.description}</p>
