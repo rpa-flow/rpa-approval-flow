@@ -53,13 +53,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     if (parsed.data.addManager) {
-      const { email, nome, senha } = parsed.data.addManager;
+      const { id, email, nome, senha } = parsed.data.addManager;
 
-      let manager = await prisma.manager.findUnique({ where: { email } });
+      let manager = id
+        ? await prisma.manager.findUnique({ where: { id } })
+        : email
+          ? await prisma.manager.findUnique({ where: { email } })
+          : null;
+
       if (!manager) {
-        if (!nome || !senha) {
+        if (!email || !nome || !senha) {
           return NextResponse.json(
-            { error: "Para criar novo gestor, informe nome e senha junto do e-mail." },
+            { error: "Para criar novo gestor, informe nome, e-mail e senha." },
             { status: 400 }
           );
         }
