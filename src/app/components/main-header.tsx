@@ -9,6 +9,7 @@ const DEFAULT_HEADER_LINKS = [
   { href: "/relatorios", label: "Relatórios", icon: "📈" },
   { href: "/notas", label: "Lançar nota", icon: "🧾" },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏢" },
+  { href: "/gestores", label: "Gestores", icon: "👥" },
   { href: "/categorias-fornecedores", label: "Categorias", icon: "🗂️" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️" },
   { href: "/perfil", label: "Perfil", icon: "👤" }
@@ -52,7 +53,7 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
         return role === "ADMIN" || role === "FORNECEDOR";
       }
 
-      if (link.href === "/categorias-fornecedores") {
+      if (link.href === "/gestores" || link.href === "/categorias-fornecedores") {
         return role === "ADMIN";
       }
 

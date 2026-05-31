@@ -70,10 +70,10 @@ export const supplierSchema = z.object({
   managers: z.array(
     z.object({
       nome: z.string().min(2),
-      email: z.string().email(),
+      email: z.string().trim().toLowerCase().email(),
       senha: z.string().min(6)
     })
-  )
+  ).default([])
 });
 
 export const updateSupplierSchema = z.object({
@@ -82,10 +82,34 @@ export const updateSupplierSchema = z.object({
   codigoExterno: z.string().trim().min(1).max(120).nullable().optional(),
   categoryIds: z.array(z.string().min(1)).optional(),
   addManager: z.object({
+    id: z.string().min(1).optional(),
     nome: z.string().min(2).optional(),
-    email: z.string().email(),
+    email: z.string().trim().toLowerCase().email().optional(),
     senha: z.string().min(6).optional()
+  }).refine((data) => Boolean(data.id || data.email), {
+    message: "Informe o gestor existente ou o e-mail do novo gestor."
   }).optional()
+});
+
+
+const userRoleSchema = z.enum(["ADMIN", "GESTOR", "FORNECEDOR"]);
+
+export const managerSchema = z.object({
+  nome: z.string().trim().min(2),
+  email: z.string().trim().toLowerCase().email(),
+  senha: z.string().min(6),
+  role: userRoleSchema.default("GESTOR"),
+  ativo: z.boolean().optional(),
+  supplierIds: z.array(z.string().min(1)).default([])
+});
+
+export const updateManagerSchema = z.object({
+  nome: z.string().trim().min(2),
+  email: z.string().trim().toLowerCase().email(),
+  senha: z.string().min(6).optional().or(z.literal("")),
+  role: userRoleSchema,
+  ativo: z.boolean(),
+  supplierIds: z.array(z.string().min(1)).default([])
 });
 
 export const supplierNotificationConfigSchema = z.object({
