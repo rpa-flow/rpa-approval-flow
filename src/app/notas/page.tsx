@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 
@@ -11,6 +11,10 @@ const INITIAL_FORM = {
   fornecedorId: "", numeroNota: "", codigoIdentificador: "", dataEmissao: "", dataCompetencia: "", valorServico: "", valorLiquido: "", tomadorNome: "", tomadorCnpj: "", tomadorEmail: "", nDfse: "", localEmissao: "", localPrestacao: "", municipioIncidencia: "", itemTributacaoNac: "", itemTributacaoMun: "", nbsDescricao: "", dataProcessamento: "", prestadorCnpj: "", prestadorNome: "", prestadorEmail: "", valorBaseCalculo: "", valorIssqn: "", valorTotalRetido: "", aliquota: ""
 };
 
+function normalizeSearch(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 export default function NotasPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [message, setMessage] = useState("");
@@ -18,6 +22,8 @@ export default function NotasPage() {
   const [mode, setMode] = useState<LaunchMode>("XML");
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [invoiceForm, setInvoiceForm] = useState(INITIAL_FORM);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [isSupplierListOpen, setIsSupplierListOpen] = useState(false);
   const router = useRouter();
 
   const loadMe = useCallback(async () => {
@@ -28,8 +34,40 @@ export default function NotasPage() {
 
   useEffect(() => { loadMe(); }, [loadMe]);
 
+  const suppliers = useMemo(() => me?.manager.suppliers ?? [], [me?.manager.suppliers]);
+  const filteredSuppliers = useMemo(() => {
+    const term = normalizeSearch(supplierSearch.trim());
+    if (!term) return suppliers.slice(0, 25);
+
+    return suppliers
+      .filter((supplier) => normalizeSearch(supplier.supplierName).includes(term))
+      .slice(0, 25);
+  }, [supplierSearch, suppliers]);
+
+  const selectedSupplier = suppliers.find((supplier) => supplier.supplierId === invoiceForm.fornecedorId);
+
+  function handleSupplierSearch(value: string) {
+    const term = normalizeSearch(value.trim());
+    const exactSupplier = suppliers.find((supplier) => normalizeSearch(supplier.supplierName) === term);
+
+    setSupplierSearch(value);
+    setInvoiceForm((previous) => ({ ...previous, fornecedorId: exactSupplier?.supplierId ?? "" }));
+    setIsSupplierListOpen(true);
+  }
+
+  function selectSupplier(supplier: { supplierId: string; supplierName: string }) {
+    setSupplierSearch(supplier.supplierName);
+    setInvoiceForm((previous) => ({ ...previous, fornecedorId: supplier.supplierId }));
+    setIsSupplierListOpen(false);
+  }
+
   async function lançarNotaFiscal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!invoiceForm.fornecedorId) {
+      setMessage("Pesquise e selecione um fornecedor da lista antes de enviar a nota.");
+      return;
+    }
+
     setIsSubmittingInvoice(true);
     setMessage("");
 
@@ -74,6 +112,7 @@ export default function NotasPage() {
     setIsSubmittingInvoice(false);
     if (!res.ok) return setMessage("Não foi possível lançar a nota fiscal. Verifique os dados obrigatórios.");
     setInvoiceForm(INITIAL_FORM);
+    setSupplierSearch("");
     setXmlFile(null);
     setMessage("Nota fiscal lançada com sucesso.");
   }
@@ -100,7 +139,39 @@ export default function NotasPage() {
                 <option value="MANUAL">Digitar dados manualmente</option>
               </select>
             </label>
-            <label>Fornecedor *<select value={invoiceForm.fornecedorId} onChange={(e) => setInvoiceForm((p) => ({ ...p, fornecedorId: e.target.value }))} required><option value="">Selecione</option>{me?.manager.suppliers.map((s) => <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>)}</select></label>
+            <label>Fornecedor *
+              <div className="supplier-search">
+                <input
+                  value={supplierSearch}
+                  onChange={(e) => handleSupplierSearch(e.target.value)}
+                  onFocus={() => setIsSupplierListOpen(true)}
+                  onBlur={() => setIsSupplierListOpen(false)}
+                  placeholder="Pesquise pelo nome do fornecedor"
+                  autoComplete="off"
+                  required
+                />
+                {isSupplierListOpen && (supplierSearch || suppliers.length > 0) && (
+                  <div className="supplier-search-results" role="listbox" aria-label="Fornecedores encontrados">
+                    {filteredSuppliers.length ? filteredSuppliers.map((supplier) => (
+                      <button
+                        key={supplier.supplierId}
+                        type="button"
+                        role="option"
+                        aria-selected={supplier.supplierId === invoiceForm.fornecedorId}
+                        className={supplier.supplierId === invoiceForm.fornecedorId ? "supplier-search-option selected" : "supplier-search-option"}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectSupplier(supplier)}
+                      >
+                        {supplier.supplierName}
+                      </button>
+                    )) : (
+                      <span className="supplier-search-empty">Nenhum fornecedor encontrado.</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedSupplier ? <span className="small">Selecionado: {selectedSupplier.supplierName}</span> : <span className="small">Digite parte do nome e escolha um fornecedor da lista.</span>}
+            </label>
           </div>
         </div>
 
@@ -161,7 +232,7 @@ export default function NotasPage() {
           </>
         )}
 
-        <div className="form-actions"><button className="btn-primary" type="submit" disabled={isSubmittingInvoice}>{isSubmittingInvoice ? "Enviando..." : "Enviar nota"}</button><button className="btn-secondary" type="button" onClick={() => { setInvoiceForm(INITIAL_FORM); setXmlFile(null); }}>Limpar</button></div>
+        <div className="form-actions"><button className="btn-primary" type="submit" disabled={isSubmittingInvoice}>{isSubmittingInvoice ? "Enviando..." : "Enviar nota"}</button><button className="btn-secondary" type="button" onClick={() => { setInvoiceForm(INITIAL_FORM); setSupplierSearch(""); setXmlFile(null); }}>Limpar</button></div>
       </form>
     </section>
     {message && <p className="message" role="status">{message}</p>}
