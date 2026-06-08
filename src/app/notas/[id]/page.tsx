@@ -39,6 +39,7 @@ type Invoice = {
   dataValidacao?: string | null;
   observacaoValidacao?: string | null;
   codigoDelphi?: string | null;
+  ordemCompra?: string | null;
   ocContrato?: string | null;
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
@@ -98,6 +99,7 @@ export default function NotaDetalhePage() {
   const [message, setMessage] = useState("");
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
+  const [purchaseOrder, setPurchaseOrder] = useState("");
   const [isApproving, setIsApproving] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
@@ -139,6 +141,7 @@ export default function NotaDetalhePage() {
     const nextDay = new Date();
     nextDay.setDate(nextDay.getDate() + 1);
     setPaymentDate(loadedInvoice.dataPagamento ? toLocalDateInputValue(new Date(loadedInvoice.dataPagamento)) : toLocalDateInputValue(nextDay));
+    setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
     setLoading(false);
   }, [params.id, router]);
 
@@ -163,6 +166,7 @@ export default function NotaDetalhePage() {
       body: JSON.stringify({
         status: "APROVADO",
         dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
+        ordemCompra: purchaseOrder.trim() || null,
         serviceEvaluation: {
           rating: evaluation.rating,
           comment: "Qualificação registrada",
@@ -180,6 +184,7 @@ export default function NotaDetalhePage() {
 
     setMessage("Nota aprovada com sucesso.");
     setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+    setPurchaseOrder("");
     await loadData();
   }
 
@@ -265,6 +270,7 @@ export default function NotaDetalhePage() {
           <DetailItem label="Responsável validação" value={invoice.responsavelValidacao} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
           <DetailItem label="Pagamento previsto" value={formatDate(invoice.dataPagamento)} />
+          <DetailItem label="Ordem de compra" value={invoice.ordemCompra} />
           <DetailItem label="Código Delphi" value={invoice.codigoDelphi} />
           <DetailItem label="OC contrato" value={invoice.ocContrato} />
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
@@ -295,6 +301,7 @@ export default function NotaDetalhePage() {
           <label>Qualifica?<select value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></label>
           <label>Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
           <label>Data de pagamento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+          <label>Ordem de compra <span className="text-xs font-normal text-slate-500">(opcional)</span><input value={purchaseOrder} onChange={(event) => setPurchaseOrder(event.target.value)} maxLength={120} placeholder="Informe a ordem de compra, se houver" /></label>
           <button type="button" className="btn-primary w-full" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Aprovar nota"}</button>
         </section>}
 

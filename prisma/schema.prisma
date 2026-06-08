@@ -136,6 +136,7 @@ model Invoice {
   dataEmissao         DateTime?
   dataCompetencia     DateTime?
   dataPagamento       DateTime?
+  ordemCompra         String?
   ocContrato          String?
   dataLancamentoDelphi DateTime?
   codigoDelphi        String?
