@@ -43,6 +43,7 @@ export const updateInvoiceSchema = z
     statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),
     tentativasNotificacao: z.number().int().min(0).optional(),
     ultimoLembreteEm: z.string().datetime().nullable().optional(),
+    ordemCompra: z.string().trim().max(120).nullable().optional(),
     ocContrato: z.string().min(1).optional(),
     dataLancamentoDelphi: z.string().datetime().nullable().optional(),
     dataPagamento: z.string().datetime().nullable().optional(),
