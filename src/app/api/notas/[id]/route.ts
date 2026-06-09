@@ -126,6 +126,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (payloadToSave.status === "PROCESSADO") {
     payloadToSave.processada = true;
     payloadToSave.statusProcessamento = "CONCLUIDO";
+    payloadToSave.dataLancamentoDelphi = new Date().toISOString();
   }
 
   if (payloadToSave.status === "AGUARDANDO_APROVACAO") {
