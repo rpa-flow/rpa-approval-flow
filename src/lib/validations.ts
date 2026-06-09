@@ -1,6 +1,28 @@
 import { DelphiIntegrationStatus, InvoiceSituation, InvoiceStatus, ProcessingStatus, SupplierRiskLevel } from "@prisma/client";
 import { z } from "zod";
 
+const dateTimeStringSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const brazilianDateMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed);
+  if (!brazilianDateMatch) return trimmed;
+
+  const [, day, month, year] = brazilianDateMatch;
+  const dayNumber = Number(day);
+  const monthNumber = Number(month);
+  const yearNumber = Number(year);
+  const date = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber, 12));
+
+  if (date.getUTCFullYear() !== yearNumber || date.getUTCMonth() !== monthNumber - 1 || date.getUTCDate() !== dayNumber) {
+    return trimmed;
+  }
+
+  return date.toISOString();
+}, z.string().datetime().nullable().optional());
+
 export const createInvoiceSchema = z
   .object({
     numeroNota: z.string().min(1).optional(),
@@ -42,11 +64,11 @@ export const updateInvoiceSchema = z
     processada: z.boolean().optional(),
     statusProcessamento: z.nativeEnum(ProcessingStatus).optional(),
     tentativasNotificacao: z.number().int().min(0).optional(),
-    ultimoLembreteEm: z.string().datetime().nullable().optional(),
+    ultimoLembreteEm: dateTimeStringSchema,
     ordemCompra: z.string().trim().max(120).nullable().optional(),
     ocContrato: z.string().min(1).optional(),
-    dataLancamentoDelphi: z.string().datetime().nullable().optional(),
-    dataPagamento: z.string().datetime().nullable().optional(),
+    dataLancamentoDelphi: dateTimeStringSchema,
+    dataPagamento: dateTimeStringSchema,
     codigoDelphi: z.string().min(1).nullable().optional(),
     statusIntegracaoDelphi: z.nativeEnum(DelphiIntegrationStatus).optional(),
     situacaoNotaFiscal: z.nativeEnum(InvoiceSituation).optional(),
