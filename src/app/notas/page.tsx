@@ -63,10 +63,6 @@ export default function NotasPage() {
 
   async function lançarNotaFiscal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!invoiceForm.fornecedorId) {
-      setMessage("Pesquise e selecione um fornecedor da lista antes de enviar a nota.");
-      return;
-    }
 
     setIsSubmittingInvoice(true);
     setMessage("");
@@ -74,7 +70,7 @@ export default function NotasPage() {
     const request = mode === "XML"
       ? (() => {
           const formData = new FormData();
-          formData.append("fornecedorId", invoiceForm.fornecedorId);
+          if (invoiceForm.fornecedorId) formData.append("fornecedorId", invoiceForm.fornecedorId);
           if (xmlFile) formData.append("xmlFile", xmlFile);
           return fetch("/api/notas", { method: "POST", body: formData });
         })()
@@ -99,7 +95,7 @@ export default function NotasPage() {
             nbsDescricao: invoiceForm.nbsDescricao || undefined,
             dataProcessamento: invoiceForm.dataProcessamento ? new Date(invoiceForm.dataProcessamento).toISOString() : undefined,
             prestadorCnpj: invoiceForm.prestadorCnpj || undefined,
-            prestadorNome: invoiceForm.prestadorNome || undefined,
+            prestadorNome: invoiceForm.prestadorNome || supplierSearch.trim() || undefined,
             prestadorEmail: invoiceForm.prestadorEmail || undefined,
             valorBaseCalculo: invoiceForm.valorBaseCalculo ? Number(invoiceForm.valorBaseCalculo) : undefined,
             valorIssqn: invoiceForm.valorIssqn ? Number(invoiceForm.valorIssqn) : undefined,
@@ -139,16 +135,15 @@ export default function NotasPage() {
                 <option value="MANUAL">Digitar dados manualmente</option>
               </select>
             </label>
-            <label>Fornecedor *
+            <label>Fornecedor cadastrado
               <div className="supplier-search">
                 <input
                   value={supplierSearch}
                   onChange={(e) => handleSupplierSearch(e.target.value)}
                   onFocus={() => setIsSupplierListOpen(true)}
                   onBlur={() => setIsSupplierListOpen(false)}
-                  placeholder="Pesquise pelo nome do fornecedor"
+                  placeholder="Pesquise pelo nome do fornecedor ou deixe em branco para importar pelo XML"
                   autoComplete="off"
-                  required
                 />
                 {isSupplierListOpen && (supplierSearch || suppliers.length > 0) && (
                   <div className="supplier-search-results" role="listbox" aria-label="Fornecedores encontrados">
@@ -170,7 +165,7 @@ export default function NotasPage() {
                   </div>
                 )}
               </div>
-              {selectedSupplier ? <span className="small">Selecionado: {selectedSupplier.supplierName}</span> : <span className="small">Digite parte do nome e escolha um fornecedor da lista.</span>}
+              {selectedSupplier ? <span className="small">Selecionado: {selectedSupplier.supplierName}</span> : <span className="small">Opcional: se não selecionar um fornecedor cadastrado, o prestador da nota será criado automaticamente.</span>}
             </label>
           </div>
         </div>

@@ -259,13 +259,6 @@ export async function POST(request: NextRequest) {
   }
 
   if (!supplier) {
-    if (manager && manager.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Fornecedor não encontrado. Informe um fornecedor vinculado à sua conta." },
-        { status: 404 }
-      );
-    }
-
     supplier = await prisma.supplier.create({
       data: {
         nome: ("prestadorNome" in nfseData && nfseData.prestadorNome) || "Fornecedor importado via NFSe",
