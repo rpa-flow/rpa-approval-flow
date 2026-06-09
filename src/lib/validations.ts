@@ -30,9 +30,9 @@ export const createInvoiceSchema = z
     valorServico: z.number().optional(),
     aliquota: z.number().optional()
   })
-  .refine((data) => Boolean(data.xml) || Boolean(data.fornecedorId && data.numeroNota), {
+  .refine((data) => Boolean(data.xml) || Boolean(data.numeroNota && (data.fornecedorId || data.prestadorNome || data.prestadorCnpj)), {
     message:
-      "Informe XML da NFSe (recomendado) ou os campos manuais fornecedorId + numeroNota."
+      "Informe XML da NFSe (recomendado) ou os campos manuais numeroNota + fornecedor/prestador."
   });
 
 export const updateInvoiceSchema = z
