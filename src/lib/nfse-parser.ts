@@ -120,11 +120,11 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
 
   const rawId = text(infNfse.Id) ?? "";
   const numericId = rawId.replace(/\D/g, "");
-  if (numericId.length < 44) {
-    throw new Error("Identificador inválido: esperado código numérico com pelo menos 44 dígitos.");
+  if (numericId.length < 44 || numericId.length > 50) {
+    throw new Error("Identificador inválido: esperado código numérico entre 44 e 50 dígitos.");
   }
 
-  const codigoIdentificador = numericId.slice(0, 44);
+  const codigoIdentificador = numericId;
   const extras: Record<string, string> = {};
   flattenXmlFields(doc, "", extras);
 

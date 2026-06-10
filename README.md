@@ -7,7 +7,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 - Recebimento de NFSe via API (`POST /api/notas`) com parser de XML.
 - Um gestor pode estar vinculado a múltiplos fornecedores, com escopo respeitado em listagem/aprovação/configurações.
 - Persistência de dados da nota (status, processamento, valores, prestador/tomador, XML original).
-- Identificador de nota com 44 dígitos (`codigoIdentificador`).
+- Identificador de nota com 44 a 50 dígitos (`codigoIdentificador`).
 - Status da nota: `AGUARDANDO_APROVACAO`, `APROVADO`, `RECUSADO`, `PROCESSADO`, `EXPIRADA`, `DADOS_INCONSISTENTES`.
 - Regras de aviso globais e por fornecedor (recorrência + e-mails extras).
 - Login de gestor via frontend (`/login`) com sessão por cookie HttpOnly.
