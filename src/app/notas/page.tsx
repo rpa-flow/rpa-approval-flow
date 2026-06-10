@@ -184,7 +184,7 @@ export default function NotasPage() {
               <h3 className="form-section-title">Identificação da nota</h3>
               <div className="grid-2">
                 <label>Número da nota *<input value={invoiceForm.numeroNota} onChange={(e) => setInvoiceForm((p) => ({ ...p, numeroNota: e.target.value }))} required /></label>
-                <label>Chave de acesso (44 dígitos) *<input value={invoiceForm.codigoIdentificador} onChange={(e) => setInvoiceForm((p) => ({ ...p, codigoIdentificador: e.target.value.replace(/\D/g, "").slice(0, 44) }))} minLength={44} maxLength={44} required /></label>
+                <label>Chave de acesso (44 a 50 dígitos) *<input value={invoiceForm.codigoIdentificador} onChange={(e) => setInvoiceForm((p) => ({ ...p, codigoIdentificador: e.target.value.replace(/\D/g, "").slice(0, 50) }))} minLength={44} maxLength={50} required /></label>
                 <label>Data de emissão<input type="date" value={invoiceForm.dataEmissao} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataEmissao: e.target.value }))} /></label>
                 <label>Data de competência<input type="date" value={invoiceForm.dataCompetencia} onChange={(e) => setInvoiceForm((p) => ({ ...p, dataCompetencia: e.target.value }))} /></label>
               </div>

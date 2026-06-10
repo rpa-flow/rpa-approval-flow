@@ -27,7 +27,7 @@ export const createInvoiceSchema = z
   .object({
     numeroNota: z.string().min(1).optional(),
     fornecedorId: z.string().min(1).optional(),
-    codigoIdentificador: z.string().regex(/^\d{44}$/).optional(),
+    codigoIdentificador: z.string().regex(/^\d{44,50}$/).optional(),
     xml: z.string().min(20).optional(),
     nDfse: z.string().optional(),
     localEmissao: z.string().optional(),
@@ -144,7 +144,7 @@ export const supplierNotificationConfigSchema = z.object({
 
 export const approvalNotificationSchema = z.object({
   invoiceId: z.string().min(1).optional(),
-  codigoIdentificador: z.string().regex(/^\d{44}$/).optional(),
+  codigoIdentificador: z.string().regex(/^\d{44,50}$/).optional(),
   extraMessage: z.string().max(500).optional()
 }).refine((d) => d.invoiceId || d.codigoIdentificador, {
   message: "Informe invoiceId ou codigoIdentificador."

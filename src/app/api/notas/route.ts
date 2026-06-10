@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
 
   if (alreadyExists) {
     return NextResponse.json(
-      { error: "Já existe nota com esse código identificador (44 dígitos)." },
+      { error: "Já existe nota com esse código identificador (44 a 50 dígitos)." },
       { status: 409 }
     );
   }
