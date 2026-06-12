@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = {
   manager: {
@@ -104,7 +105,7 @@ export default function CadastrosPage() {
   }
 
   return (
-    <main className="container container-wide">
+    <AppLayout>
       <MainHeader
         title="Cadastros administrativos"
         subtitle="Cadastre fornecedores e gestores para operação diária."
@@ -180,6 +181,6 @@ export default function CadastrosPage() {
       </section>
 
       {message && <p className="message">{message}</p>}
-    </main>
+    </AppLayout>
   );
 }

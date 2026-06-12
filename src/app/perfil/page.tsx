@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 export default function PerfilPage() {
   const [passwordForm, setPasswordForm] = useState({
@@ -43,7 +44,7 @@ export default function PerfilPage() {
   }
 
   return (
-    <main className="container container-wide">
+    <AppLayout>
       <MainHeader
         title="Perfil"
         subtitle="Gerencie dados da sua conta."
@@ -87,6 +88,6 @@ export default function PerfilPage() {
       </section>
 
       {message && <p className="message" role="status">{message}</p>}
-    </main>
+    </AppLayout>
   );
 }

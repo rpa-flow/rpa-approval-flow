@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/ui-kit";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -36,48 +42,54 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-brand">
+        <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10 ring-1 ring-white/15">
+          <ShieldCheck size={28} />
+        </div>
+        <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-100"><Sparkles size={14} /> Plataforma de aprovação</p>
         <h1>RPA Approval Flow</h1>
         <p>
           Plataforma para aprovação de notas fiscais com gestão de lembretes, histórico de
           tentativas e controle por fornecedor.
         </p>
         <ul>
-          <li>✅ Dashboard de aprovação por status</li>
-          <li>✅ Regras por fornecedor e tentativas de lembrete</li>
-          <li>✅ Controle de acesso por gestor</li>
+          <li><CheckCircle2 size={16} /> Dashboard de aprovação por status</li>
+          <li><CheckCircle2 size={16} /> Regras por fornecedor e tentativas de lembrete</li>
+          <li><CheckCircle2 size={16} /> Controle de acesso por gestor</li>
         </ul>
       </section>
 
-      <section className="login-card">
-        <h2>Entrar</h2>
-        <p className="muted">Use suas credenciais de gestor para continuar.</p>
-        <form onSubmit={onSubmit} className="form-grid">
-          <label>
-            E-mail
-            <input
-              type="email"
-              placeholder="gestor@empresa.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Senha
-            <input
-              type="password"
-              placeholder="********"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              required
-            />
-          </label>
-          <button className="btn-primary" type="submit" disabled={loading}>
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
-        </form>
-        {erro && <p className="login-error">{erro}</p>}
-      </section>
+      <Card className="login-card">
+        <CardHeader className="p-0 pb-5">
+          <CardTitle className="text-2xl">Entrar</CardTitle>
+          <CardDescription>Use suas credenciais de gestor para continuar.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <form onSubmit={onSubmit} className="grid gap-4">
+            <FormField label="E-mail">
+              <Input
+                type="email"
+                placeholder="gestor@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </FormField>
+            <FormField label="Senha">
+              <Input
+                type="password"
+                placeholder="********"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                required
+              />
+            </FormField>
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+          {erro && <Alert className="mt-4" variant="destructive">{erro}</Alert>}
+        </CardContent>
+      </Card>
     </main>
   );
 }

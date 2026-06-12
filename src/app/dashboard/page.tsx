@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
@@ -148,7 +149,7 @@ export default function DashboardPage() {
     setMenuState(null);
   }
 
-  return <main className="container container-wide" onClick={() => setMenuState(null)}>
+  return <AppLayout onClick={() => setMenuState(null)}>
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     <section className="card mt-4 space-y-5" onClick={(e) => e.stopPropagation()}>
@@ -239,5 +240,5 @@ export default function DashboardPage() {
       <div className="space-y-3 border-l-2 border-slate-200 pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{event.actionType}</p><p className="mt-1 text-sm font-semibold text-slate-900">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="mt-2 text-xs font-semibold text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="mt-1 text-xs text-slate-700">{event.comment}</p>}</article>)}</div>
     </section>}
     {message && <p className="message" role="status">{message}</p>}
-  </main>;
+  </AppLayout>;
 }

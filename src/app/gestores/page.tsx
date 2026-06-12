@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type UserRole = "ADMIN" | "GESTOR" | "FORNECEDOR";
 type Me = { manager: { role: UserRole } };
@@ -163,7 +164,7 @@ export default function GestoresPage() {
   if (!me || me.manager.role !== "ADMIN") return null;
 
   return (
-    <main className="container container-wide">
+    <AppLayout>
       <MainHeader
         title="Gestores"
         subtitle="Administre acessos e vincule fornecedores diretamente pelo responsável, com visão clara de todos os vínculos."
@@ -342,6 +343,6 @@ export default function GestoresPage() {
       )}
 
       {message && <p className="message" role="status">{message}</p>}
-    </main>
+    </AppLayout>
   );
 }

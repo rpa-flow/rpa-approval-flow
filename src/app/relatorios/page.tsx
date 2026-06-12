@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 import { ChartCard, EmptyState, ErrorState, KpiCard, LoadingState, ReportPageLayout, ReportTable } from "@/app/components/reports/report-components";
+import { Input } from "@/components/ui/input";
+import { TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FormField } from "@/components/ui-kit";
 
 type SummaryData = { total: number; approved: number; refused: number; processed: number; pending: number };
 type CreatedProcessedData = { monthly: Array<{ month: string; created: number; processed: number; difference: number; conversionRate: number }> };
@@ -42,9 +46,9 @@ export default function RelatoriosPage() {
     return Object.entries(ratingsRisk.risks).map(([level, value]) => [level, `${"█".repeat(Math.max(1, value))} (${value})`]);
   }, [ratingsRisk]);
 
-  return <main className="container container-wide space-y-4">
+  return <AppLayout>
     <MainHeader title="Relatórios executivos" subtitle="Histórico mensal, SLA, avaliações e risco" />
-    <ReportPageLayout title="Dashboard Executivo" filters={<div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end"><div className="grid gap-3 sm:grid-cols-2"><label>Data inicial<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><label>Data final<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label></div><div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipo de relatório"><button type="button" className={tab === "geral" ? "btn-primary" : "btn-secondary"} onClick={() => setTab("geral")}>Visão Geral</button><button type="button" className={tab === "avaliacoes" ? "btn-primary" : "btn-secondary"} onClick={() => setTab("avaliacoes")}>Avaliações & Risco</button></div></div>}>
+    <ReportPageLayout title="Dashboard Executivo" filters={<div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end"><div className="grid gap-3 sm:grid-cols-2"><FormField label="Data inicial"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField><FormField label="Data final"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></FormField></div><TabsList role="tablist" aria-label="Tipo de relatório"><TabsTrigger type="button" active={tab === "geral"} onClick={() => setTab("geral")}>Visão Geral</TabsTrigger><TabsTrigger type="button" active={tab === "avaliacoes"} onClick={() => setTab("avaliacoes")}>Avaliações & Risco</TabsTrigger></TabsList></div>}>
       {loading && <LoadingState />}
       {!!error && <ErrorState text={error} />}
       {!loading && !error && tab === "geral" && <>
@@ -71,5 +75,5 @@ export default function RelatoriosPage() {
         <ChartCard title="Avaliações e riscos por fornecedor">{ratingsRisk?.supplierRanking?.length ? <ReportTable headers={["Fornecedor", "Notas", "Avaliadas", "Média", "% Cobertura", "Risco Alto", "Médio", "Baixo"]} rows={ratingsRisk.supplierRanking.map((s) => [s.supplierName, s.totalInvoices, s.evaluatedInvoices, s.avgRating, `${s.evaluationCoverage}%`, s.highRisk, s.mediumRisk, s.lowRisk])} /> : <EmptyState text="Sem fornecedores avaliados." />}</ChartCard>
       </>}
     </ReportPageLayout>
-  </main>;
+  </AppLayout>;
 }
