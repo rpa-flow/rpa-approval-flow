@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
@@ -222,7 +223,7 @@ export default function NotaDetalhePage() {
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
 
-  return <main className="container container-wide">
+  return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>} />
 
     {loading && <section className="card mt-4"><p className="section-description">Carregando nota fiscal...</p></section>}
@@ -316,5 +317,5 @@ export default function NotaDetalhePage() {
     </div>}
 
     {message && <p className="message" role="status">{message}</p>}
-  </main>;
+  </AppLayout>;
 }

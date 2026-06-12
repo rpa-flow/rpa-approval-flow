@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout, DataTable, FormField, SectionCard, StatusBadge } from "@/components/ui-kit";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 type Category = {
   id: string;
@@ -109,66 +114,62 @@ export default function CategoriasFornecedoresPage() {
 
   if (me.manager.role !== "ADMIN") {
     return (
-      <main className="container container-wide">
+      <AppLayout>
         <MainHeader title="Categorias de fornecedores" subtitle="Gestão das áreas de atuação" />
         <section className="card mt-4">
           <p>Acesso restrito ao perfil ADMIN.</p>
         </section>
-      </main>
+      </AppLayout>
     );
   }
 
   return (
-    <main className="container container-wide">
+    <AppLayout>
       <MainHeader title="Categorias de fornecedores" subtitle="Cadastre e organize áreas de atuação dos fornecedores." />
 
-      <section className="card mt-4 space-y-4">
-        <h2 className="text-lg font-semibold">Nova categoria</h2>
-        <form onSubmit={createCategory} className="grid gap-3 md:grid-cols-3">
-          <label>
-            Nome da categoria
-            <input
+      <SectionCard title="Nova categoria" description="Crie categorias para manter a classificação dos fornecedores consistente.">
+        <form onSubmit={createCategory} className="grid gap-4 md:grid-cols-3">
+          <FormField label="Nome da categoria">
+            <Input
               value={form.nome}
               onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))}
               placeholder="Ex.: Manutenção Predial"
               required
             />
-          </label>
-          <label className="md:col-span-2">
-            Descrição
-            <input
+          </FormField>
+          <FormField label="Descrição" className="md:col-span-2">
+            <Input
               value={form.descricao}
               onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))}
               placeholder="Contexto opcional para facilitar a classificação"
             />
-          </label>
+          </FormField>
           <div className="md:col-span-3 flex justify-end">
-            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Cadastrando..." : "Cadastrar categoria"}
-            </button>
+            </Button>
           </div>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className="card mt-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Categorias cadastradas</h2>
-          <span className="text-sm text-slate-500">{filteredCategories.length} registro(s)</span>
-        </div>
-
-        <div className="grid gap-2 md:grid-cols-3">
-          <input
+      <SectionCard
+        title="Categorias cadastradas"
+        description="Pesquise e altere rapidamente a disponibilidade de cada categoria."
+        actions={<span className="text-sm font-semibold text-slate-500">{filteredCategories.length} registro(s)</span>}
+      >
+        <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-3">
+          <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por nome ou descrição"
           />
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
             <option value="TODAS">Todos os status</option>
             <option value="ATIVAS">Somente ativas</option>
             <option value="INATIVAS">Somente inativas</option>
-          </select>
-          <button
-            className="btn-secondary"
+          </Select>
+          <Button
+            variant="outline"
             type="button"
             onClick={() => {
               setSearch("");
@@ -176,53 +177,28 @@ export default function CategoriasFornecedoresPage() {
             }}
           >
             Limpar filtros
-          </button>
+          </Button>
         </div>
 
-        <div className="table-shell">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr>
-                <th className="px-4 py-3 text-left">Nome</th>
-                <th className="px-4 py-3 text-left">Descrição</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredCategories.map((category) => (
-                <tr key={category.id} >
-                  <td className="px-4 py-3 font-medium text-slate-800">{category.nome}</td>
-                  <td className="px-4 py-3 text-slate-600">{category.descricao || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs ${category.ativo
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-200 text-slate-600"}`}
-                    >
-                      {category.ativo ? "Ativa" : "Inativa"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button type="button" className="btn-secondary" onClick={() => toggleCategory(category)}>
-                      {category.ativo ? "Inativar" : "Ativar"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filteredCategories.length && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
-                    Nenhuma categoria encontrada para os filtros aplicados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <DataTable
+          data={filteredCategories}
+          getRowKey={(category) => category.id}
+          emptyTitle="Nenhuma categoria encontrada"
+          emptyDescription="Ajuste os filtros ou cadastre uma nova categoria para começar."
+          columns={[
+            { key: "nome", header: "Nome", cell: (category) => <span className="font-semibold text-slate-900">{category.nome}</span> },
+            { key: "descricao", header: "Descrição", cell: (category) => <span className="text-slate-600">{category.descricao || "—"}</span> },
+            { key: "status", header: "Status", cell: (category) => <StatusBadge status={category.ativo ? "ATIVO" : "INATIVO"} label={category.ativo ? "Ativa" : "Inativa"} /> }
+          ]}
+          actions={(category) => (
+            <Button type="button" variant="outline" size="sm" onClick={() => toggleCategory(category)}>
+              {category.ativo ? "Inativar" : "Ativar"}
+            </Button>
+          )}
+        />
+      </SectionCard>
 
-      {message && <p className="message" role="status">{message}</p>}
-    </main>
+      {message && <Alert variant={message.startsWith("Erro") ? "destructive" : "success"}>{message}</Alert>}
+    </AppLayout>
   );
 }

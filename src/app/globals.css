@@ -260,3 +260,23 @@ tbody tr:hover { background: #f8fafc; }
   .form-actions { justify-content: stretch; }
   .form-actions > * { flex: 1 1 auto; }
 }
+
+@layer base {
+  :root {
+    --radius: 1rem;
+  }
+}
+
+@layer components {
+  .app-surface {
+    background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(248,250,252,.88));
+    border: 1px solid rgba(226,232,240,.85);
+    box-shadow: 0 22px 55px rgba(15,23,42,.08);
+  }
+}
+
+.login-brand ul li {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = { manager: { role: "ADMIN" | "GESTOR" | "FORNECEDOR"; suppliers: Array<{ supplierId: string; supplierName: string }> } };
 type CategoryItem = { id: string; nome: string; ativo: boolean };
@@ -68,7 +69,7 @@ export default function FornecedoresPage() {
     if (!res.ok) return setMessage("Erro ao salvar edição do fornecedor.");
     setEditingSupplierId(null); setMessage("Fornecedor atualizado com sucesso."); await loadData(); }
 
-  return <main className="container container-wide">
+  return <AppLayout>
     <MainHeader title="Fornecedores" subtitle="Gestão central de fornecedores, categorias e responsáveis." />
 
     {me.manager.role === "ADMIN" ? <>
@@ -122,5 +123,5 @@ export default function FornecedoresPage() {
       </div>}
     </> : null}
     {message && <p className="message" role="status">{message}</p>}
-  </main>;
+  </AppLayout>;
 }

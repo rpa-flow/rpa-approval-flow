@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR"; suppliers: Array<{ supplierId: string; supplierName: string }> } };
 type LaunchMode = "XML" | "MANUAL";
@@ -113,7 +114,7 @@ export default function NotasPage() {
     setMessage("Nota fiscal lançada com sucesso.");
   }
 
-  return <main className="container container-wide">
+  return <AppLayout>
     <MainHeader title="Lançamento de notas" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     <section className="card mt-4">
@@ -231,5 +232,5 @@ export default function NotasPage() {
       </form>
     </section>
     {message && <p className="message" role="status">{message}</p>}
-  </main>;
+  </AppLayout>;
 }

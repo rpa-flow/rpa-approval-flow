@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
+import { AppLayout } from "@/components/ui-kit";
 
 type Me = {
   manager: {
@@ -97,7 +98,7 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <main className="container container-wide">
+    <AppLayout>
       <MainHeader
         title="Configurações"
         subtitle="Gerencie regras globais, lembretes por fornecedor e sua conta."
@@ -218,6 +219,6 @@ export default function ConfiguracoesPage() {
       </section>
 
       {message && <p className="message" role="status">{message}</p>}
-    </main>
+    </AppLayout>
   );
 }
