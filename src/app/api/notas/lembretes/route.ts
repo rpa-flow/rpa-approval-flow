@@ -6,7 +6,9 @@ import { createInvoiceAuditLog } from "@/lib/audit";
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
     where: {
-      status: "AGUARDANDO_APROVACAO"
+      status: {
+        in: ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"]
+      }
     },
     include: {
       fornecedor: {
@@ -49,6 +51,7 @@ async function buildDueReminders() {
         numeroNota: invoice.numeroNota,
         codigoIdentificador: invoice.codigoIdentificador,
         status: invoice.status,
+        observacaoValidacao: invoice.observacaoValidacao,
         fornecedor: {
           id: invoice.fornecedor.id,
           nome: invoice.fornecedor.nome,
@@ -77,7 +80,6 @@ async function processDueReminders(
 
   for (const reminder of reminders) {
     const nextTentativa = reminder.tentativasAtuais + 1;
-    const shouldExpire = false;
 
     const recipients = Array.from(new Set([...reminder.emailsGestores, ...reminder.emailsExtras].filter(Boolean)));
     let emailSent = false;
@@ -90,7 +92,8 @@ async function processDueReminders(
           codigoIdentificador: reminder.codigoIdentificador,
           supplierName: reminder.fornecedor.nome,
           recipients,
-          invoiceId: reminder.invoiceId
+          invoiceId: reminder.invoiceId,
+          validationObservation: reminder.status === "DADOS_INCONSISTENTES" ? reminder.observacaoValidacao ?? undefined : undefined
         });
         emailSent = true;
       } catch (error) {
@@ -102,10 +105,7 @@ async function processDueReminders(
       where: { id: reminder.invoiceId },
       data: {
         tentativasNotificacao: nextTentativa,
-        ultimoLembreteEm: now,
-        status: "AGUARDANDO_APROVACAO",
-        statusProcessamento: "PENDENTE",
-        processada: false
+        ultimoLembreteEm: now
       }
     });
 

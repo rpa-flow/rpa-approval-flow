@@ -219,6 +219,7 @@ export async function sendApprovalRequestEmail(params: {
   issueDate?: string;
   competenceDate?: string;
   prestadorCnpj?: string;
+  validationObservation?: string;
   extraMessage?: string;
 }) {
   if (!params.recipients.length) {
@@ -235,6 +236,7 @@ export async function sendApprovalRequestEmail(params: {
     params.issueDate ? `Data de emissão: ${params.issueDate}.` : "",
     params.competenceDate ? `Data de competência: ${params.competenceDate}.` : "",
     params.prestadorCnpj ? `CNPJ do prestador: ${params.prestadorCnpj}.` : "",
+    params.validationObservation ? `Observação da validação: ${params.validationObservation}` : "",
     params.extraMessage ? `Mensagem adicional: ${params.extraMessage}` : ""
   ]
     .filter(Boolean)
@@ -250,6 +252,7 @@ export async function sendApprovalRequestEmail(params: {
     params.competenceDate ? `<li><strong>Data de competência:</strong> ${escapeHtml(params.competenceDate)}</li>` : "",
     params.prestadorCnpj ? `<li><strong>CNPJ do prestador:</strong> ${escapeHtml(params.prestadorCnpj)}</li>` : "",
     "</ul>",
+    params.validationObservation ? `<p><strong>Observação da validação:</strong> ${escapeHtml(params.validationObservation)}</p>` : "",
     params.extraMessage ? `<p><strong>Mensagem adicional:</strong> ${escapeHtml(params.extraMessage)}</p>` : "",
     `<p><a href=\"${approvalUrl}\">Abrir a nota e aprovar</a></p>`
   ]
