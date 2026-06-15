@@ -38,7 +38,6 @@ async function buildDueReminders() {
     .map((invoice) => {
       const config = invoice.fornecedor.notificationConfig;
       const recorrenciaDias = config?.recorrenciaDias ?? 2;
-      const maxTentativas = config?.maxTentativas ?? 2;
       const ativo = config?.ativo ?? true;
       const neverNotified = invoice.tentativasNotificacao === 0 && !invoice.ultimoLembreteEm;
       const lastReferenceDate = invoice.ultimoLembreteEm ?? invoice.dataAtualizacao;
@@ -58,7 +57,6 @@ async function buildDueReminders() {
           cnpj: invoice.fornecedor.cnpj
         },
         recorrenciaDias,
-        maxTentativas,
         tentativasAtuais: invoice.tentativasNotificacao,
         diasDesdeUltimoEnvioOuAtualizacao: diffDays,
         primeiroEnvioPendente: neverNotified,

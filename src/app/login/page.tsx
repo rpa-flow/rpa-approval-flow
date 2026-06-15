@@ -49,11 +49,11 @@ export default function LoginPage() {
         <h1>RPA Approval Flow</h1>
         <p>
           Plataforma para aprovação de notas fiscais com gestão de lembretes, histórico de
-          tentativas e controle por fornecedor.
+          recorrência e controle por fornecedor.
         </p>
         <ul>
           <li><CheckCircle2 size={16} /> Dashboard de aprovação por status</li>
-          <li><CheckCircle2 size={16} /> Regras por fornecedor e tentativas de lembrete</li>
+          <li><CheckCircle2 size={16} /> Regras por fornecedor e lembretes recorrentes</li>
           <li><CheckCircle2 size={16} /> Controle de acesso por gestor</li>
         </ul>
       </section>

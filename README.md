@@ -30,9 +30,9 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
   - `ADMIN` pode ajustar manualmente `tentativasNotificacao` e `ultimoLembreteEm`.
 - `GET /api/notas/minhas` (requer login; retorna apenas notas permitidas)
 - `GET /api/notas/lembretes` (lista notas com status `AGUARDANDO_APROVACAO` ou `DADOS_INCONSISTENTES` pendentes de lembrete para job diário, opcionalmente protegido por `x-api-key`)
-  - use `?contabilizar=true` para já incrementar tentativas e enviar e-mail na mesma chamada.
+  - use `?contabilizar=true` para registrar o envio do lembrete e enviar e-mail na mesma chamada.
   - use `&enviarEmail=false` se quiser contabilizar sem enviar e-mail.
-- `POST /api/notas/lembretes` (processa tentativas e envia e-mails; ao atingir `maxTentativas`, marca nota como `EXPIRADA`)
+- `POST /api/notas/lembretes` (processa lembretes recorrentes e envia e-mails enquanto a regra estiver ativa)
   - notas sem nenhum envio anterior (`tentativasNotificacao = 0`) entram como lembrete devido imediatamente.
 
 ### Configurações
@@ -67,7 +67,7 @@ Payload opcional para teste de e-mail:
 
 - `/login`: autenticação do gestor.
 - `/dashboard`: listagem profissional de notas com filtros (pendentes, concluídas, todas).
-- `/configuracoes`: tela dedicada para regras globais e regras do fornecedor (recorrência + e-mails extras).
+- `/configuracoes`: tela dedicada para regras globais e regras do fornecedor (recorrência + e-mails extras, sem limite de quantidade de lembretes).
 - `/perfil`: tela de perfil com alteração de senha do usuário logado.
 - `/fornecedores`: entrada da gestão de fornecedores.
   - para `ADMIN`, mostra tabela com fornecedores, ação de editar e botão "Adicionar novo fornecedor";
