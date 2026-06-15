@@ -96,17 +96,17 @@ export default function FornecedoresPage() {
           <div className="flex items-end"><button className="btn-primary" type="submit">Cadastrar fornecedor</button></div>
         </form>
       </section>}
-      {editingSupplierId && <div className="fixed inset-0 z-40 bg-slate-950/40 px-4 py-8" onClick={() => setEditingSupplierId(null)}>
-        <section className="card mx-auto flex max-h-[88vh] w-full max-w-3xl flex-col p-0" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      {editingSupplierId && <div className="fixed inset-0 z-40 grid place-items-center bg-slate-950/40 p-3 sm:p-6" onClick={() => setEditingSupplierId(null)}>
+        <section className="card flex max-h-[calc(100svh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden p-0 sm:max-h-[calc(100svh-3rem)]" onClick={(e) => e.stopPropagation()}>
+          <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div>
               <h3 className="text-lg font-semibold">Editar fornecedor</h3>
               <p className="text-sm text-slate-500">Atualize dados cadastrais. Para trocar vários vínculos, prefira a tela de gestores.</p>
             </div>
             <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Fechar</button>
           </div>
-          <form onSubmit={salvarEdicao} className="flex flex-1 flex-col">
-            <div className="grid-2 overflow-y-auto px-5 pb-4">
+          <form onSubmit={salvarEdicao} className="flex min-h-0 flex-1 flex-col">
+            <div className="grid-2 min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             <label>Nome<input required value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} /></label>
             <label>CNPJ<input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))} /></label>
             <label>Código externo no RPA<input value={editForm.codigoExterno} onChange={(e) => setEditForm((p) => ({ ...p, codigoExterno: e.target.value }))} /></label>
@@ -114,9 +114,11 @@ export default function FornecedoresPage() {
             <label className="md:col-span-2">Buscar gestor<input placeholder="Filtrar por nome ou e-mail" value={managerSearch} onChange={(e) => setManagerSearch(e.target.value)} /></label>
             <label className="md:col-span-2">Adicionar gestor existente<select className="w-full" value={editForm.selectedManagerId} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerId: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.email})</option>)}</select><span className="mt-1 block text-xs text-slate-500">Este atalho apenas adiciona um responsável. Para revisar todos os fornecedores de um gestor, use a tela Gestores.</span></label>
             </div>
-            <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 bg-white px-5 py-3">
+            <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 sm:px-5">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button>
               <button className="btn-primary" type="submit">Salvar alterações</button>
+              </div>
             </div>
           </form>
         </section>
