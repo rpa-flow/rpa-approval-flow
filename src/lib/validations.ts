@@ -138,7 +138,6 @@ export const updateManagerSchema = z.object({
 export const supplierNotificationConfigSchema = z.object({
   ativo: z.boolean(),
   recorrenciaDias: z.number().int().min(1).max(90),
-  maxTentativas: z.number().int().min(1).max(10),
   emailsExtras: z.array(z.string().email()).default([])
 });
 

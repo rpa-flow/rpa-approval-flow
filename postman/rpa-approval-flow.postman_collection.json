@@ -684,7 +684,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ativo\": true,\n  \"recorrenciaDias\": 2,\n  \"maxTentativas\": 2,\n  \"emailsExtras\": [\n    \"financeiro@empresa.com\"\n  ]\n}",
+              "raw": "{\n  \"ativo\": true,\n  \"recorrenciaDias\": 2,\n  \"emailsExtras\": [\n    \"financeiro@empresa.com\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

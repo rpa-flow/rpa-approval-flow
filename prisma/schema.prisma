@@ -257,7 +257,6 @@ model SupplierNotificationConfig {
   supplierId      String   @unique
   ativo           Boolean  @default(true)
   recorrenciaDias Int      @default(2)
-  maxTentativas   Int      @default(2)
   emailsExtras    String[] @default([])
   ultimoEnvioEm   DateTime?
   proximoEnvioEm  DateTime?

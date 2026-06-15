@@ -95,14 +95,12 @@ async function main() {
     update: {
       ativo: true,
       recorrenciaDias: 2,
-      maxTentativas: 2,
       emailsExtras: ["compras@empresa.com"]
     },
     create: {
       supplierId: supplierA.id,
       ativo: true,
       recorrenciaDias: 2,
-      maxTentativas: 2,
       emailsExtras: ["compras@empresa.com"]
     }
   });
@@ -112,14 +110,12 @@ async function main() {
     update: {
       ativo: true,
       recorrenciaDias: 3,
-      maxTentativas: 3,
       emailsExtras: ["fiscal@empresa.com"]
     },
     create: {
       supplierId: supplierB.id,
       ativo: true,
       recorrenciaDias: 3,
-      maxTentativas: 3,
       emailsExtras: ["fiscal@empresa.com"]
     }
   });

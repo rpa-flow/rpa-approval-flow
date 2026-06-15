@@ -20,7 +20,7 @@ export default function ConfiguracoesPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
-  const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, maxTentativas: 2, emailsExtras: "" });
+  const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, emailsExtras: "" });
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -35,7 +35,6 @@ export default function ConfiguracoesPage() {
       setSupplierConfig({
         ativo: payload.config.ativo,
         recorrenciaDias: payload.config.recorrenciaDias,
-        maxTentativas: payload.config.maxTentativas ?? 2,
         emailsExtras: (payload.config.emailsExtras ?? []).join(", ")
       });
     }
@@ -85,7 +84,6 @@ export default function ConfiguracoesPage() {
       body: JSON.stringify({
         ativo: supplierConfig.ativo,
         recorrenciaDias: Number(supplierConfig.recorrenciaDias),
-        maxTentativas: Number(supplierConfig.maxTentativas),
         emailsExtras: supplierConfig.emailsExtras.split(",").map((s) => s.trim()).filter(Boolean)
       })
     });
@@ -115,8 +113,7 @@ export default function ConfiguracoesPage() {
       )}
 
       <section className="card info-banner">
-        <strong>Como funciona:</strong> o lembrete respeita recorrência em dias e quantidade máxima de tentativas por fornecedor.
-        Ao atingir o limite, a nota muda para <strong>EXPIRADA</strong>.
+        <strong>Como funciona:</strong> o lembrete respeita a recorrência em dias configurada por fornecedor e continua sendo enviado enquanto a regra estiver ativa.
       </section>
 
       <section className="settings-grid">
@@ -157,7 +154,7 @@ export default function ConfiguracoesPage() {
 
         <article className="card">
           <h2>Regra por fornecedor</h2>
-          <p className="muted small">Escolha um fornecedor e ajuste recorrência, tentativas e e-mails de notificação.</p>
+          <p className="muted small">Escolha um fornecedor e ajuste recorrência e e-mails de notificação.</p>
 
           <label>
             Fornecedor
@@ -185,16 +182,6 @@ export default function ConfiguracoesPage() {
                 max={90}
                 value={supplierConfig.recorrenciaDias}
                 onChange={(e) => setSupplierConfig((p) => ({ ...p, recorrenciaDias: Number(e.target.value) }))}
-              />
-            </label>
-            <label>
-              Máximo de tentativas
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={supplierConfig.maxTentativas}
-                onChange={(e) => setSupplierConfig((p) => ({ ...p, maxTentativas: Number(e.target.value) }))}
               />
             </label>
             <label>
