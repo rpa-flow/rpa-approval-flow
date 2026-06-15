@@ -81,7 +81,7 @@ export default function FornecedoresPage() {
           <button className="btn-secondary" type="button" onClick={() => { setSearch(""); setCategoryFilter("TODAS"); }}>Limpar filtros</button>
         </div>
         <div className="table-shell">
-          <table className="min-w-full text-sm"><thead><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">CNPJ</th><th className="px-4 py-3 text-left">Código externo</th><th className="px-4 py-3 text-left">Categorias</th><th className="px-4 py-3 text-left">Gestores</th><th className="px-4 py-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredSuppliers.map((supplier) => <tr key={supplier.id} ><td className="px-4 py-3 font-medium text-slate-800">{supplier.nome}</td><td className="px-4 py-3 text-slate-600">{supplier.cnpj ?? "—"}</td><td className="px-4 py-3 text-slate-600">{supplier.codigoExterno ?? "—"}</td><td className="px-4 py-3">{supplier.categories?.length ? <div className="flex flex-wrap gap-1">{supplier.categories.map((c) => <span key={c.id} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{c.nome}</span>)}</div> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-slate-600">{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td><td className="px-4 py-3 text-right"><button type="button" className="btn-secondary" onClick={() => iniciarEdicao(supplier)}>Editar</button></td></tr>)}{!filteredSuppliers.length && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">Nenhum fornecedor encontrado para os filtros aplicados.</td></tr>}</tbody></table>
+          <table className="min-w-full text-sm"><thead><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">CNPJ</th><th className="px-4 py-3 text-left">Código externo</th><th className="px-4 py-3 text-left">Categorias</th><th className="px-4 py-3 text-left">Gestores</th><th className="w-28 px-4 py-3 text-right whitespace-nowrap">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredSuppliers.map((supplier) => <tr key={supplier.id} ><td className="px-4 py-3 font-medium text-slate-800">{supplier.nome}</td><td className="px-4 py-3 text-slate-600">{supplier.cnpj ?? "—"}</td><td className="px-4 py-3 text-slate-600">{supplier.codigoExterno ?? "—"}</td><td className="px-4 py-3">{supplier.categories?.length ? <div className="flex flex-wrap gap-1">{supplier.categories.map((c) => <span key={c.id} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{c.nome}</span>)}</div> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-slate-600">{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td><td className="px-4 py-3 text-right whitespace-nowrap"><button type="button" className="btn-secondary whitespace-nowrap" onClick={() => iniciarEdicao(supplier)}>Editar</button></td></tr>)}{!filteredSuppliers.length && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">Nenhum fornecedor encontrado para os filtros aplicados.</td></tr>}</tbody></table>
         </div>
       </section>
       {showCreateForm && <section className="card mt-4">
@@ -96,17 +96,17 @@ export default function FornecedoresPage() {
           <div className="flex items-end"><button className="btn-primary" type="submit">Cadastrar fornecedor</button></div>
         </form>
       </section>}
-      {editingSupplierId && <div className="fixed inset-0 z-40 bg-slate-950/40 px-4 py-8" onClick={() => setEditingSupplierId(null)}>
-        <section className="card mx-auto flex max-h-[88vh] w-full max-w-3xl flex-col p-0" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      {editingSupplierId && <div className="fixed inset-0 z-40 grid place-items-center bg-slate-950/40 p-3 sm:p-6" onClick={() => setEditingSupplierId(null)}>
+        <section className="card flex max-h-[calc(100svh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden p-0 sm:max-h-[calc(100svh-3rem)]" onClick={(e) => e.stopPropagation()}>
+          <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div>
               <h3 className="text-lg font-semibold">Editar fornecedor</h3>
               <p className="text-sm text-slate-500">Atualize dados cadastrais. Para trocar vários vínculos, prefira a tela de gestores.</p>
             </div>
             <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Fechar</button>
           </div>
-          <form onSubmit={salvarEdicao} className="flex flex-1 flex-col">
-            <div className="grid-2 overflow-y-auto px-5 pb-4">
+          <form onSubmit={salvarEdicao} className="flex min-h-0 flex-1 flex-col">
+            <div className="grid-2 min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             <label>Nome<input required value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} /></label>
             <label>CNPJ<input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: e.target.value }))} /></label>
             <label>Código externo no RPA<input value={editForm.codigoExterno} onChange={(e) => setEditForm((p) => ({ ...p, codigoExterno: e.target.value }))} /></label>
@@ -114,9 +114,11 @@ export default function FornecedoresPage() {
             <label className="md:col-span-2">Buscar gestor<input placeholder="Filtrar por nome ou e-mail" value={managerSearch} onChange={(e) => setManagerSearch(e.target.value)} /></label>
             <label className="md:col-span-2">Adicionar gestor existente<select className="w-full" value={editForm.selectedManagerId} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerId: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.email})</option>)}</select><span className="mt-1 block text-xs text-slate-500">Este atalho apenas adiciona um responsável. Para revisar todos os fornecedores de um gestor, use a tela Gestores.</span></label>
             </div>
-            <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 bg-white px-5 py-3">
+            <div className="shrink-0 border-t border-slate-100 bg-transparent px-4 py-3 sm:px-5">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button>
               <button className="btn-primary" type="submit">Salvar alterações</button>
+              </div>
             </div>
           </form>
         </section>
