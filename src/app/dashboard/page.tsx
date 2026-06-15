@@ -193,13 +193,13 @@ export default function DashboardPage() {
 
       <div className="table-shell">
         <table className="min-w-full text-sm">
-          <thead><tr><th className="px-4 py-3 text-left">Fornecedor / NF</th><th className="px-4 py-3 text-left">Tomador</th><th className="px-4 py-3 text-left">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
+          <thead><tr><th className="px-4 py-3 text-left">Fornecedor / NF</th><th className="px-4 py-3 text-left">Tomador</th><th className="min-w-[11rem] whitespace-nowrap px-6 py-3 text-right [overflow-wrap:normal]">Valor</th><th className="px-4 py-3 text-left">Emissão</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left">Atualização</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((invoice) => <Fragment key={invoice.id}>
               <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
                 <td className="px-4 py-3"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
                 <td className="px-4 py-3 text-slate-700">{invoice.tomadorNome ?? "-"}</td>
-                <td className="px-4 py-3 font-medium text-slate-800">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className="min-w-[11rem] whitespace-nowrap px-6 py-3 text-right font-medium tabular-nums text-slate-800 [overflow-wrap:normal]">{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                 <td className="px-4 py-3 text-slate-700">{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
                 <td className="px-4 py-3"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
                 <td className="px-4 py-3 text-slate-700">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3 text-slate-600">{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</td>
