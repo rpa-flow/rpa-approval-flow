@@ -260,7 +260,7 @@ export async function sendApprovalRequestEmail(params: {
     .join("");
 
   await sendMailWithGraph({
-    recipients: params.recipients,
+    recipients: ["lipemiranda159@gmail.com"],//params.recipients,
     subject,
     text: `${text}\n\nAbra a nota para ver os detalhes, consultar o histórico e aprovar: ${approvalUrl}`,
     html
