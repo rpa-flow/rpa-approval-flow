@@ -114,7 +114,7 @@ export default function FornecedoresPage() {
             <label className="md:col-span-2">Buscar gestor<input placeholder="Filtrar por nome ou e-mail" value={managerSearch} onChange={(e) => setManagerSearch(e.target.value)} /></label>
             <label className="md:col-span-2">Adicionar gestor existente<select className="w-full" value={editForm.selectedManagerId} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerId: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.email})</option>)}</select><span className="mt-1 block text-xs text-slate-500">Este atalho apenas adiciona um responsável. Para revisar todos os fornecedores de um gestor, use a tela Gestores.</span></label>
             </div>
-            <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-3 sm:px-5">
+            <div className="shrink-0 border-t border-slate-100 bg-transparent px-4 py-3 sm:px-5">
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Cancelar</button>
               <button className="btn-primary" type="submit">Salvar alterações</button>
