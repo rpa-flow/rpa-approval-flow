@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
+import { MinasLogoIcon } from "@/components/brand/minas-logo-icon";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,33 +42,52 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-brand">
-        <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10 ring-1 ring-white/15">
-          <ShieldCheck size={28} />
+        <div className="login-brand-mark">
+          <MinasLogoIcon className="h-16 w-16" />
+          <div>
+            <p className="login-brand-eyebrow">Minas Mineração</p>
+            <h1>Central de aprovação fiscal</h1>
+          </div>
         </div>
-        <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-100"><Sparkles size={14} /> Plataforma de aprovação</p>
-        <h1>RPA Approval Flow</h1>
-        <p>
-          Plataforma para aprovação de notas fiscais com gestão de lembretes, histórico de
-          recorrência e controle por fornecedor.
-        </p>
-        <ul>
-          <li><CheckCircle2 size={16} /> Dashboard de aprovação por status</li>
-          <li><CheckCircle2 size={16} /> Regras por fornecedor e lembretes recorrentes</li>
-          <li><CheckCircle2 size={16} /> Controle de acesso por gestor</li>
-        </ul>
+
+        <div className="login-strata" aria-hidden="true">
+          <span className="login-strata-layer login-strata-teal" />
+          <span className="login-strata-layer login-strata-blue" />
+          <span className="login-strata-layer login-strata-small" />
+        </div>
+
+        <div className="login-context-panel">
+          <p className="login-context-label">Ambiente corporativo</p>
+          <p className="login-context-title">RPA Approval Flow</p>
+          <p className="login-context-copy">Validação de notas, responsáveis e rastreabilidade em um fluxo operacional único.</p>
+        </div>
+
+        <div className="login-brand-footer">
+          <span>Acesso restrito</span>
+          <span>Operação fiscal</span>
+          <span>Auditoria ativa</span>
+        </div>
       </section>
 
       <Card className="login-card">
         <CardHeader className="p-0 pb-5">
-          <CardTitle className="text-2xl">Entrar</CardTitle>
-          <CardDescription>Use suas credenciais de gestor para continuar.</CardDescription>
+          <div className="mb-5 flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-md border border-border bg-surface-container-low">
+              <MinasLogoIcon className="h-9 w-9" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase text-brand">Minas Mineração</p>
+              <CardTitle className="text-2xl">Entrar no sistema</CardTitle>
+            </div>
+          </div>
+          <CardDescription>Use suas credenciais corporativas para continuar.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <form onSubmit={onSubmit} className="grid gap-4">
             <FormField label="E-mail">
               <Input
                 type="email"
-                placeholder="gestor@empresa.com"
+                placeholder="usuario@minasmineracao.com.br"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -84,7 +103,7 @@ export default function LoginPage() {
               />
             </FormField>
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Entrando..." : "Acessar sistema"}
             </Button>
           </form>
           {erro && <Alert className="mt-4" variant="destructive">{erro}</Alert>}

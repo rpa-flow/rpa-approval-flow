@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ComponentType, ReactNode, useState } from "react";
+import { ComponentType, FocusEvent, MouseEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, ShieldCheck, Sparkles, X } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
+import { MinasLogoIcon } from "@/components/brand/minas-logo-icon";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui-kit/page-header";
 import { cn } from "@/lib/utils";
 
 type HeaderLink = {
@@ -15,67 +15,179 @@ type HeaderLink = {
 };
 
 type AppHeaderProps = {
-  title: string;
-  subtitle?: string;
   links: HeaderLink[];
-  action?: ReactNode;
+  onLogout: () => void | Promise<void>;
 };
 
-export function AppHeader({ title, subtitle, links, action }: AppHeaderProps) {
-  const [open, setOpen] = useState(false);
+const SIDEBAR_WIDTH = "16rem";
+const SIDEBAR_COLLAPSED_WIDTH = "4.75rem";
+
+type SidebarTooltip = {
+  label: string;
+  left: number;
+  top: number;
+} | null;
+
+export function AppHeader({ links, onLogout }: AppHeaderProps) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [sidebarTooltip, setSidebarTooltip] = useState<SidebarTooltip>(null);
   const pathname = usePathname();
 
-  const navItems = links.map((link) => {
+  useEffect(() => {
+    const storedValue = window.localStorage.getItem("minas-sidebar-collapsed");
+    if (storedValue) {
+      setCollapsed(storedValue === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+    document.documentElement.style.setProperty("--app-sidebar-width", width);
+    window.localStorage.setItem("minas-sidebar-collapsed", String(collapsed));
+    if (!collapsed) {
+      setSidebarTooltip(null);
+    }
+  }, [collapsed]);
+
+  const showCollapsedTooltip = (label: string, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    setSidebarTooltip({
+      label,
+      left: rect.right + 8,
+      top: rect.top + rect.height / 2
+    });
+  };
+
+  const renderNavItem = (link: HeaderLink, mode: "desktop" | "mobile") => {
     const Icon = link.icon;
     const isActive = pathname === link.href;
+    const desktopCollapsed = mode === "desktop" && collapsed;
+
     return (
       <Link
-        key={link.href}
+        key={`${mode}-${link.href}`}
         href={link.href}
+        title={desktopCollapsed ? link.label : undefined}
         className={cn(
-          "group inline-flex min-w-0 items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition",
-          isActive ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-600 hover:bg-white hover:text-slate-950 hover:shadow-sm"
+          "group relative flex min-w-0 items-center gap-3 rounded-md text-sm font-semibold transition",
+          mode === "desktop" ? "px-3 py-2.5" : "px-3 py-2",
+          desktopCollapsed && "justify-center px-2",
+          isActive ? "bg-brand text-white shadow-sm" : "text-muted hover:bg-surface-container-lowest hover:text-text hover:shadow-sm"
         )}
         aria-current={isActive ? "page" : undefined}
-        onClick={() => setOpen(false)}
+        aria-label={desktopCollapsed ? link.label : undefined}
+        onMouseEnter={(event: MouseEvent<HTMLAnchorElement>) => {
+          if (desktopCollapsed) {
+            showCollapsedTooltip(link.label, event.currentTarget);
+          }
+        }}
+        onMouseLeave={() => setSidebarTooltip(null)}
+        onFocus={(event: FocusEvent<HTMLAnchorElement>) => {
+          if (desktopCollapsed) {
+            showCollapsedTooltip(link.label, event.currentTarget);
+          }
+        }}
+        onBlur={() => setSidebarTooltip(null)}
+        onClick={() => {
+          setMobileOpen(false);
+          setSidebarTooltip(null);
+        }}
       >
-        {Icon && <Icon size={17} className={cn(isActive ? "text-white" : "text-slate-400 group-hover:text-blue-600")} />}
-        <span className="truncate">{link.label}</span>
+        {Icon && <Icon size={18} className={cn("shrink-0", isActive ? "text-white" : "text-outline group-hover:text-secondary")} />}
+        <span className={cn("min-w-0 truncate", desktopCollapsed && "sr-only")}>{link.label}</span>
       </Link>
     );
-  });
+  };
 
   return (
-    <header className="sticky top-0 z-40 mb-4 rounded-b-[1.5rem] border border-t-0 border-slate-200/80 bg-white/90 px-2 py-3 shadow-[0_18px_40px_rgba(15,23,42,.08)] backdrop-blur-xl sm:static sm:rounded-[2rem] sm:border sm:p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex min-w-0 items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-3 text-white sm:p-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-              <ShieldCheck size={22} />
-            </div>
-            <div className="min-w-0">
-              <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-[0.12em] text-blue-100 sm:tracking-[0.16em]"><Sparkles size={14} /> <span className="truncate">Plataforma de aprovação</span></p>
-              <p className="truncate text-sm text-slate-300">RPA Approval Flow</p>
-            </div>
+    <>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-border bg-surface-container-lowest shadow-card transition-[width] duration-200 lg:flex",
+          collapsed ? "w-[4.75rem]" : "w-64"
+        )}
+        aria-label="Navegação principal"
+      >
+        <div className={cn("flex min-h-20 items-center gap-3 border-b border-border px-3", collapsed && "justify-center")}>
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded bg-white p-1 shadow-sm ring-1 ring-border">
+            <MinasLogoIcon className="h-9 w-9" />
           </div>
-          <div className="hidden sm:block">{action}</div>
-          <Button type="button" size="icon" variant="secondary" className="bg-white/10 text-white hover:bg-white/20 sm:hidden" aria-expanded={open} aria-controls="mobile-main-navigation" onClick={() => setOpen((prev) => !prev)}>
-            {open ? <X size={18} /> : <Menu size={18} />}
-          </Button>
+          <div className={cn("min-w-0", collapsed && "sr-only")}>
+            <p className="truncate text-xs font-bold uppercase text-brand">Minas Mineração</p>
+            <p className="truncate text-sm text-muted">RPA Approval Flow</p>
+          </div>
         </div>
 
-        <PageHeader title={title} description={subtitle} actions={<div className="sm:hidden">{action}</div>} />
-
-        <nav className="hidden rounded-3xl border border-slate-200 bg-slate-50/80 p-1.5 md:flex md:flex-wrap md:items-center md:gap-1" aria-label="Navegação principal">
-          {navItems}
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-2 py-4">
+          {links.map((link) => renderNavItem(link, "desktop"))}
         </nav>
 
-        {open && (
-          <nav id="mobile-main-navigation" className="grid gap-1 rounded-3xl border border-slate-200 bg-slate-50 p-2 shadow-sm md:hidden" aria-label="Navegação mobile">
-            {navItems}
-          </nav>
-        )}
-      </div>
-    </header>
+        <div className="grid gap-2 border-t border-border p-2">
+          <Button
+            type="button"
+            size={collapsed ? "icon" : "default"}
+            variant="outline"
+            className={cn("w-full bg-surface-container-lowest", collapsed ? "justify-center px-0" : "justify-start")}
+            aria-label="Sair"
+            onClick={onLogout}
+          >
+            <LogOut size={18} />
+            {!collapsed && <span>Sair</span>}
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            className="h-10 w-full justify-center"
+            aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+            aria-pressed={collapsed}
+            onClick={() => setCollapsed((current) => !current)}
+          >
+            <Menu size={18} />
+          </Button>
+        </div>
+      </aside>
+
+      {collapsed && sidebarTooltip && (
+        <span
+          className="pointer-events-none fixed z-[60] hidden -translate-y-1/2 whitespace-nowrap rounded bg-brand px-2.5 py-1.5 text-xs font-semibold text-white shadow-card lg:block"
+          style={{ left: sidebarTooltip.left, top: sidebarTooltip.top }}
+        >
+          {sidebarTooltip.label}
+        </span>
+      )}
+
+      <header className="sticky top-0 z-40 mb-4 rounded-b-md border border-t-0 border-border bg-surface-container-lowest/95 px-2 py-3 shadow-card backdrop-blur-xl lg:hidden">
+        <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border-l-4 border-secondary bg-brand p-3 text-white">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded bg-white p-1 shadow-sm ring-1 ring-white/25">
+                <MinasLogoIcon className="h-9 w-9" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold uppercase text-surface-container-low">Minas Mineração</p>
+                <p className="truncate text-sm text-surface-container-high">RPA Approval Flow</p>
+              </div>
+            </div>
+            <Button type="button" size="icon" variant="secondary" className="bg-white/10 text-white hover:bg-white/20" aria-expanded={mobileOpen} aria-controls="mobile-main-navigation" onClick={() => setMobileOpen((prev) => !prev)}>
+              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+            </Button>
+          </div>
+
+          {mobileOpen && (
+            <nav id="mobile-main-navigation" className="grid gap-1 rounded-md border border-border bg-surface-container-low p-2 shadow-sm lg:hidden" aria-label="Navegação mobile">
+              {links.map((link) => renderNavItem(link, "mobile"))}
+              <div className="mt-2 border-t border-border pt-2">
+                <Button type="button" variant="outline" className="w-full justify-start bg-surface-container-lowest" onClick={onLogout}>
+                  <LogOut size={18} />
+                  Sair
+                </Button>
+              </div>
+            </nav>
+          )}
+        </div>
+      </header>
+    </>
   );
 }

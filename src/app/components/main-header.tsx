@@ -1,10 +1,9 @@
 "use client";
 
-import { ComponentType, ReactNode, useEffect, useMemo, useState } from "react";
+import { ComponentType, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Building2, FileText, LayoutDashboard, LogOut, Settings, Tags, UserCircle, Users } from "lucide-react";
+import { BarChart3, Building2, FileText, LayoutDashboard, Settings, Tags, UserCircle, Users } from "lucide-react";
 import { AppHeader } from "@/app/components/app-header";
-import { Button } from "@/components/ui/button";
 
 const DEFAULT_HEADER_LINKS: Array<{ href: string; label: string; icon: ComponentType<{ size?: number | string; className?: string }> }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,10 +21,9 @@ type ManagerRole = "ADMIN" | "GESTOR" | "FORNECEDOR";
 type MainHeaderProps = {
   title: string;
   subtitle?: string;
-  action?: ReactNode;
 };
 
-export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
+export function MainHeader(_: MainHeaderProps) {
   const [role, setRole] = useState<ManagerRole | null>(null);
   const router = useRouter();
 
@@ -63,19 +61,10 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
     });
   }, [role]);
 
-  const logoutButton = (
-    <Button
-      variant="outline"
-      className="bg-white/95"
-      onClick={async () => {
-        await fetch("/api/auth/logout", { method: "POST" });
-        router.push("/login");
-      }}
-    >
-      <LogOut size={16} />
-      Sair
-    </Button>
-  );
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
 
-  return <AppHeader title={title} subtitle={subtitle} links={[...filteredLinks]} action={action ?? logoutButton} />;
+  return <AppHeader links={[...filteredLinks]} onLogout={logout} />;
 }

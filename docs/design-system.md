@@ -1,85 +1,31 @@
-# Design System — RPA Approval Flow
+# Design System — Corporate Precision
 
-## Objetivo
-Estabelecer uma linguagem visual corporativa, previsível e reutilizável para evitar interfaces genéricas e inconsistentes em futuras gerações por IA.
+Fonte de verdade: [`design.md`](../design.md), `tailwind.config.ts` e `src/app/globals.css`.
 
-## Princípios visuais
-- Clareza antes de ornamentação.
-- Hierarquia explícita (título > subtítulo > corpo > metadado).
-- Baixa densidade visual em telas operacionais.
-- Cores com função semântica (não decorativa).
-- Consistência de espaçamento e raio para reduzir ruído.
+Este sistema visual foi aplicado ao RPA Approval Flow para aproximar a interface da identidade da Minas Mineração: produtividade, confiança e precisão técnica em fluxos de aprovação.
 
-## Tokens oficiais
-> Fonte de verdade: `tailwind.config.ts` e `src/app/globals.css`.
+## Tokens principais
+- Primário: `#2b3a7e`, usado em ações principais, navegação ativa e foco.
+- Secundário: `#23a18e`, usado como acento de confirmação e modernidade.
+- Superfícies: base clara `#f8f9ff`, containers azulados suaves e cards brancos.
+- Texto: `#191c20` para leitura principal e `#43474e` para metadados.
+- Bordas: `#c3c7cf` para separação discreta.
 
-### Cores
-- `brand`: ações primárias e elementos de foco.
-- `success`: confirmação de sucesso.
-- `warning`: atenção sem bloqueio.
-- `danger`: erro, exclusão e bloqueio.
-- `surface`/`background`: base de cards e páginas.
-- `text`/`muted`: contraste principal e secundário.
-- `border`: separadores e contornos discretos.
+## Tipografia
+- Família base: `Manrope, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`.
+- Títulos operacionais: 22–32px, peso 600.
+- Corpo e tabelas: 14px, peso 400/500.
+- Labels e metadados: 12–14px, peso 500/600.
 
-### Tipografia
-- Família base: `Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`.
-- Títulos: peso 600/700.
-- Corpo: peso 400/500.
-- Legendas/metadados: 12–13px com contraste `muted`.
-- Evitar mais de 4 tamanhos de fonte por tela.
+## Componentes
+- Cards usam fundo branco, raio de 4px e sombra discreta.
+- Botões primários usam azul institucional; ações secundárias usam teal ou outline conforme contexto.
+- Badges usam cores semânticas com baixa saturação.
+- Tabelas priorizam contraste, cabeçalhos curtos e linhas com hover sutil.
+- Estados vazios, erros e loading mantêm layout estável com bordas e superfícies leves.
 
-### Espaçamento (escala 4px)
-- `1 = 4px`, `2 = 8px`, `3 = 12px`, `4 = 16px`, `6 = 24px`, `8 = 32px`, `10 = 40px`.
-- Distância vertical entre seções: mínimo `24px`.
-- Não usar margens arbitrárias fora da escala.
-
-### Bordas e sombras
-- Raio padrão de componentes: `10px`.
-- Raio de containers/card: `16px`.
-- Borda padrão: `1px solid border`.
-- Sombra somente em superfícies elevadas (cards, modais), sempre suave.
-
-### Estados
-- Hover: alteração sutil de fundo/contraste.
-- Focus: anel visível (`focus ring`) com cor `brand` e contraste AA.
-- Disabled: opacidade reduzida + cursor bloqueado.
-- Loading: manter layout estável, usar skeleton/spinner discreto.
-
-## Padrões por tipo de componente
-
-### Botões
-- Primário: ação principal única por contexto.
-- Secundário: ações alternativas, baixa ênfase.
-- Perigo: somente operações destrutivas.
-- Não renderizar 3+ botões primários no mesmo bloco.
-
-### Formulários
-- Label sempre visível (não depender de placeholder).
-- Mensagens de erro abaixo do campo, com texto objetivo.
-- Agrupar campos por contexto de negócio.
-- Máximo de 2 colunas em desktop; 1 coluna em mobile.
-
-### Tabelas
-- Cabeçalhos curtos e semânticos.
-- Ações no fim da linha com prioridade visual clara.
-- Evitar mais de 7 colunas sem estratégia responsiva.
-- Estado vazio deve orientar próximo passo.
-
-### Dashboards
-- Cards KPI no topo, detalhes em blocos abaixo.
-- Gráficos/tendências devem ter legenda textual.
-- Evitar múltiplos destaques concorrendo por atenção.
-
-### Modais
-- Usar para tarefas focadas e curtas.
-- Largura progressiva (`sm`, `md`, `lg`) com conteúdo rolável.
-- Botão principal no canto inferior direito.
-- Sempre oferecer saída clara (X + cancelar).
-
-## Anti-padrões
-- excesso de bordas e sombras;
-- paleta com muitas cores saturadas;
-- blocos sem alinhamento vertical consistente;
-- textos longos em botões;
-- componentes “all-in-one” com lógica + UI + chamadas API misturadas.
+## Diretrizes
+- Evitar gradientes decorativos, excesso de sombras e cantos muito arredondados.
+- Usar a escala de espaçamento baseada em 4px.
+- Manter telas operacionais densas, escaneáveis e sem aparência de landing page.
+- Preferir componentes compartilhados em `src/components/ui` e `src/components/ui-kit`.

@@ -6,7 +6,7 @@ export function SectionCard({ title, description, actions, children, className, 
   return (
     <Card className={cn("mt-4", className)}>
       {(title || description || actions) && (
-        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-slate-100">
+        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-border">
           <div>
             {title && <CardTitle>{title}</CardTitle>}
             {description && <CardDescription>{description}</CardDescription>}

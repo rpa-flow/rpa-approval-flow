@@ -7,5 +7,6 @@ export * from "./error-state";
 export * from "./form-field";
 export * from "./loading-state";
 export * from "./page-header";
+export * from "./pagination-controls";
 export * from "./section-card";
 export * from "./status-badge";

@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout, DataTable, FormField, SectionCard, StatusBadge } from "@/components/ui-kit";
+import { AppLayout, DataTable, FormField, PaginationControls, SectionCard, StatusBadge } from "@/components/ui-kit";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import type { PaginationMetadata } from "@/lib/pagination";
 
 type Category = {
   id: string;
@@ -18,15 +19,21 @@ type Category = {
 };
 
 type Me = { manager: { role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
+type CategoriesResponse = { items: Category[]; pagination: PaginationMetadata };
 
 const EMPTY_FORM = { nome: "", descricao: "" };
 
 export default function CategoriasFornecedoresPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata>({ page: 1, pageSize: 10, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"TODAS" | "ATIVAS" | "INATIVAS">("TODAS");
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -42,32 +49,45 @@ export default function CategoriasFornecedoresPage() {
     setMe(meData);
 
     if (meData.manager.role !== "ADMIN") return;
-
-    const categoriesRes = await fetch("/api/categorias-fornecedores");
-    if (categoriesRes.ok) {
-      setCategories(await categoriesRes.json());
-    }
   }, [router]);
+
+  const loadCategories = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize)
+    });
+
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (statusFilter !== "TODAS") params.set("status", statusFilter);
+
+    setIsLoadingCategories(true);
+    try {
+      const categoriesRes = await fetch(`/api/categorias-fornecedores?${params.toString()}`);
+      if (!categoriesRes.ok) {
+        setMessage("Erro ao carregar categorias.");
+        return;
+      }
+
+      const payload = await categoriesRes.json() as CategoriesResponse;
+      setCategories(payload.items);
+      setPagination(payload.pagination);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, [debouncedSearch, page, pageSize, statusFilter]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const filteredCategories = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  useEffect(() => {
+    if (me?.manager.role === "ADMIN") loadCategories();
+  }, [loadCategories, me?.manager.role]);
 
-    return categories.filter((category) => {
-      const matchesSearch = !term
-        || category.nome.toLowerCase().includes(term)
-        || (category.descricao ?? "").toLowerCase().includes(term);
-
-      const matchesStatus = statusFilter === "TODAS"
-        || (statusFilter === "ATIVAS" && category.ativo)
-        || (statusFilter === "INATIVAS" && !category.ativo);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [categories, search, statusFilter]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
   if (!me) return null;
 
@@ -90,8 +110,9 @@ export default function CategoriasFornecedoresPage() {
     }
 
     setForm(EMPTY_FORM);
+    setPage(1);
     setMessage("Categoria criada com sucesso.");
-    await loadData();
+    await loadCategories();
   }
 
   async function toggleCategory(category: Category) {
@@ -109,7 +130,7 @@ export default function CategoriasFornecedoresPage() {
     }
 
     setMessage(`Categoria ${category.ativo ? "inativada" : "ativada"} com sucesso.`);
-    await loadData();
+    await loadCategories();
   }
 
   if (me.manager.role !== "ADMIN") {
@@ -155,15 +176,15 @@ export default function CategoriasFornecedoresPage() {
       <SectionCard
         title="Categorias cadastradas"
         description="Pesquise e altere rapidamente a disponibilidade de cada categoria."
-        actions={<span className="text-sm font-semibold text-slate-500">{filteredCategories.length} registro(s)</span>}
+        actions={<span className="text-sm font-semibold text-slate-500">{isLoadingCategories ? "Carregando..." : `${pagination.total} registro(s)`}</span>}
       >
-        <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-3">
+        <div className="mb-4 grid gap-3 rounded-md border border-border bg-surface-container-low p-3 md:grid-cols-3">
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             placeholder="Buscar por nome ou descrição"
           />
-          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <Select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(1); }}>
             <option value="TODAS">Todos os status</option>
             <option value="ATIVAS">Somente ativas</option>
             <option value="INATIVAS">Somente inativas</option>
@@ -174,6 +195,7 @@ export default function CategoriasFornecedoresPage() {
             onClick={() => {
               setSearch("");
               setStatusFilter("TODAS");
+              setPage(1);
             }}
           >
             Limpar filtros
@@ -181,8 +203,9 @@ export default function CategoriasFornecedoresPage() {
         </div>
 
         <DataTable
-          data={filteredCategories}
+          data={categories}
           getRowKey={(category) => category.id}
+          loading={isLoadingCategories}
           emptyTitle="Nenhuma categoria encontrada"
           emptyDescription="Ajuste os filtros ou cadastre uma nova categoria para começar."
           columns={[
@@ -195,6 +218,13 @@ export default function CategoriasFornecedoresPage() {
               {category.ativo ? "Inativar" : "Ativar"}
             </Button>
           )}
+        />
+        <PaginationControls
+          pagination={pagination}
+          itemLabel="registro(s)"
+          loading={isLoadingCategories}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
         />
       </SectionCard>
 

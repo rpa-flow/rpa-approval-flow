@@ -6,6 +6,7 @@ import { sendInvoiceCreatedEmail } from "@/lib/email";
 import { groupExtrasByFieldName, parseNFSeXml, simplifyExtrasByFieldName } from "@/lib/nfse-parser";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
+import { getPaginationMetadata, getPaginationParams, shouldUsePaginatedResponse } from "@/lib/pagination";
 import { uploadXmlToOneDrive } from "@/lib/onedrive";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
@@ -78,8 +79,13 @@ export async function GET(request: NextRequest) {
   }
 
   const includeExtras = shouldIncludeExtras(request);
+  const paginated = shouldUsePaginatedResponse(request.nextUrl.searchParams);
+  const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
+  const where = statusParam ? { status: statusParam as InvoiceStatus } : undefined;
+  const total = paginated ? await prisma.invoice.count({ where }) : 0;
+  const pagination = paginated ? getPaginationMetadata(total, requestedPage, pageSize) : null;
   const invoices = await prisma.invoice.findMany({
-    where: statusParam ? { status: statusParam as InvoiceStatus } : undefined,
+    where,
     include: {
       fornecedor: {
         include: {
@@ -95,7 +101,8 @@ export async function GET(request: NextRequest) {
     },
     orderBy: {
       createdAt: "desc"
-    }
+    },
+    ...(pagination ? { skip: (pagination.page - 1) * pageSize, take: pageSize } : {})
   });
 
   const response = invoices.map((invoice) => {
@@ -126,7 +133,9 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  return NextResponse.json(response);
+  if (!pagination) return NextResponse.json(response);
+
+  return NextResponse.json({ items: response, pagination });
 }
 
 export async function POST(request: NextRequest) {

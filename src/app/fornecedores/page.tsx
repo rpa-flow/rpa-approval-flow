@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout } from "@/components/ui-kit";
+import { AppLayout, PaginationControls } from "@/components/ui-kit";
+import type { PaginationMetadata } from "@/lib/pagination";
 
 type Me = { manager: { role: "ADMIN" | "GESTOR" | "FORNECEDOR"; suppliers: Array<{ supplierId: string; supplierName: string }> } };
 type CategoryItem = { id: string; nome: string; ativo: boolean };
 type SupplierListItem = { id: string; nome: string; cnpj: string | null; codigoExterno: string | null; categories?: CategoryItem[]; managers: Array<{ id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR"; ativo: boolean }> };
 type ManagerItem = { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR"; ativo: boolean };
+type SuppliersResponse = { items: SupplierListItem[]; pagination: PaginationMetadata };
 
 const EMPTY_CREATE_FORM = { nome: "", cnpj: "", codigoExterno: "", managerNome: "", managerEmail: "", managerSenha: "", categoryIds: [] as string[] };
 
@@ -18,8 +20,13 @@ export default function FornecedoresPage() {
   const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
   const [managers, setManagers] = useState<ManagerItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata>({ page: 1, pageSize: 10, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("TODAS");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
@@ -34,20 +41,48 @@ export default function FornecedoresPage() {
     const meData = (await meRes.json()) as Me;
     setMe(meData);
     if (meData.manager.role !== "ADMIN") return;
-    const [suppliersRes, categoriesRes, managersRes] = await Promise.all([fetch("/api/fornecedores"), fetch("/api/categorias-fornecedores"), fetch("/api/gestores")]);
-    if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
+    const [categoriesRes, managersRes] = await Promise.all([fetch("/api/categorias-fornecedores"), fetch("/api/gestores")]);
     if (categoriesRes.ok) setCategories((await categoriesRes.json()).filter((c: CategoryItem) => c.ativo));
     if (managersRes.ok) setManagers(await managersRes.json());
   }, [router]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const loadSuppliers = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize)
+    });
 
-  const filteredSuppliers = useMemo(() => suppliers.filter((s) => {
-    const byCategory = categoryFilter === "TODAS" || (s.categories ?? []).some((c) => c.id === categoryFilter);
-    const term = search.trim().toLowerCase();
-    const bySearch = !term || s.nome.toLowerCase().includes(term) || (s.cnpj ?? "").includes(term) || (s.codigoExterno ?? "").toLowerCase().includes(term) || s.managers.some((m) => m.nome.toLowerCase().includes(term));
-    return byCategory && bySearch;
-  }), [suppliers, categoryFilter, search]);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (categoryFilter !== "TODAS") params.set("categoryId", categoryFilter);
+
+    setIsLoadingSuppliers(true);
+    try {
+      const suppliersRes = await fetch(`/api/fornecedores?${params.toString()}`);
+      if (suppliersRes.status === 401) return router.push("/login");
+      if (suppliersRes.status === 403) return router.push("/dashboard");
+      if (!suppliersRes.ok) {
+        setMessage("Não foi possível carregar os fornecedores.");
+        return;
+      }
+
+      const payload = await suppliersRes.json() as SuppliersResponse;
+      setSuppliers(payload.items);
+      setPagination(payload.pagination);
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  }, [categoryFilter, debouncedSearch, page, pageSize, router]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    if (me?.manager.role === "ADMIN") loadSuppliers();
+  }, [loadSuppliers, me?.manager.role]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
   const filteredManagers = useMemo(() => {
     const term = managerSearch.trim().toLowerCase();
     if (!term) return managers;
@@ -60,28 +95,35 @@ export default function FornecedoresPage() {
     const hasInitialManager = createForm.managerNome.trim() && createForm.managerEmail.trim() && createForm.managerSenha;
     const res = await fetch("/api/fornecedores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: createForm.nome, cnpj: createForm.cnpj.replace(/\D/g, "") || undefined, codigoExterno: createForm.codigoExterno.trim() || undefined, managers: hasInitialManager ? [{ nome: createForm.managerNome, email: createForm.managerEmail, senha: createForm.managerSenha }] : [], categoryIds: createForm.categoryIds }) });
     if (!res.ok) return setMessage("Erro ao cadastrar fornecedor. Verifique os dados.");
-    setCreateForm(EMPTY_CREATE_FORM); setShowCreateForm(false); setMessage("Fornecedor cadastrado com sucesso. Use a tela de gestores para revisar os vínculos."); await loadData(); }
+    setCreateForm(EMPTY_CREATE_FORM); setShowCreateForm(false); setPage(1); setMessage("Fornecedor cadastrado com sucesso. Use a tela de gestores para revisar os vínculos."); await loadData(); await loadSuppliers(); }
 
   function iniciarEdicao(supplier: SupplierListItem) { setEditingSupplierId(supplier.id); setEditForm({ nome: supplier.nome, cnpj: supplier.cnpj ?? "", codigoExterno: supplier.codigoExterno ?? "", selectedManagerId: "", createNewManager: false, addManagerNome: "", addManagerEmail: "", addManagerSenha: "", categoryIds: supplier.categories?.map((c) => c.id) ?? [] }); }
 
   async function salvarEdicao(e: React.FormEvent) { e.preventDefault(); if (!editingSupplierId) return;
     const res = await fetch(`/api/fornecedores/${editingSupplierId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: editForm.nome, cnpj: editForm.cnpj.replace(/\D/g, "") || null, codigoExterno: editForm.codigoExterno.trim() || null, addManager: editForm.createNewManager ? { nome: editForm.addManagerNome || undefined, email: editForm.addManagerEmail, senha: editForm.addManagerSenha || undefined } : editForm.selectedManagerId ? { id: editForm.selectedManagerId } : undefined, categoryIds: editForm.categoryIds }) });
     if (!res.ok) return setMessage("Erro ao salvar edição do fornecedor.");
-    setEditingSupplierId(null); setMessage("Fornecedor atualizado com sucesso."); await loadData(); }
+    setEditingSupplierId(null); setMessage("Fornecedor atualizado com sucesso."); await loadData(); await loadSuppliers(); }
 
   return <AppLayout>
     <MainHeader title="Fornecedores" subtitle="Gestão central de fornecedores, categorias e responsáveis." />
 
     {me.manager.role === "ADMIN" ? <>
       <section className="card mt-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Base de fornecedores</h2><p className="muted small">O vínculo em massa de responsáveis agora fica na tela de gestores.</p></div><div className="flex flex-wrap gap-2"><Link href="/gestores" className="btn-secondary">Gerenciar gestores</Link><button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? "Cancelar" : "Adicionar fornecedor"}</button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Base de fornecedores</h2><p className="muted small">O vínculo em massa de responsáveis agora fica na tela de gestores.</p></div><div className="flex flex-wrap items-center gap-2"><span className="badge badge-slate">{isLoadingSuppliers ? "Carregando..." : `${pagination.total} fornecedor(es)`}</span><Link href="/gestores" className="btn-secondary">Gerenciar gestores</Link><button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? "Cancelar" : "Adicionar fornecedor"}</button></div></div>
         <div className="grid gap-2 md:grid-cols-3">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por fornecedor, CNPJ, código externo ou gestor" />
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="TODAS">Todas as categorias</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select>
-          <button className="btn-secondary" type="button" onClick={() => { setSearch(""); setCategoryFilter("TODAS"); }}>Limpar filtros</button>
+          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por fornecedor, CNPJ, código externo ou gestor" />
+          <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}><option value="TODAS">Todas as categorias</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select>
+          <button className="btn-secondary" type="button" onClick={() => { setSearch(""); setCategoryFilter("TODAS"); setPage(1); }}>Limpar filtros</button>
         </div>
         <div className="table-shell">
-          <table className="min-w-full text-sm"><thead><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">CNPJ</th><th className="px-4 py-3 text-left">Código externo</th><th className="px-4 py-3 text-left">Categorias</th><th className="px-4 py-3 text-left">Gestores</th><th className="w-28 px-4 py-3 text-right whitespace-nowrap">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredSuppliers.map((supplier) => <tr key={supplier.id} ><td className="px-4 py-3 font-medium text-slate-800">{supplier.nome}</td><td className="px-4 py-3 text-slate-600">{supplier.cnpj ?? "—"}</td><td className="px-4 py-3 text-slate-600">{supplier.codigoExterno ?? "—"}</td><td className="px-4 py-3">{supplier.categories?.length ? <div className="flex flex-wrap gap-1">{supplier.categories.map((c) => <span key={c.id} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{c.nome}</span>)}</div> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-slate-600">{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td><td className="px-4 py-3 text-right whitespace-nowrap"><button type="button" className="btn-secondary whitespace-nowrap" onClick={() => iniciarEdicao(supplier)}>Editar</button></td></tr>)}{!filteredSuppliers.length && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">Nenhum fornecedor encontrado para os filtros aplicados.</td></tr>}</tbody></table>
+          <table className="min-w-full text-sm"><thead><tr><th className="px-4 py-3 text-left">Fornecedor</th><th className="px-4 py-3 text-left">CNPJ</th><th className="px-4 py-3 text-left">Código externo</th><th className="px-4 py-3 text-left">Categorias</th><th className="px-4 py-3 text-left">Gestores</th><th className="w-28 px-4 py-3 text-right whitespace-nowrap">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{suppliers.map((supplier) => <tr key={supplier.id} ><td className="px-4 py-3 font-medium text-slate-800">{supplier.nome}</td><td className="px-4 py-3 text-slate-600">{supplier.cnpj ?? "—"}</td><td className="px-4 py-3 text-slate-600">{supplier.codigoExterno ?? "—"}</td><td className="px-4 py-3">{supplier.categories?.length ? <div className="flex flex-wrap gap-1">{supplier.categories.map((c) => <span key={c.id} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{c.nome}</span>)}</div> : <span className="text-slate-400">—</span>}</td><td className="px-4 py-3 text-slate-600">{supplier.managers.map((m) => m.nome).join(", ") || "—"}</td><td className="px-4 py-3 text-right whitespace-nowrap"><button type="button" className="btn-secondary whitespace-nowrap" onClick={() => iniciarEdicao(supplier)}>Editar</button></td></tr>)}{!suppliers.length && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">{isLoadingSuppliers ? "Carregando fornecedores..." : "Nenhum fornecedor encontrado para os filtros aplicados."}</td></tr>}</tbody></table>
+          <PaginationControls
+            pagination={pagination}
+            itemLabel="fornecedor(es)"
+            loading={isLoadingSuppliers}
+            onPageChange={setPage}
+            onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
+          />
         </div>
       </section>
       {showCreateForm && <section className="card mt-4">

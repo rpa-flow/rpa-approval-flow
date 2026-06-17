@@ -9,17 +9,17 @@ export function DataTable<T>({ columns, data, getRowKey, loading, emptyTitle = "
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title={emptyTitle} description={emptyDescription} />;
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-md border border-border bg-surface-container-lowest shadow-sm">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               {columns.map((column) => <TableHead key={column.key} className={column.className}>{column.header}</TableHead>)}
-              {actions && <TableHead className="text-right">Ações</TableHead>}
+              {actions && <TableHead className="w-32 whitespace-nowrap text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row) => <TableRow key={getRowKey(row)}>{columns.map((column) => <TableCell key={column.key} className={column.className}>{column.cell(row)}</TableCell>)}{actions && <TableCell className="text-right">{actions(row)}</TableCell>}</TableRow>)}
+            {data.map((row) => <TableRow key={getRowKey(row)}>{columns.map((column) => <TableCell key={column.key} className={column.className}>{column.cell(row)}</TableCell>)}{actions && <TableCell className="whitespace-nowrap text-right">{actions(row)}</TableCell>}</TableRow>)}
           </TableBody>
         </Table>
       </div>
