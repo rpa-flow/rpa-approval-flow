@@ -157,7 +157,7 @@ export default function CategoriasFornecedoresPage() {
         description="Pesquise e altere rapidamente a disponibilidade de cada categoria."
         actions={<span className="text-sm font-semibold text-slate-500">{filteredCategories.length} registro(s)</span>}
       >
-        <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-3">
+        <div className="mb-4 grid gap-3 rounded-md border border-border bg-surface-container-low p-3 md:grid-cols-3">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}

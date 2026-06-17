@@ -66,7 +66,7 @@ export function MainHeader({ title, subtitle, action }: MainHeaderProps) {
   const logoutButton = (
     <Button
       variant="outline"
-      className="bg-white/95"
+      className="bg-surface-container-lowest"
       onClick={async () => {
         await fetch("/api/auth/logout", { method: "POST" });
         router.push("/login");

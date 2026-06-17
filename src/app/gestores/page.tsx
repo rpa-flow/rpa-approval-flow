@@ -312,7 +312,7 @@ export default function GestoresPage() {
               </div>
               <div className="grid gap-2 md:grid-cols-2">
                 {suppliers.map((supplier) => (
-                  <label key={supplier.id} className="checkbox rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                  <label key={supplier.id} className="checkbox rounded-md border border-border bg-surface-container-low p-3">
                     <input
                       type="checkbox"
                       checked={form.supplierIds.includes(supplier.id)}

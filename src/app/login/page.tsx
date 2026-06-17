@@ -42,10 +42,10 @@ export default function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-brand">
-        <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10 ring-1 ring-white/15">
+        <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded bg-white/10 ring-1 ring-white/20">
           <ShieldCheck size={28} />
         </div>
-        <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-100"><Sparkles size={14} /> Plataforma de aprovação</p>
+        <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase text-surface-container-low"><Sparkles size={14} /> Plataforma de aprovação</p>
         <h1>RPA Approval Flow</h1>
         <p>
           Plataforma para aprovação de notas fiscais com gestão de lembretes, histórico de

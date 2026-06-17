@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { ComponentType, ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import { MinasLogoIcon } from "@/components/brand/minas-logo-icon";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui-kit/page-header";
 import { cn } from "@/lib/utils";
@@ -33,29 +34,29 @@ export function AppHeader({ title, subtitle, links, action }: AppHeaderProps) {
         key={link.href}
         href={link.href}
         className={cn(
-          "group inline-flex min-w-0 items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition",
-          isActive ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-600 hover:bg-white hover:text-slate-950 hover:shadow-sm"
+          "group inline-flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition",
+          isActive ? "bg-brand text-white shadow-sm" : "text-muted hover:bg-surface-container-lowest hover:text-text hover:shadow-sm"
         )}
         aria-current={isActive ? "page" : undefined}
         onClick={() => setOpen(false)}
       >
-        {Icon && <Icon size={17} className={cn(isActive ? "text-white" : "text-slate-400 group-hover:text-blue-600")} />}
+        {Icon && <Icon size={17} className={cn(isActive ? "text-white" : "text-outline group-hover:text-secondary")} />}
         <span className="truncate">{link.label}</span>
       </Link>
     );
   });
 
   return (
-    <header className="sticky top-0 z-40 mb-4 rounded-b-[1.5rem] border border-t-0 border-slate-200/80 bg-white/90 px-2 py-3 shadow-[0_18px_40px_rgba(15,23,42,.08)] backdrop-blur-xl sm:static sm:rounded-[2rem] sm:border sm:p-4">
+    <header className="sticky top-0 z-40 mb-4 rounded-b-md border border-t-0 border-border bg-surface-container-lowest/95 px-2 py-3 shadow-card backdrop-blur-xl sm:static sm:rounded-md sm:border sm:p-4">
       <div className="flex flex-col gap-4">
-        <div className="flex min-w-0 items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-3 text-white sm:p-5">
+        <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border-l-4 border-secondary bg-brand p-3 text-white sm:p-5">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/15">
-              <ShieldCheck size={22} />
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded bg-white p-1 shadow-sm ring-1 ring-white/25">
+              <MinasLogoIcon className="h-10 w-10" />
             </div>
             <div className="min-w-0">
-              <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-[0.12em] text-blue-100 sm:tracking-[0.16em]"><Sparkles size={14} /> <span className="truncate">Plataforma de aprovação</span></p>
-              <p className="truncate text-sm text-slate-300">RPA Approval Flow</p>
+              <p className="truncate text-xs font-bold uppercase text-surface-container-low">Minas Mineração</p>
+              <p className="truncate text-sm text-surface-container-high">RPA Approval Flow</p>
             </div>
           </div>
           <div className="hidden sm:block">{action}</div>
@@ -66,12 +67,12 @@ export function AppHeader({ title, subtitle, links, action }: AppHeaderProps) {
 
         <PageHeader title={title} description={subtitle} actions={<div className="sm:hidden">{action}</div>} />
 
-        <nav className="hidden rounded-3xl border border-slate-200 bg-slate-50/80 p-1.5 md:flex md:flex-wrap md:items-center md:gap-1" aria-label="Navegação principal">
+        <nav className="hidden rounded-md border border-border bg-surface-container-low p-1.5 md:flex md:flex-wrap md:items-center md:gap-1" aria-label="Navegação principal">
           {navItems}
         </nav>
 
         {open && (
-          <nav id="mobile-main-navigation" className="grid gap-1 rounded-3xl border border-slate-200 bg-slate-50 p-2 shadow-sm md:hidden" aria-label="Navegação mobile">
+          <nav id="mobile-main-navigation" className="grid gap-1 rounded-md border border-border bg-surface-container-low p-2 shadow-sm md:hidden" aria-label="Navegação mobile">
             {navItems}
           </nav>
         )}

@@ -9,7 +9,7 @@ export function DataTable<T>({ columns, data, getRowKey, loading, emptyTitle = "
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title={emptyTitle} description={emptyDescription} />;
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-md border border-border bg-surface-container-lowest shadow-sm">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
