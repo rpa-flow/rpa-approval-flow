@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout } from "@/components/ui-kit";
+import { AppLayout, PaginationControls } from "@/components/ui-kit";
+import type { PaginationMetadata } from "@/lib/pagination";
 
 type Me = {
   manager: {
@@ -23,10 +24,15 @@ type SupplierListItem = {
     ativo: boolean;
   }>;
 };
+type SuppliersResponse = { items: SupplierListItem[]; pagination: PaginationMetadata };
 
 export default function CadastrosPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata>({ page: 1, pageSize: 10, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
   const [supplierForm, setSupplierForm] = useState({
     nome: "",
     cnpj: "",
@@ -51,17 +57,32 @@ export default function CadastrosPage() {
     }
 
     setMe(meData);
-
-    const suppliersRes = await fetch("/api/fornecedores");
-    if (suppliersRes.ok) {
-      const payload = (await suppliersRes.json()) as SupplierListItem[];
-      setSuppliers(payload);
-    }
   }, [router]);
+
+  const loadSuppliers = useCallback(async () => {
+    setIsLoadingSuppliers(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      const suppliersRes = await fetch(`/api/fornecedores?${params.toString()}`);
+      if (suppliersRes.status === 401) return router.push("/login");
+      if (suppliersRes.status === 403) return router.push("/dashboard");
+      if (suppliersRes.ok) {
+        const payload = (await suppliersRes.json()) as SuppliersResponse;
+        setSuppliers(payload.items);
+        setPagination(payload.pagination);
+      }
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  }, [page, pageSize, router]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (me?.manager.role === "ADMIN") loadSuppliers();
+  }, [loadSuppliers, me?.manager.role]);
 
   async function cadastrarFornecedor(e: React.FormEvent) {
     e.preventDefault();
@@ -97,7 +118,8 @@ export default function CadastrosPage() {
     });
 
     setMessage("Fornecedor e gestor cadastrados com sucesso.");
-    await loadData();
+    setPage(1);
+    await loadSuppliers();
   }
 
   if (!me || me.manager.role !== "ADMIN") {
@@ -168,7 +190,10 @@ export default function CadastrosPage() {
       </section>
 
       <section className="card">
-        <h2>Fornecedores cadastrados</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2>Fornecedores cadastrados</h2>
+          <span className="badge badge-slate">{isLoadingSuppliers ? "Carregando..." : `${pagination.total} fornecedor(es)`}</span>
+        </div>
         <ul className="list">
           {suppliers.map((supplier) => (
             <li key={supplier.id}>
@@ -176,8 +201,15 @@ export default function CadastrosPage() {
               {supplier.managers.map((manager) => `${manager.nome} <${manager.email}>`).join(", ")}
             </li>
           ))}
-          {suppliers.length === 0 && <li>Nenhum fornecedor cadastrado ainda.</li>}
+          {suppliers.length === 0 && <li>{isLoadingSuppliers ? "Carregando fornecedores..." : "Nenhum fornecedor cadastrado ainda."}</li>}
         </ul>
+        <PaginationControls
+          pagination={pagination}
+          itemLabel="fornecedor(es)"
+          loading={isLoadingSuppliers}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
+        />
       </section>
 
       {message && <p className="message">{message}</p>}

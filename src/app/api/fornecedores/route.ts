@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { supplierSchema } from "@/lib/validations";
 import { getSessionManager, hashPassword } from "@/lib/auth";
+import { getPaginationMetadata, getPaginationParams, shouldUsePaginatedResponse } from "@/lib/pagination";
 
 async function validateAdmin() {
   const manager = await getSessionManager();
@@ -16,42 +18,81 @@ async function validateAdmin() {
   return null;
 }
 
-export async function GET() {
+const supplierInclude = {
+  categoryLinks: { include: { category: true } },
+  managerSuppliers: {
+    include: {
+      manager: {
+        select: {
+          id: true,
+          nome: true,
+          email: true,
+          role: true,
+          ativo: true
+        }
+      }
+    }
+  }
+} satisfies Prisma.SupplierInclude;
+
+type SupplierWithRelations = Prisma.SupplierGetPayload<{ include: typeof supplierInclude }>;
+
+function serializeSupplier(supplier: SupplierWithRelations) {
+  return {
+    id: supplier.id,
+    nome: supplier.nome,
+    cnpj: supplier.cnpj,
+    codigoExterno: supplier.codigoExterno,
+    managers: supplier.managerSuppliers.map((ms) => ms.manager),
+    categories: supplier.categoryLinks.map((cl) => cl.category)
+  };
+}
+
+function buildSupplierWhere(searchParams: URLSearchParams) {
+  const search = searchParams.get("search")?.trim();
+  const categoryId = searchParams.get("categoryId");
+  const filters: Prisma.SupplierWhereInput[] = [];
+
+  if (categoryId && categoryId !== "TODAS") {
+    filters.push({ categoryLinks: { some: { categoryId } } });
+  }
+
+  if (search) {
+    filters.push({
+      OR: [
+        { nome: { contains: search, mode: "insensitive" } },
+        { cnpj: { contains: search } },
+        { codigoExterno: { contains: search, mode: "insensitive" } },
+        { managerSuppliers: { some: { manager: { nome: { contains: search, mode: "insensitive" } } } } }
+      ]
+    });
+  }
+
+  return filters.length ? { AND: filters } : {};
+}
+
+export async function GET(request: NextRequest) {
   const unauthorized = await validateAdmin();
   if (unauthorized) return unauthorized;
 
+  const where = buildSupplierWhere(request.nextUrl.searchParams);
+  const paginated = shouldUsePaginatedResponse(request.nextUrl.searchParams);
+  const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
+  const total = paginated ? await prisma.supplier.count({ where }) : 0;
+  const pagination = paginated ? getPaginationMetadata(total, requestedPage, pageSize) : null;
   const suppliers = await prisma.supplier.findMany({
-    include: {
-      categoryLinks: { include: { category: true } },
-      managerSuppliers: {
-        include: {
-          manager: {
-            select: {
-              id: true,
-              nome: true,
-              email: true,
-              role: true,
-              ativo: true
-            }
-          }
-        }
-      }
-    },
+    where,
+    include: supplierInclude,
     orderBy: {
       nome: "asc"
-    }
+    },
+    ...(pagination ? { skip: (pagination.page - 1) * pageSize, take: pageSize } : {})
   });
 
-  return NextResponse.json(
-    suppliers.map((s) => ({
-      id: s.id,
-      nome: s.nome,
-      cnpj: s.cnpj,
-      codigoExterno: s.codigoExterno,
-      managers: s.managerSuppliers.map((ms) => ms.manager),
-      categories: s.categoryLinks.map((cl) => cl.category)
-    }))
-  );
+  const items = suppliers.map(serializeSupplier);
+  if (!pagination) return NextResponse.json(items);
+
+  return NextResponse.json({ items, pagination });
 }
 
 export async function POST(request: NextRequest) {
@@ -111,33 +152,11 @@ export async function POST(request: NextRequest) {
 
   const fullSupplier = await prisma.supplier.findUnique({
     where: { id: supplier.id },
-    include: {
-      categoryLinks: { include: { category: true } },
-      managerSuppliers: {
-        include: {
-          manager: {
-            select: {
-              id: true,
-              nome: true,
-              email: true,
-              role: true,
-              ativo: true
-            }
-          }
-        }
-      }
-    }
+    include: supplierInclude
   });
 
   return NextResponse.json(
-    {
-      id: fullSupplier?.id,
-      nome: fullSupplier?.nome,
-      cnpj: fullSupplier?.cnpj,
-      codigoExterno: fullSupplier?.codigoExterno,
-      managers: fullSupplier?.managerSuppliers.map((ms) => ms.manager) ?? [],
-      categories: fullSupplier?.categoryLinks.map((cl) => cl.category) ?? []
-    },
+    fullSupplier ? serializeSupplier(fullSupplier) : null,
     { status: 201 }
   );
 }

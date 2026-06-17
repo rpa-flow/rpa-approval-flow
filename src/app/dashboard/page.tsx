@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout } from "@/components/ui-kit";
+import { AppLayout, PaginationControls } from "@/components/ui-kit";
+import type { PaginationMetadata } from "@/lib/pagination";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
@@ -31,6 +32,13 @@ type Invoice = {
   dataPagamento?: string | null;
 };
 
+type SupplierOption = { id: string; nome: string };
+type NotesResponse = {
+  items: Invoice[];
+  pagination: PaginationMetadata;
+  supplierOptions: SupplierOption[];
+};
+
 const STATUS_COLORS: Record<string, string> = {
   AGUARDANDO_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADO: "bg-emerald-100 text-emerald-800",
@@ -38,10 +46,6 @@ const STATUS_COLORS: Record<string, string> = {
   PROCESSADO: "bg-blue-100 text-blue-800",
   DADOS_INCONSISTENTES: "bg-orange-100 text-orange-800"
 };
-
-function isInvoiceLaunched(invoice: Invoice) {
-  return invoice.status === "PROCESSADO" || Boolean(invoice.dataLancamentoDelphi);
-}
 
 function toLocalDateInputValue(date: Date) {
   const year = date.getFullYear();
@@ -53,9 +57,22 @@ function toLocalDateInputValue(date: Date) {
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata>({
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false
+  });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
   const [takerFilter, setTakerFilter] = useState("");
+  const [debouncedTakerFilter, setDebouncedTakerFilter] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -68,15 +85,49 @@ export default function DashboardPage() {
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const router = useRouter();
 
-  const loadData = useCallback(async () => {
+  const loadMe = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) return router.push("/login");
     setMe(await meRes.json());
-    const notesRes = await fetch("/api/notas/minhas");
-    if (notesRes.ok) setInvoices(await notesRes.json());
   }, [router]);
 
+  const loadData = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize)
+    });
+
+    if (statusFilter !== "TODOS") params.set("status", statusFilter);
+    if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
+    if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
+    if (updatedFrom) params.set("updatedFrom", updatedFrom);
+    if (updatedTo) params.set("updatedTo", updatedTo);
+
+    setIsLoadingNotes(true);
+    try {
+      const notesRes = await fetch(`/api/notas/minhas?${params.toString()}`);
+      if (notesRes.status === 401) return router.push("/login");
+      if (!notesRes.ok) {
+        setMessage("Não foi possível carregar as notas.");
+        return;
+      }
+
+      const data = await notesRes.json() as NotesResponse;
+      setInvoices(data.items);
+      setPagination(data.pagination);
+      setSupplierOptions(data.supplierOptions);
+    } finally {
+      setIsLoadingNotes(false);
+    }
+  }, [debouncedTakerFilter, page, pageSize, router, statusFilter, supplierFilter, updatedFrom, updatedTo]);
+
+  useEffect(() => { loadMe(); }, [loadMe]);
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedTakerFilter(takerFilter.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [takerFilter]);
 
   useEffect(() => {
     if (!menuState) return;
@@ -88,26 +139,6 @@ export default function DashboardPage() {
     window.addEventListener("keydown", closeMenuOnEscape);
     return () => window.removeEventListener("keydown", closeMenuOnEscape);
   }, [menuState]);
-
-  const filtered = useMemo(() => invoices.filter((i) => {
-    const updatedAt = new Date(i.dataAtualizacao);
-    const fromDate = updatedFrom ? new Date(`${updatedFrom}T00:00:00`) : null;
-    const toDate = updatedTo ? new Date(`${updatedTo}T23:59:59`) : null;
-
-    const matchesStatus = statusFilter === "TODOS"
-      || (statusFilter === "LANCADAS" && isInvoiceLaunched(i))
-      || i.status === statusFilter;
-    const normalizedTaker = takerFilter.trim().toLowerCase();
-    const matchesTaker = !normalizedTaker || (i.tomadorNome ?? "").toLowerCase().includes(normalizedTaker);
-
-    return matchesStatus &&
-      (supplierFilter === "TODOS" || i.fornecedor.nome === supplierFilter) &&
-      matchesTaker &&
-      (!fromDate || updatedAt >= fromDate) &&
-      (!toDate || updatedAt <= toDate);
-  }), [invoices, statusFilter, supplierFilter, takerFilter, updatedFrom, updatedTo]);
-
-  const suppliers = useMemo(() => Array.from(new Set(invoices.map((i) => i.fornecedor.nome))), [invoices]);
 
   async function atualizarNota(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/notas/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -158,36 +189,36 @@ export default function DashboardPage() {
           <h2 className="section-title">Notas em acompanhamento</h2>
           <p className="section-description">Filtre, analise detalhes e execute aprovações sem sair da central operacional.</p>
         </div>
-        <span className="badge badge-slate">{filtered.length} de {invoices.length} nota(s)</span>
+        <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
       </div>
 
       <div className="grid gap-3 rounded-md border border-border bg-surface-container-low p-3 md:grid-cols-3 xl:grid-cols-6">
         <label>
           Status
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
             <option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option>
           </select>
         </label>
         <label>
           Fornecedor
-          <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
-            <option value="TODOS">Todos fornecedores</option>{suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+          <select value={supplierFilter} onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }}>
+            <option value="TODOS">Todos fornecedores</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.nome}</option>)}
           </select>
         </label>
         <label>
           Tomador
-          <input value={takerFilter} onChange={(e) => setTakerFilter(e.target.value)} placeholder="Buscar por tomador" />
+          <input value={takerFilter} onChange={(e) => { setTakerFilter(e.target.value); setPage(1); }} placeholder="Buscar por tomador" />
         </label>
         <label>
           Atualização de
-          <input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} />
+          <input type="date" value={updatedFrom} onChange={(e) => { setUpdatedFrom(e.target.value); setPage(1); }} />
         </label>
         <label>
           Atualização até
-          <input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} />
+          <input type="date" value={updatedTo} onChange={(e) => { setUpdatedTo(e.target.value); setPage(1); }} />
         </label>
         <div className="flex items-end">
-          <button type="button" className="btn-secondary w-full" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); }}>Limpar filtros</button>
+          <button type="button" className="btn-secondary w-full" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setPage(1); }}>Limpar filtros</button>
         </div>
       </div>
 
@@ -195,7 +226,7 @@ export default function DashboardPage() {
         <table className="min-w-full text-sm">
           <thead><tr><th className="px-4 py-3 text-left">Fornecedor / NF</th><th className="px-4 py-3 text-left">Tomador</th><th className="px-6 py-3 text-right" style={{ minWidth: "11rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th><th className="px-4 py-3 text-left" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th><th className="px-4 py-3 text-left" style={{ minWidth: "12rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left" style={{ minWidth: "9rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th><th className="px-4 py-3 text-right" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((invoice) => <Fragment key={invoice.id}>
+            {invoices.map((invoice) => <Fragment key={invoice.id}>
               <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
                 <td className="px-4 py-3"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
                 <td className="px-4 py-3 text-slate-700">{invoice.tomadorNome ?? "-"}</td>
@@ -207,9 +238,16 @@ export default function DashboardPage() {
               </tr>
               {expandedId === invoice.id && <tr><td colSpan={8} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>CNPJ:</strong> {invoice.fornecedor.cnpj ?? "-"}</p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de compra:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
-            {!filtered.length && <tr><td colSpan={8} className="px-4 py-10"><div className="empty-state">Nenhuma nota encontrada para os filtros selecionados.</div></td></tr>}
+            {!invoices.length && <tr><td colSpan={8} className="px-4 py-10"><div className="empty-state">{isLoadingNotes ? "Carregando notas..." : "Nenhuma nota encontrada para os filtros selecionados."}</div></td></tr>}
           </tbody>
         </table>
+        <PaginationControls
+          pagination={pagination}
+          itemLabel="nota(s)"
+          loading={isLoadingNotes}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
+        />
       </div>
     </section>
 

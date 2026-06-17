@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout } from "@/components/ui-kit";
+import { AppLayout, PaginationControls } from "@/components/ui-kit";
+import type { PaginationMetadata } from "@/lib/pagination";
 
 type UserRole = "ADMIN" | "GESTOR" | "FORNECEDOR";
 type Me = { manager: { role: UserRole } };
@@ -16,6 +17,7 @@ type ManagerListItem = {
   ativo: boolean;
   suppliers: SupplierOption[];
 };
+type ManagersResponse = { items: ManagerListItem[]; pagination: PaginationMetadata };
 
 type ManagerForm = {
   nome: string;
@@ -51,7 +53,12 @@ export default function GestoresPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [managers, setManagers] = useState<ManagerListItem[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [pagination, setPagination] = useState<PaginationMetadata>({ page: 1, pageSize: 10, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isLoadingManagers, setIsLoadingManagers] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ManagerForm>(EMPTY_FORM);
@@ -73,28 +80,48 @@ export default function GestoresPage() {
       return;
     }
 
-    const [managersRes, suppliersRes] = await Promise.all([fetch("/api/gestores"), fetch("/api/fornecedores")]);
-    if (managersRes.ok) setManagers(await managersRes.json());
+    const suppliersRes = await fetch("/api/fornecedores");
     if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
   }, [router]);
+
+  const loadManagers = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize)
+    });
+
+    if (debouncedSearch) params.set("search", debouncedSearch);
+
+    setIsLoadingManagers(true);
+    try {
+      const managersRes = await fetch(`/api/gestores?${params.toString()}`);
+      if (managersRes.status === 401) return router.push("/login");
+      if (managersRes.status === 403) return router.push("/dashboard");
+      if (!managersRes.ok) {
+        setMessage("Não foi possível carregar os gestores.");
+        return;
+      }
+
+      const payload = await managersRes.json() as ManagersResponse;
+      setManagers(payload.items);
+      setPagination(payload.pagination);
+    } finally {
+      setIsLoadingManagers(false);
+    }
+  }, [debouncedSearch, page, pageSize, router]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const filteredManagers = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return managers;
+  useEffect(() => {
+    if (me?.manager.role === "ADMIN") loadManagers();
+  }, [loadManagers, me?.manager.role]);
 
-    return managers.filter((manager) => {
-      return (
-        manager.nome.toLowerCase().includes(term) ||
-        manager.email.toLowerCase().includes(term) ||
-        roleLabels[manager.role].toLowerCase().includes(term) ||
-        manager.suppliers.some((supplier) => supplier.nome.toLowerCase().includes(term))
-      );
-    });
-  }, [managers, search]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
   function startCreate() {
     setEditingManagerId(null);
@@ -157,8 +184,10 @@ export default function GestoresPage() {
     setShowForm(false);
     setEditingManagerId(null);
     setForm(EMPTY_FORM);
+    if (!editingManagerId) setPage(1);
     setMessage(editingManagerId ? "Gestor atualizado com sucesso." : "Gestor cadastrado com sucesso.");
     await loadData();
+    await loadManagers();
   }
 
   if (!me || me.manager.role !== "ADMIN") return null;
@@ -176,18 +205,21 @@ export default function GestoresPage() {
             <h2 className="text-lg font-semibold">Base de gestores</h2>
             <p className="muted small">Use esta tela para manter usuários e seus fornecedores em um único lugar.</p>
           </div>
-          <button type="button" className="btn-primary" onClick={startCreate}>
-            Adicionar gestor
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge badge-slate">{isLoadingManagers ? "Carregando..." : `${pagination.total} gestor(es)`}</span>
+            <button type="button" className="btn-primary" onClick={startCreate}>
+              Adicionar gestor
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-2 md:grid-cols-[1fr_auto]">
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar por gestor, e-mail, perfil ou fornecedor"
           />
-          <button type="button" className="btn-secondary" onClick={() => setSearch("")}>
+          <button type="button" className="btn-secondary" onClick={() => { setSearch(""); setPage(1); }}>
             Limpar busca
           </button>
         </div>
@@ -204,7 +236,7 @@ export default function GestoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredManagers.map((manager) => (
+              {managers.map((manager) => (
                 <tr key={manager.id}>
                   <td className="px-4 py-3">
                     <strong className="block text-slate-800">{manager.nome}</strong>
@@ -226,15 +258,22 @@ export default function GestoresPage() {
                   </td>
                 </tr>
               ))}
-              {!filteredManagers.length && (
+              {!managers.length && (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
-                    Nenhum gestor encontrado para a busca informada.
+                    {isLoadingManagers ? "Carregando gestores..." : "Nenhum gestor encontrado para a busca informada."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          <PaginationControls
+            pagination={pagination}
+            itemLabel="gestor(es)"
+            loading={isLoadingManagers}
+            onPageChange={setPage}
+            onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
+          />
         </div>
       </section>
 
