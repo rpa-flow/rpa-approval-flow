@@ -77,12 +77,14 @@ export default function DashboardPage() {
   const [updatedTo, setUpdatedTo] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
+  const [isApproving, setIsApproving] = useState(false);
   const router = useRouter();
 
   const loadMe = useCallback(async () => {
@@ -108,6 +110,7 @@ export default function DashboardPage() {
       const notesRes = await fetch(`/api/notas/minhas?${params.toString()}`);
       if (notesRes.status === 401) return router.push("/login");
       if (!notesRes.ok) {
+        setMessageType("error");
         setMessage("Não foi possível carregar as notas.");
         return;
       }
@@ -141,21 +144,53 @@ export default function DashboardPage() {
   }, [menuState]);
 
   async function atualizarNota(id: string, payload: Record<string, unknown>) {
-    const res = await fetch(`/api/notas/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     setMenuState(null);
-    if (!res.ok) return setMessage("Não foi possível concluir a ação na nota.");
-    setMessage("Ação registrada com sucesso.");
-    await loadData();
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/notas/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        setMessageType("error");
+        setMessage(error?.error ?? "Não foi possível concluir a ação na nota.");
+        return false;
+      }
+
+      setMessageType("success");
+      setMessage("Ação registrada com sucesso.");
+      await loadData();
+      return true;
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor. Recarregue a página e tente novamente.");
+      return false;
+    }
   }
 
+  function abrirModalAprovacao(invoice: Invoice) {
+    const nextDay = new Date();
+    nextDay.setDate(nextDay.getDate() + 1);
+    setPaymentDate(toLocalDateInputValue(nextDay));
+    setPurchaseOrder(invoice.ordemCompra ?? "");
+    setApproveModal(invoice);
+    setMenuState(null);
+  }
+
+  function handleMenuPointerDown(event: React.PointerEvent<HTMLButtonElement>, action: () => void) {
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  }
 
   async function aprovarComAvaliacao() {
     if (!approveModal || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
-      setMessage("Preencha a avaliação completa para aprovar a nota.");
+      setMessageType("error");
+      setMessage("Preencha a pontuação, o campo Qualifica e a classificação de risco para aprovar a nota.");
       return;
     }
 
-    await atualizarNota(approveModal.id, {
+    setIsApproving(true);
+    const approved = await atualizarNota(approveModal.id, {
       status: "APROVADO",
       dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
       ordemCompra: purchaseOrder.trim() || null,
@@ -166,6 +201,9 @@ export default function DashboardPage() {
         qualifica: evaluation.qualifica
       }
     });
+    setIsApproving(false);
+
+    if (!approved) return;
 
     setApproveModal(null);
     setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
@@ -174,14 +212,25 @@ export default function DashboardPage() {
   }
 
   async function verHistorico(invoice: Invoice) {
-    const res = await fetch(`/api/notas/${invoice.id}/historico`);
-    if (!res.ok) return setMessage("Não foi possível carregar o histórico da nota.");
-    setHistoryModal({ invoice, events: await res.json() });
     setMenuState(null);
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}/historico`);
+      if (!res.ok) {
+        setMessageType("error");
+        setMessage("Não foi possível carregar o histórico da nota.");
+        return;
+      }
+      setHistoryModal({ invoice, events: await res.json() });
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor para carregar o histórico.");
+    }
   }
 
   return <AppLayout onClick={() => setMenuState(null)}>
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
+
+    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role="status">{message}</p>}
 
     <section className="card mt-4 space-y-5" onClick={(e) => e.stopPropagation()}>
       <div className="section-header">
@@ -253,12 +302,12 @@ export default function DashboardPage() {
 
     {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
     {menuState && <div className="fixed z-50 w-[calc(100vw-1rem)] max-w-60 rounded-md border border-border bg-surface-container-lowest p-2 shadow-elevated" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-      {['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onClick={() => { const nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1); setPaymentDate(toLocalDateInputValue(nextDay)); setPurchaseOrder(menuState.invoice.ordemCompra ?? ""); setApproveModal(menuState.invoice); setMenuState(null); }}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
-      {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onClick={() => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); }}>⛔ Reprovar</button>}
-      {menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onClick={() => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); }}>↩️ Revogar aprovação</button>}
-      <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={() => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); }}>🔎 Ver detalhes</button>
-      <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={() => { setExpandedId(menuState.invoice.id); setMenuState(null); }}>▾ Expandir resumo</button>
-      <button className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={() => verHistorico(menuState.invoice)}>🕒 Ver histórico</button>
+      {['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalAprovacao(menuState.invoice))}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
+      {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; void atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); })}>⛔ Reprovar</button>}
+      {menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); })}>↩️ Revogar aprovação</button>}
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); })}>🔎 Ver detalhes</button>
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { setExpandedId(menuState.invoice.id); setMenuState(null); })}>▾ Expandir resumo</button>
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => void verHistorico(menuState.invoice))}>🕒 Ver histórico</button>
     </div>}
 
     {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setApproveModal(null)} />}
@@ -269,7 +318,7 @@ export default function DashboardPage() {
         <div className="grid gap-3 sm:grid-cols-3"><label>Qualifica?<select value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></label><label>Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label>Data de pagamento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label></div>
         <label>Ordem de compra <span className="text-xs font-normal text-slate-500">(opcional)</span><input value={purchaseOrder} onChange={(event) => setPurchaseOrder(event.target.value)} maxLength={120} placeholder="Informe a ordem de compra, se houver" /></label>
       </div>
-      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao}>Confirmar aprovação</button></div>
+      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
     </section>}
 
     {historyModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setHistoryModal(null)} />}
@@ -277,6 +326,5 @@ export default function DashboardPage() {
       <div className="section-header"><div><h3 id="history-modal-title" className="section-title">Histórico da nota {historyModal.invoice.numeroNota}</h3><p className="section-description">Linha do tempo de interações e auditoria.</p></div><button type="button" className="btn-secondary" onClick={() => setHistoryModal(null)}>Fechar</button></div>
       <div className="space-y-3 border-l-2 border-border pl-4">{historyModal.events.map((event) => <article key={event.id} className="rounded-md border border-border bg-surface-container-low p-4"><p className="text-xs font-bold uppercase text-slate-500">{event.actionType}</p><p className="mt-1 text-sm font-semibold text-slate-900">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {new Date(event.createdAt).toLocaleString("pt-BR")}</p>{event.reason && <p className="mt-2 text-xs font-semibold text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="mt-1 text-xs text-slate-700">{event.comment}</p>}</article>)}</div>
     </section>}
-    {message && <p className="message" role="status">{message}</p>}
   </AppLayout>;
 }

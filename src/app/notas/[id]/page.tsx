@@ -106,6 +106,7 @@ export default function NotaDetalhePage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
@@ -133,12 +134,14 @@ export default function NotaDetalhePage() {
     }
 
     if (invoiceRes.status === 403 || historyRes.status === 403) {
+      setMessageType("error");
       setMessage("Você não tem acesso a esta nota fiscal.");
       setLoading(false);
       return;
     }
 
     if (!invoiceRes.ok) {
+      setMessageType("error");
       setMessage("Nota fiscal não encontrada.");
       setLoading(false);
       return;
@@ -164,37 +167,49 @@ export default function NotaDetalhePage() {
 
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
-      setMessage("Preencha a avaliação completa para aprovar a nota.");
+      setMessageType("error");
+      setMessage("Preencha a pontuação, o campo Qualifica e a classificação de risco para aprovar a nota.");
       return;
     }
 
     setIsApproving(true);
-    const res = await fetch(`/api/notas/${invoice.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "APROVADO",
-        dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
-        ordemCompra: purchaseOrder.trim() || null,
-        serviceEvaluation: {
-          rating: evaluation.rating,
-          comment: "Qualificação registrada",
-          riskLevel: evaluation.riskLevel,
-          qualifica: evaluation.qualifica
-        }
-      })
-    });
-    setIsApproving(false);
+    setMessage("");
 
-    if (!res.ok) {
-      setMessage("Não foi possível aprovar a nota. Confira a avaliação obrigatória e tente novamente.");
-      return;
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "APROVADO",
+          dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
+          ordemCompra: purchaseOrder.trim() || null,
+          serviceEvaluation: {
+            rating: evaluation.rating,
+            comment: "Qualificação registrada",
+            riskLevel: evaluation.riskLevel,
+            qualifica: evaluation.qualifica
+          }
+        })
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        setMessageType("error");
+        setMessage(error?.error ?? "Não foi possível aprovar a nota. Confira a avaliação obrigatória e tente novamente.");
+        return;
+      }
+
+      setMessageType("success");
+      setMessage("Nota aprovada com sucesso.");
+      setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+      setPurchaseOrder("");
+      await loadData();
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor para aprovar a nota. Recarregue a página e tente novamente.");
+    } finally {
+      setIsApproving(false);
     }
-
-    setMessage("Nota aprovada com sucesso.");
-    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
-    setPurchaseOrder("");
-    await loadData();
   }
 
   async function alterarStatusAprovado() {
@@ -202,30 +217,41 @@ export default function NotaDetalhePage() {
 
     const reason = statusChange.reason.trim();
     if (!reason) {
+      setMessageType("error");
       setMessage("Informe o motivo para alterar ou cancelar uma aprovação.");
       return;
     }
 
     setIsChangingStatus(true);
-    const res = await fetch(`/api/notas/${invoice.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: statusChange.status,
-        reason
-      })
-    });
-    setIsChangingStatus(false);
+    setMessage("");
 
-    if (!res.ok) {
-      const error = await res.json().catch(() => null);
-      setMessage(error?.error ?? "Não foi possível alterar o status da nota aprovada.");
-      return;
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: statusChange.status,
+          reason
+        })
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        setMessageType("error");
+        setMessage(error?.error ?? "Não foi possível alterar o status da nota aprovada.");
+        return;
+      }
+
+      setMessageType("success");
+      setMessage(statusChange.status === "AGUARDANDO_APROVACAO" ? "Aprovação cancelada com sucesso." : "Status da nota aprovada alterado com sucesso.");
+      setStatusChange({ status: "AGUARDANDO_APROVACAO", reason: "" });
+      await loadData();
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor para alterar o status da nota. Recarregue a página e tente novamente.");
+    } finally {
+      setIsChangingStatus(false);
     }
-
-    setMessage(statusChange.status === "AGUARDANDO_APROVACAO" ? "Aprovação cancelada com sucesso." : "Status da nota aprovada alterado com sucesso.");
-    setStatusChange({ status: "AGUARDANDO_APROVACAO", reason: "" });
-    await loadData();
   }
 
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
@@ -233,6 +259,8 @@ export default function NotaDetalhePage() {
 
   return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
+
+    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role="status">{message}</p>}
 
     {loading && <section className="card mt-4"><p className="section-description">Carregando nota fiscal...</p></section>}
 
@@ -329,6 +357,5 @@ export default function NotaDetalhePage() {
       </aside>
     </div>}
 
-    {message && <p className="message" role="status">{message}</p>}
   </AppLayout>;
 }
