@@ -29,6 +29,7 @@
   --danger: #ba1a1a;
   --danger-soft: #ffdad6;
   --focus: #2b3a7e;
+  --app-sidebar-width: 16rem;
 }
 
 * { box-sizing: border-box; }
@@ -60,6 +61,17 @@ button:disabled { cursor: not-allowed; }
 
 .container { width: min(100% - clamp(1rem, 4vw, 2rem), 1200px); margin: 0 auto; padding: clamp(0.85rem, 2vw, 1.5rem) 0 clamp(1.5rem, 4vw, 2.5rem); }
 .container-wide { width: min(100% - clamp(1rem, 4vw, 2rem), 1400px); max-width: 1400px; }
+.app-layout { min-height: 100vh; }
+
+@media (min-width: 1024px) {
+  .app-layout {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: clamp(0.85rem, 2vw, 1.25rem) clamp(1rem, 2vw, 1.5rem) clamp(1.5rem, 4vw, 2.5rem);
+    padding-left: calc(var(--app-sidebar-width, 16rem) + clamp(1rem, 2vw, 1.25rem));
+  }
+}
 
 .card {
   background: var(--surface-container-lowest);

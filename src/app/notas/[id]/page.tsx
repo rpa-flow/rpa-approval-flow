@@ -232,7 +232,7 @@ export default function NotaDetalhePage() {
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
 
   return <AppLayout>
-    <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} action={<button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>} />
+    <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
     {loading && <section className="card mt-4"><p className="section-description">Carregando nota fiscal...</p></section>}
 
@@ -244,7 +244,10 @@ export default function NotaDetalhePage() {
             <h2 className="section-title">NF {invoice.numeroNota}</h2>
             <p className="section-description">{invoice.fornecedor.nome} • código identificador {invoice.codigoIdentificador}</p>
           </div>
-          <span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>
+            <span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
