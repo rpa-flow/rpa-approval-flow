@@ -4,6 +4,7 @@ import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
+import { parseNFSeXml } from "@/lib/nfse-parser";
 
 type Params = {
   params: {
@@ -21,6 +22,16 @@ function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(inv
   if (includeXml) return invoice;
   const { xmlOriginal, ...rest } = invoice;
   return rest;
+}
+
+function getServiceDescriptionFromXml(invoice: { xmlOriginal?: string | null; nbsDescricao?: string | null }) {
+  if (!invoice.xmlOriginal) return invoice.nbsDescricao ?? null;
+
+  try {
+    return parseNFSeXml(invoice.xmlOriginal).descricaoServico ?? invoice.nbsDescricao ?? null;
+  } catch {
+    return invoice.nbsDescricao ?? null;
+  }
 }
 
 async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: string | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
@@ -58,7 +69,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
-  return NextResponse.json(serializeInvoiceResponse(invoice, includeXml));
+  return NextResponse.json({
+    ...serializeInvoiceResponse(invoice, includeXml),
+    descricaoServico: getServiceDescriptionFromXml(invoice)
+  });
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {

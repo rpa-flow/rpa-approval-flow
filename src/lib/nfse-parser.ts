@@ -11,6 +11,7 @@ export type NormalizedInvoiceDto = {
   itemTributacaoNac?: string;
   itemTributacaoMun?: string;
   nbsDescricao?: string;
+  descricaoServico?: string;
   dataProcessamento?: string;
   dataEmissao?: string;
   dataCompetencia?: string;
@@ -31,6 +32,32 @@ export type NormalizedInvoiceDto = {
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function collectPathValues(value: unknown, path: string[]): unknown[] {
+  if (value === null || value === undefined) return [];
+  if (!path.length) return [value];
+  if (Array.isArray(value)) return value.flatMap((item) => collectPathValues(item, path));
+  if (typeof value !== "object") return [];
+
+  const [current, ...rest] = path;
+  return collectPathValues((value as Record<string, unknown>)[current], rest);
+}
+
+function textByPath(value: unknown, path: string[]) {
+  const values = collectPathValues(value, path)
+    .map(text)
+    .filter((item): item is string => Boolean(item));
+
+  return values.length ? values.join(" | ") : undefined;
+}
+
+function firstTextByPath(value: unknown, paths: string[][]) {
+  for (const path of paths) {
+    const parsed = textByPath(value, path);
+    if (parsed) return parsed;
+  }
+  return undefined;
 }
 
 function decimal(value: unknown): string | undefined {
@@ -127,6 +154,14 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
   const codigoIdentificador = numericId;
   const extras: Record<string, string> = {};
   flattenXmlFields(doc, "", extras);
+  const descricaoServico = firstTextByPath(infNfse, [
+    ["DPS", "infDPS", "serv", "cServ", "xDescServ"],
+    ["DPS", "infDPS", "servico", "descricao"],
+    ["DPS", "infDPS", "servico", "discriminacao"],
+    ["DPS", "infDPS", "itens", "descricao"],
+    ["xDescServ"],
+    ["xServ"]
+  ]);
 
   const knownPaths = [
     "NFSe.infNFSe.Id",
@@ -138,10 +173,15 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
     "NFSe.infNFSe.xTribNac",
     "NFSe.infNFSe.xTribMun",
     "NFSe.infNFSe.xNBS",
+    "NFSe.infNFSe.xDescServ",
+    "NFSe.infNFSe.xServ",
     "NFSe.infNFSe.dhProc",
     "NFSe.infNFSe.DPS.infDPS.serie",
     "NFSe.infNFSe.DPS.infDPS.dhEmi",
     "NFSe.infNFSe.DPS.infDPS.dCompet",
+    "NFSe.infNFSe.DPS.infDPS.serv.cServ.xDescServ",
+    "NFSe.infNFSe.DPS.infDPS.servico.descricao",
+    "NFSe.infNFSe.DPS.infDPS.servico.discriminacao",
     "NFSe.infNFSe.emit.CNPJ",
     "NFSe.infNFSe.emit.xNome",
     "NFSe.infNFSe.emit.email",
@@ -173,6 +213,7 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
     itemTributacaoNac: text(infNfse.xTribNac),
     itemTributacaoMun: text(infNfse.xTribMun),
     nbsDescricao: text(infNfse.xNBS),
+    descricaoServico,
     dataProcessamento: text(infNfse.dhProc),
     dataEmissao: text(dps?.dhEmi),
     dataCompetencia: text(dps?.dCompet),

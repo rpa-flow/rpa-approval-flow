@@ -36,6 +36,7 @@ type Invoice = {
   itemTributacaoNac?: string | null;
   itemTributacaoMun?: string | null;
   nbsDescricao?: string | null;
+  descricaoServico?: string | null;
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
   observacaoValidacao?: string | null;
@@ -87,6 +88,13 @@ function DetailItem({ label, value }: { label: string; value?: string | number |
   return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
     <p className="text-xs font-bold uppercase text-muted">{label}</p>
     <p className="mt-1 text-sm font-semibold text-text">{value ?? "-"}</p>
+  </div>;
+}
+
+function DetailTextItem({ label, value }: { label: string; value?: string | null }) {
+  return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
+    <p className="text-xs font-bold uppercase text-muted">{label}</p>
+    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-text">{value || "-"}</p>
   </div>;
 }
 
@@ -251,6 +259,8 @@ export default function NotaDetalhePage() {
           <DetailItem label="E-mail tomador" value={invoice.tomadorEmail} />
         </div>
 
+        <DetailTextItem label="Descrição do serviço" value={invoice.descricaoServico} />
+
         <div className="grid gap-3 md:grid-cols-2">
           <DetailItem label="Local de emissão" value={invoice.localEmissao} />
           <DetailItem label="Local de prestação" value={invoice.localPrestacao} />
@@ -270,7 +280,7 @@ export default function NotaDetalhePage() {
         <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Responsável validação" value={invoice.responsavelValidacao} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
-          <DetailItem label="Pagamento previsto" value={formatDate(invoice.dataPagamento)} />
+          <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />
           <DetailItem label="Ordem de compra" value={invoice.ordemCompra} />
           <DetailItem label="Código Delphi" value={invoice.codigoDelphi} />
           <DetailItem label="OC contrato" value={invoice.ocContrato} />
@@ -301,7 +311,7 @@ export default function NotaDetalhePage() {
           <div><p className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => <button key={rate} type="button" className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>)}</div></div>
           <label>Qualifica?<select value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></label>
           <label>Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
-          <label>Data de pagamento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+          <label>Data de vencimento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
           <label>Ordem de compra <span className="text-xs font-normal text-slate-500">(opcional)</span><input value={purchaseOrder} onChange={(event) => setPurchaseOrder(event.target.value)} maxLength={120} placeholder="Informe a ordem de compra, se houver" /></label>
           <button type="button" className="btn-primary w-full" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Aprovar nota"}</button>
         </section>}

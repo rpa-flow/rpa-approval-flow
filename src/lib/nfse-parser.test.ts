@@ -12,6 +12,13 @@ test("known fields are mapped", () => {
   assert.equal(parsed.valorServico, "100.50");
 });
 
+test("maps service description from DPS service code", () => {
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><serv><cServ><xDescServ>Servicos de manutencao industrial</xDescServ></cServ></serv></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+  assert.equal(parsed.descricaoServico, "Servicos de manutencao industrial");
+  assert.equal(parsed.extras["NFSe.infNFSe.DPS.infDPS.serv.cServ.xDescServ"], undefined);
+});
+
 test("unknown fields go to extras", () => {
   const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><campoDesconhecido>xyz</campoDesconhecido><itens><descricao>A</descricao></itens><itens><descricao>B</descricao></itens></infDPS></DPS></infNFSe></NFSe>`;
   const parsed = parseNFSeXml(xml);
