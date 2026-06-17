@@ -15,11 +15,11 @@ export function DataTable<T>({ columns, data, getRowKey, loading, emptyTitle = "
           <TableHeader>
             <TableRow>
               {columns.map((column) => <TableHead key={column.key} className={column.className}>{column.header}</TableHead>)}
-              {actions && <TableHead className="text-right">Ações</TableHead>}
+              {actions && <TableHead className="w-32 whitespace-nowrap text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row) => <TableRow key={getRowKey(row)}>{columns.map((column) => <TableCell key={column.key} className={column.className}>{column.cell(row)}</TableCell>)}{actions && <TableCell className="text-right">{actions(row)}</TableCell>}</TableRow>)}
+            {data.map((row) => <TableRow key={getRowKey(row)}>{columns.map((column) => <TableCell key={column.key} className={column.className}>{column.cell(row)}</TableCell>)}{actions && <TableCell className="whitespace-nowrap text-right">{actions(row)}</TableCell>}</TableRow>)}
           </TableBody>
         </Table>
       </div>
