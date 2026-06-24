@@ -5,6 +5,16 @@ import { prisma } from "@/lib/prisma";
 const COOKIE_NAME = "rpa_session";
 const SECRET = process.env.AUTH_SECRET ?? "dev-secret-change-me";
 
+export function createSecureToken() {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  return { token, tokenHash };
+}
+
+export function hashActivationToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 export function hashPassword(password: string) {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");

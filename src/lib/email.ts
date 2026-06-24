@@ -266,3 +266,35 @@ export async function sendApprovalRequestEmail(params: {
     html
   });
 }
+
+
+export async function sendAccountActivationEmail(params: {
+  recipient: string;
+  name: string;
+  activationUrl: string;
+  expiresAt: Date;
+}): Promise<EmailSendResult> {
+  const expiration = new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo"
+  }).format(params.expiresAt);
+
+  return sendMailWithGraph({
+    recipients: [params.recipient],
+    subject: "Ative sua conta no RPA Approval Flow",
+    text: [
+      `Olá, ${params.name}.`,
+      "Sua conta foi habilitada para acesso ao RPA Approval Flow.",
+      `Cadastre uma nova senha até ${expiration} pelo link: ${params.activationUrl}`,
+      "Se você não esperava este convite, ignore esta mensagem."
+    ].join("\n"),
+    html: [
+      `<p>Olá, <strong>${escapeHtml(params.name)}</strong>.</p>`,
+      "<p>Sua conta foi habilitada para acesso ao RPA Approval Flow.</p>",
+      `<p><a href="${params.activationUrl}">Cadastrar nova senha</a></p>`,
+      `<p>Este link expira em ${escapeHtml(expiration)}.</p>`,
+      "<p>Se você não esperava este convite, ignore esta mensagem.</p>"
+    ].join("")
+  });
+}

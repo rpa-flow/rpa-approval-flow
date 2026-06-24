@@ -64,6 +64,8 @@ export default function GestoresPage() {
   const [form, setForm] = useState<ManagerForm>(EMPTY_FORM);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [activatingManagerId, setActivatingManagerId] = useState<string | null>(null);
+  const [isSendingBulkActivation, setIsSendingBulkActivation] = useState(false);
   const router = useRouter();
 
   const loadData = useCallback(async () => {
@@ -153,6 +155,63 @@ export default function GestoresPage() {
     }));
   }
 
+  async function sendBulkActivation() {
+    setIsSendingBulkActivation(true);
+    setMessage("");
+
+    const res = await fetch("/api/gestores/ativacao", { method: "POST" });
+    setIsSendingBulkActivation(false);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível enviar as ativações.");
+      return;
+    }
+
+    const payload = await res.json();
+    setMessage(`${payload.sent ?? 0} e-mail(s) de ativação enviados para usuários inativos.`);
+  }
+
+  async function sendActivation(manager: ManagerListItem) {
+    setActivatingManagerId(manager.id);
+    setMessage("");
+
+    const res = await fetch(`/api/gestores/${manager.id}/ativacao`, { method: "POST" });
+    setActivatingManagerId(null);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível enviar o e-mail de ativação.");
+      return;
+    }
+
+    setMessage(`E-mail de ativação enviado para ${manager.email}.`);
+  }
+
+  async function toggleManagerStatus(manager: ManagerListItem) {
+    setMessage("");
+    const res = await fetch(`/api/gestores/${manager.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: manager.nome,
+        email: manager.email,
+        role: manager.role,
+        ativo: !manager.ativo,
+        supplierIds: manager.suppliers.map((supplier) => supplier.id)
+      })
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível alterar o status do usuário.");
+      return;
+    }
+
+    setMessage(manager.ativo ? "Usuário desativado com sucesso." : "Usuário ativado com sucesso.");
+    await loadManagers();
+  }
+
   async function saveManager(e: React.FormEvent) {
     e.preventDefault();
     setIsSaving(true);
@@ -207,6 +266,9 @@ export default function GestoresPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge badge-slate">{isLoadingManagers ? "Carregando..." : `${pagination.total} gestor(es)`}</span>
+            <button type="button" className="btn-secondary" disabled={isSendingBulkActivation} onClick={sendBulkActivation}>
+              {isSendingBulkActivation ? "Enviando..." : "Enviar ativações"}
+            </button>
             <button type="button" className="btn-primary" onClick={startCreate}>
               Adicionar gestor
             </button>
@@ -252,9 +314,24 @@ export default function GestoresPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatSuppliers(manager.suppliers)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button type="button" className="btn-secondary" onClick={() => startEdit(manager)}>
-                      Editar vínculos
-                    </button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {!manager.ativo && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={activatingManagerId === manager.id}
+                          onClick={() => sendActivation(manager)}
+                        >
+                          {activatingManagerId === manager.id ? "Enviando..." : "Enviar ativação"}
+                        </button>
+                      )}
+                      <button type="button" className="btn-secondary" onClick={() => toggleManagerStatus(manager)}>
+                        {manager.ativo ? "Desativar" : "Ativar"}
+                      </button>
+                      <button type="button" className="btn-secondary" onClick={() => startEdit(manager)}>
+                        Editar vínculos
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
