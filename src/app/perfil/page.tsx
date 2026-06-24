@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout } from "@/components/ui-kit";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { AppLayout, FormField } from "@/components/ui-kit";
 
 export default function PerfilPage() {
   const [passwordForm, setPasswordForm] = useState({
@@ -50,44 +54,46 @@ export default function PerfilPage() {
         subtitle="Gerencie dados da sua conta."
       />
 
-      <section className="card">
-        <h2>Alterar minha senha</h2>
-        <p className="muted small">Atualize sua senha de acesso com segurança.</p>
-        <form onSubmit={alterarSenha} className="form-grid">
-          <label>
-            Senha atual
-            <input
-              required
-              type="password"
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
-            />
-          </label>
-          <label>
-            Nova senha
-            <input
-              required
-              minLength={6}
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
-            />
-          </label>
-          <label>
-            Confirmar nova senha
-            <input
-              required
-              minLength={6}
-              type="password"
-              value={passwordForm.confirmPassword}
-              onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
-            />
-          </label>
-          <button type="submit">Alterar senha</button>
-        </form>
+      <section className="profile-password-section">
+        <Card className="profile-password-card">
+          <CardHeader className="p-0 pb-5 text-center">
+            <CardTitle className="text-2xl">Alterar minha senha</CardTitle>
+            <CardDescription>Atualize sua senha de acesso com segurança.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <form onSubmit={alterarSenha} className="grid gap-4">
+              <FormField label="Senha atual">
+                <Input
+                  required
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                />
+              </FormField>
+              <FormField label="Nova senha" description="Use pelo menos 6 caracteres.">
+                <Input
+                  required
+                  minLength={6}
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                />
+              </FormField>
+              <FormField label="Confirmar nova senha">
+                <Input
+                  required
+                  minLength={6}
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                />
+              </FormField>
+              <Button type="submit" className="w-full">Alterar senha</Button>
+            </form>
+            {message && <Alert className="mt-4" role="status">{message}</Alert>}
+          </CardContent>
+        </Card>
       </section>
-
-      {message && <p className="message" role="status">{message}</p>}
     </AppLayout>
   );
 }
