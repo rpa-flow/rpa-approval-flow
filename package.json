@@ -14,7 +14,8 @@
     "prisma:add-user": "node prisma/seed-user.js",
     "vite:dev": "vite",
     "vite:build": "vite build",
-    "vite:preview": "vite preview"
+    "vite:preview": "vite preview",
+    "prisma:seed:preview": "node prisma/seed-preview.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
