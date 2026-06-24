@@ -46,7 +46,7 @@ function AtivarContaContent() {
   }
 
   return (
-    <main className="login-shell">
+    <main className="login-shell auth-centered-shell">
       <Card className="login-card">
         <CardHeader className="p-0 pb-5">
           <CardTitle className="text-2xl">Ativar conta</CardTitle>
@@ -76,7 +76,7 @@ function AtivarContaContent() {
 
 export default function AtivarContaPage() {
   return (
-    <Suspense fallback={<main className="login-shell"><Card className="login-card">Carregando...</Card></main>}>
+    <Suspense fallback={<main className="login-shell auth-centered-shell"><Card className="login-card">Carregando...</Card></main>}>
       <AtivarContaContent />
     </Suspense>
   );
