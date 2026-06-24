@@ -166,6 +166,11 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(6)
 });
 
+export const activateAccountSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(6)
+});
+
 
 export const supplierCategorySchema = z.object({
   nome: z.string().min(2),

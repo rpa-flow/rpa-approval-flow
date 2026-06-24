@@ -64,7 +64,12 @@ export default function GestoresPage() {
   const [form, setForm] = useState<ManagerForm>(EMPTY_FORM);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [activatingManagerId, setActivatingManagerId] = useState<string | null>(null);
+  const [isSendingBulkActivation, setIsSendingBulkActivation] = useState(false);
+  const [showEmailOptions, setShowEmailOptions] = useState(false);
+  const [selectedActivationManagerId, setSelectedActivationManagerId] = useState("");
   const router = useRouter();
+  const inactiveManagers = managers.filter((manager) => !manager.ativo);
 
   const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
@@ -153,6 +158,74 @@ export default function GestoresPage() {
     }));
   }
 
+  async function sendBulkActivation() {
+    setIsSendingBulkActivation(true);
+    setMessage("");
+
+    const res = await fetch("/api/gestores/ativacao", { method: "POST" });
+    setIsSendingBulkActivation(false);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível enviar as ativações.");
+      return;
+    }
+
+    const payload = await res.json();
+    setMessage(`${payload.sent ?? 0} e-mail(s) de ativação enviados para usuários inativos.`);
+  }
+
+  async function sendActivation(manager: ManagerListItem) {
+    setSelectedActivationManagerId(manager.id);
+    setActivatingManagerId(manager.id);
+    setMessage("");
+
+    const res = await fetch(`/api/gestores/${manager.id}/ativacao`, { method: "POST" });
+    setActivatingManagerId(null);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível enviar o e-mail de ativação.");
+      return;
+    }
+
+    setMessage(`E-mail de ativação enviado para ${manager.email}.`);
+  }
+
+  async function sendSelectedActivation() {
+    const manager = inactiveManagers.find((item) => item.id === selectedActivationManagerId);
+    if (!manager) {
+      setMessage("Selecione um usuário inativo para enviar o e-mail de ativação.");
+      return;
+    }
+
+    await sendActivation(manager);
+  }
+
+  async function toggleManagerStatus(manager: ManagerListItem) {
+    setMessage("");
+    const res = await fetch(`/api/gestores/${manager.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: manager.nome,
+        email: manager.email,
+        role: manager.role,
+        ativo: !manager.ativo,
+        supplierIds: manager.suppliers.map((supplier) => supplier.id)
+      })
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      setMessage(error?.error ?? "Não foi possível alterar o status do usuário.");
+      return;
+    }
+
+    setMessage(manager.ativo ? "Usuário desativado com sucesso." : "Usuário ativado com sucesso.");
+    await loadManagers();
+  }
+
   async function saveManager(e: React.FormEvent) {
     e.preventDefault();
     setIsSaving(true);
@@ -207,11 +280,62 @@ export default function GestoresPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge badge-slate">{isLoadingManagers ? "Carregando..." : `${pagination.total} gestor(es)`}</span>
+            <button type="button" className="btn-secondary" onClick={() => setShowEmailOptions((current) => !current)}>
+              Enviar e-mails
+            </button>
             <button type="button" className="btn-primary" onClick={startCreate}>
               Adicionar gestor
             </button>
           </div>
         </div>
+
+        {showEmailOptions && (
+          <div className="rounded-lg border border-border bg-surface-container-low p-4">
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Enviar e-mails de ativação</h3>
+              <p className="muted small">
+                Escolha se deseja enviar para um usuário inativo específico ou para todos os usuários inativos da base.
+              </p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-md border border-border bg-surface p-3">
+                <p className="mb-2 font-medium text-slate-800">Enviar um a um</p>
+                <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                  <select
+                    value={selectedActivationManagerId}
+                    onChange={(e) => setSelectedActivationManagerId(e.target.value)}
+                    disabled={!inactiveManagers.length}
+                  >
+                    <option value="">Selecione um usuário inativo</option>
+                    {inactiveManagers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.nome} · {manager.email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={!selectedActivationManagerId || activatingManagerId === selectedActivationManagerId}
+                    onClick={sendSelectedActivation}
+                  >
+                    {activatingManagerId === selectedActivationManagerId ? "Enviando..." : "Enviar e-mail"}
+                  </button>
+                </div>
+                {!inactiveManagers.length && <p className="muted small mt-2">Não há usuários inativos nesta página.</p>}
+              </div>
+              <div className="rounded-md border border-border bg-surface p-3">
+                <p className="mb-2 font-medium text-slate-800">Enviar para todos</p>
+                <p className="muted small mb-3">
+                  Dispara e-mails para todos os usuários inativos cadastrados, mesmo que não estejam visíveis na página atual.
+                </p>
+                <button type="button" className="btn-secondary" disabled={isSendingBulkActivation} onClick={sendBulkActivation}>
+                  {isSendingBulkActivation ? "Enviando..." : "Enviar para todos os inativos"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-2 md:grid-cols-[1fr_auto]">
           <input
@@ -252,9 +376,24 @@ export default function GestoresPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatSuppliers(manager.suppliers)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button type="button" className="btn-secondary" onClick={() => startEdit(manager)}>
-                      Editar vínculos
-                    </button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {!manager.ativo && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={activatingManagerId === manager.id}
+                          onClick={() => sendActivation(manager)}
+                        >
+                          {activatingManagerId === manager.id ? "Enviando..." : "Enviar e-mail"}
+                        </button>
+                      )}
+                      <button type="button" className="btn-secondary" onClick={() => toggleManagerStatus(manager)}>
+                        {manager.ativo ? "Desativar" : "Ativar"}
+                      </button>
+                      <button type="button" className="btn-secondary" onClick={() => startEdit(manager)}>
+                        Editar vínculos
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
