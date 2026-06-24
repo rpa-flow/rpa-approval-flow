@@ -66,11 +66,8 @@ export default function GestoresPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [activatingManagerId, setActivatingManagerId] = useState<string | null>(null);
   const [isSendingBulkActivation, setIsSendingBulkActivation] = useState(false);
-  const [showEmailOptions, setShowEmailOptions] = useState(false);
-  const [selectedActivationManagerId, setSelectedActivationManagerId] = useState("");
+  const [actionsMenu, setActionsMenu] = useState<{ manager: ManagerListItem; x: number; y: number } | null>(null);
   const router = useRouter();
-  const inactiveManagers = managers.filter((manager) => !manager.ativo);
-
   const loadData = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
     if (!meRes.ok) {
@@ -176,7 +173,7 @@ export default function GestoresPage() {
   }
 
   async function sendActivation(manager: ManagerListItem) {
-    setSelectedActivationManagerId(manager.id);
+    setActionsMenu(null);
     setActivatingManagerId(manager.id);
     setMessage("");
 
@@ -192,17 +189,8 @@ export default function GestoresPage() {
     setMessage(`E-mail de ativação enviado para ${manager.email}.`);
   }
 
-  async function sendSelectedActivation() {
-    const manager = inactiveManagers.find((item) => item.id === selectedActivationManagerId);
-    if (!manager) {
-      setMessage("Selecione um usuário inativo para enviar o e-mail de ativação.");
-      return;
-    }
-
-    await sendActivation(manager);
-  }
-
   async function toggleManagerStatus(manager: ManagerListItem) {
+    setActionsMenu(null);
     setMessage("");
     const res = await fetch(`/api/gestores/${manager.id}`, {
       method: "PATCH",
@@ -280,62 +268,14 @@ export default function GestoresPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge badge-slate">{isLoadingManagers ? "Carregando..." : `${pagination.total} gestor(es)`}</span>
-            <button type="button" className="btn-secondary" onClick={() => setShowEmailOptions((current) => !current)}>
-              Enviar e-mails
+            <button type="button" className="btn-secondary" disabled={isSendingBulkActivation} onClick={sendBulkActivation}>
+              {isSendingBulkActivation ? "Enviando..." : "Enviar e-mail para todos"}
             </button>
             <button type="button" className="btn-primary" onClick={startCreate}>
               Adicionar gestor
             </button>
           </div>
         </div>
-
-        {showEmailOptions && (
-          <div className="rounded-lg border border-border bg-surface-container-low p-4">
-            <div className="mb-3">
-              <h3 className="text-base font-semibold">Enviar e-mails de ativação</h3>
-              <p className="muted small">
-                Escolha se deseja enviar para um usuário inativo específico ou para todos os usuários inativos da base.
-              </p>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="rounded-md border border-border bg-surface p-3">
-                <p className="mb-2 font-medium text-slate-800">Enviar um a um</p>
-                <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-                  <select
-                    value={selectedActivationManagerId}
-                    onChange={(e) => setSelectedActivationManagerId(e.target.value)}
-                    disabled={!inactiveManagers.length}
-                  >
-                    <option value="">Selecione um usuário inativo</option>
-                    {inactiveManagers.map((manager) => (
-                      <option key={manager.id} value={manager.id}>
-                        {manager.nome} · {manager.email}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={!selectedActivationManagerId || activatingManagerId === selectedActivationManagerId}
-                    onClick={sendSelectedActivation}
-                  >
-                    {activatingManagerId === selectedActivationManagerId ? "Enviando..." : "Enviar e-mail"}
-                  </button>
-                </div>
-                {!inactiveManagers.length && <p className="muted small mt-2">Não há usuários inativos nesta página.</p>}
-              </div>
-              <div className="rounded-md border border-border bg-surface p-3">
-                <p className="mb-2 font-medium text-slate-800">Enviar para todos</p>
-                <p className="muted small mb-3">
-                  Dispara e-mails para todos os usuários inativos cadastrados, mesmo que não estejam visíveis na página atual.
-                </p>
-                <button type="button" className="btn-secondary" disabled={isSendingBulkActivation} onClick={sendBulkActivation}>
-                  {isSendingBulkActivation ? "Enviando..." : "Enviar para todos os inativos"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="grid gap-2 md:grid-cols-[1fr_auto]">
           <input
@@ -375,25 +315,21 @@ export default function GestoresPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatSuppliers(manager.suppliers)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {!manager.ativo && (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          disabled={activatingManagerId === manager.id}
-                          onClick={() => sendActivation(manager)}
-                        >
-                          {activatingManagerId === manager.id ? "Enviando..." : "Enviar e-mail"}
-                        </button>
-                      )}
-                      <button type="button" className="btn-secondary" onClick={() => toggleManagerStatus(manager)}>
-                        {manager.ativo ? "Desativar" : "Ativar"}
-                      </button>
-                      <button type="button" className="btn-secondary" onClick={() => startEdit(manager)}>
-                        Editar vínculos
-                      </button>
-                    </div>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      className="btn-secondary min-h-0 whitespace-nowrap px-3 py-1.5 text-sm"
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setActionsMenu({
+                          manager,
+                          x: Math.max(8, Math.min(rect.right - 208, window.innerWidth - 248)),
+                          y: Math.min(rect.bottom + 6, window.innerHeight - 220)
+                        });
+                      }}
+                    >
+                      Ações ▾
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -415,6 +351,50 @@ export default function GestoresPage() {
           />
         </div>
       </section>
+
+      {actionsMenu && (
+        <button
+          type="button"
+          aria-label="Fechar menu de ações"
+          className="fixed inset-0 z-40 cursor-default bg-transparent"
+          onClick={() => setActionsMenu(null)}
+        />
+      )}
+      {actionsMenu && (
+        <div
+          className="fixed z-50 w-[calc(100vw-1rem)] max-w-60 rounded-md border border-border bg-surface-container-lowest p-2 shadow-elevated"
+          style={{ left: actionsMenu.x, top: actionsMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {!actionsMenu.manager.ativo && (
+            <button
+              type="button"
+              className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50 disabled:opacity-50"
+              disabled={activatingManagerId === actionsMenu.manager.id}
+              onClick={() => sendActivation(actionsMenu.manager)}
+            >
+              ✉️ {activatingManagerId === actionsMenu.manager.id ? "Enviando..." : "Enviar e-mail"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50"
+            onClick={() => toggleManagerStatus(actionsMenu.manager)}
+          >
+            {actionsMenu.manager.ativo ? "⛔ Desativar" : "✅ Ativar"}
+          </button>
+          <button
+            type="button"
+            className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50"
+            onClick={() => {
+              startEdit(actionsMenu.manager);
+              setActionsMenu(null);
+            }}
+          >
+            🔗 Editar vínculos
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <section className="card mt-4">
