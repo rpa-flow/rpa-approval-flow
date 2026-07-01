@@ -167,7 +167,7 @@ export async function sendInvoiceCreatedEmail(params: {
   managers: Array<{ email: string }>;
   invoiceId?: string;
 }) {
-  const recipients = ["lipemiranda159@gmail.com"];//params.managers.map((m) => m.email).filter(Boolean);
+  const recipients = params.managers.map((m) => m.email).filter(Boolean);
 
   if (!recipients.length) return;
 
@@ -260,7 +260,7 @@ export async function sendApprovalRequestEmail(params: {
     .join("");
 
   await sendMailWithGraph({
-    recipients: ["lipemiranda159@gmail.com"],//params.recipients,
+    recipients: params.recipients,
     subject,
     text: `${text}\n\nAbra a nota para ver os detalhes, consultar o histórico e aprovar: ${approvalUrl}`,
     html
