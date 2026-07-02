@@ -301,7 +301,8 @@ export default function NotaDetalhePage() {
           <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
+          <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
           <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
           <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
           <DetailItem label="Total retido" value={formatCurrency(invoice.valorTotalRetido)} />
