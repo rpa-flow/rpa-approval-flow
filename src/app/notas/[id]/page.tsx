@@ -70,7 +70,7 @@ function formatCurrency(value?: number | null) {
 }
 
 function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleDateString("pt-BR") : "-";
+  return value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "-";
 }
 
 function formatDateTime(value?: string | null) {

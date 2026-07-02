@@ -9,7 +9,14 @@ test("known fields are mapped", () => {
   const parsed = parseNFSeXml(xml);
   assert.equal(parsed.numeroNota, "10");
   assert.equal(parsed.serie, "70000");
+  assert.equal(parsed.dataCompetencia, "2026-01-31");
   assert.equal(parsed.valorServico, "100.50");
+});
+
+test("maps competence date from DPS dCompet without changing the day", () => {
+  const xml = `<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infNFSe Id="${baseId}"><nNFSe>810</nNFSe><DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infDPS><dhEmi>2026-06-01T08:57:40-03:00</dhEmi><dCompet>2026-06-01</dCompet></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+  assert.equal(parsed.dataCompetencia, "2026-06-01");
 });
 
 test("maps service description from DPS service code", () => {
