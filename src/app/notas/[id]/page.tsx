@@ -71,7 +71,7 @@ function formatCurrency(value?: number | null) {
 }
 
 function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleDateString("pt-BR") : "-";
+  return value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "-";
 }
 
 function formatDateTime(value?: string | null) {
@@ -302,7 +302,8 @@ export default function NotaDetalhePage() {
           <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
+          <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
           <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
           <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
           <DetailItem label="Total retido" value={formatCurrency(invoice.valorTotalRetido)} />
