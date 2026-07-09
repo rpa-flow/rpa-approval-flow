@@ -15,6 +15,10 @@ export function hashActivationToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+export function hashPasswordResetToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 export function hashPassword(password: string) {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");

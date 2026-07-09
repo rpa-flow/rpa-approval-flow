@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MinasLogoIcon } from "@/components/brand/minas-logo-icon";
 import { Alert } from "@/components/ui/alert";
@@ -106,6 +107,11 @@ export default function LoginPage() {
               {loading ? "Entrando..." : "Acessar sistema"}
             </Button>
           </form>
+          <div className="mt-3 text-center text-sm">
+            <Link className="font-semibold text-brand hover:underline" href="/recuperar-senha">
+              Esqueci minha senha
+            </Link>
+          </div>
           {erro && <Alert className="mt-4" variant="destructive">{erro}</Alert>}
         </CardContent>
       </Card>
