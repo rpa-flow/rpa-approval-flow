@@ -97,11 +97,29 @@ export async function GET(request: NextRequest) {
     take: pageSize
   });
 
+  const companyCnpjs = Array.from(new Set(invoices.map((invoice) => invoice.tomadorCnpj).filter((cnpj): cnpj is string => Boolean(cnpj))));
+  const companies = companyCnpjs.length
+    ? await prisma.company.findMany({
+      where: { cnpj: { in: companyCnpjs }, active: true },
+      select: { cnpj: true, displayName: true }
+    })
+    : [];
+  const companiesByCnpj = new Map(companies.map((company) => [company.cnpj, company]));
+
   return NextResponse.json(
     {
       items: invoices.map((invoice) => {
-        if (includeXml) return invoice;
-        const { xmlOriginal, ...rest } = invoice;
+        const company = invoice.tomadorCnpj ? companiesByCnpj.get(invoice.tomadorCnpj) : undefined;
+        const invoiceWithCompany = {
+          ...invoice,
+          empresa: {
+            cnpj: invoice.tomadorCnpj,
+            nomeExibicao: company?.displayName ?? null
+          }
+        };
+
+        if (includeXml) return invoiceWithCompany;
+        const { xmlOriginal, ...rest } = invoiceWithCompany;
         return rest;
       }),
       pagination,
