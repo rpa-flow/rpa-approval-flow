@@ -46,6 +46,18 @@ enum SupplierRiskLevel {
   ALTO
 }
 
+
+model Company {
+  id          String   @id @default(cuid())
+  cnpj        String   @unique
+  displayName String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+}
+
 model Supplier {
   id                 String                       @id @default(cuid())
   nome               String

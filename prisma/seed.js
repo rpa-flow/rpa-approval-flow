@@ -10,6 +10,28 @@ function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 
+
+const initialCompanies = [
+  { cnpj: "48671252000179", displayName: "MM GROUP" },
+  { cnpj: "31096483000284", displayName: "Sabinópolis" },
+  { cnpj: "31096483000101", displayName: "Matriz" },
+  { cnpj: "49229203000143", displayName: "Elijah" },
+  { cnpj: "31096483000799", displayName: "Barão de Cocais" },
+  { cnpj: "31096483000608", displayName: "Sarzedo" },
+  { cnpj: "43003372000184", displayName: "Empresa não identificada" },
+  { cnpj: "31096483000365", displayName: "Ouro Branco" }
+];
+
+async function seedCompanies() {
+  for (const company of initialCompanies) {
+    await prisma.company.upsert({
+      where: { cnpj: company.cnpj },
+      update: { displayName: company.displayName, active: true },
+      create: { ...company, active: true }
+    });
+  }
+}
+
 async function upsertInvoice(data) {
   await prisma.invoice.upsert({
     where: { codigoIdentificador: data.codigoIdentificador },
@@ -19,6 +41,8 @@ async function upsertInvoice(data) {
 }
 
 async function main() {
+  await seedCompanies();
+
   const supplierA = await prisma.supplier.upsert({
     where: { cnpj: "00000000000000" },
     update: { nome: "Fornecedor de Teste A" },

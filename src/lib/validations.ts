@@ -85,6 +85,12 @@ export const updateInvoiceSchema = z
     message: "Informe ao menos um campo para atualizar."
   });
 
+export const companySchema = z.object({
+  cnpj: z.string().trim().regex(/^\d{14}$/, "Informe um CNPJ com 14 dígitos, somente números."),
+  displayName: z.string().trim().min(2).max(120),
+  active: z.boolean().optional()
+});
+
 export const supplierSchema = z.object({
   nome: z.string().min(2),
   cnpj: z.string().regex(/^\d{14}$/).optional(),
