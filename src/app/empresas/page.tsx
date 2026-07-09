@@ -251,7 +251,7 @@ export default function EmpresasPage() {
           emptyDescription="Ajuste os filtros ou cadastre uma empresa para exibir nomes amigáveis nas notas."
           columns={[
             { key: "displayName", header: "Empresa", cell: (company) => <span className="font-semibold text-slate-900">{company.displayName}</span> },
-            { key: "cnpj", header: "CNPJ", cell: (company) => <span className="font-mono text-slate-700">{formatCnpj(company.cnpj)}</span> },
+            { key: "cnpj", header: "CNPJ", cell: (company) => <span className="whitespace-nowrap font-mono text-slate-700">{formatCnpj(company.cnpj)}</span> },
             { key: "status", header: "Status", cell: (company) => <StatusBadge status={company.active ? "ATIVO" : "INATIVO"} label={company.active ? "Ativa" : "Inativa"} /> },
             { key: "updatedAt", header: "Atualização", cell: (company) => <span className="text-slate-600">{new Date(company.updatedAt).toLocaleString("pt-BR")}</span> }
           ]}
