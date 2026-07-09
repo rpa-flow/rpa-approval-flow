@@ -298,3 +298,34 @@ export async function sendAccountActivationEmail(params: {
     ].join("")
   });
 }
+
+export async function sendPasswordResetEmail(params: {
+  recipient: string;
+  name: string;
+  resetUrl: string;
+  expiresAt: Date;
+}): Promise<EmailSendResult> {
+  const expiration = new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo"
+  }).format(params.expiresAt);
+
+  return sendMailWithGraph({
+    recipients: [params.recipient],
+    subject: "Recuperação de senha do RPA Approval Flow",
+    text: [
+      `Olá, ${params.name}.`,
+      "Recebemos uma solicitação para redefinir sua senha no RPA Approval Flow.",
+      `Crie uma nova senha até ${expiration} pelo link: ${params.resetUrl}`,
+      "Se você não solicitou esta alteração, ignore esta mensagem."
+    ].join("\n"),
+    html: [
+      `<p>Olá, <strong>${escapeHtml(params.name)}</strong>.</p>`,
+      "<p>Recebemos uma solicitação para redefinir sua senha no RPA Approval Flow.</p>",
+      `<p><a href="${params.resetUrl}">Criar nova senha</a></p>`,
+      `<p>Este link expira em ${escapeHtml(expiration)}.</p>`,
+      "<p>Se você não solicitou esta alteração, ignore esta mensagem.</p>"
+    ].join("")
+  });
+}

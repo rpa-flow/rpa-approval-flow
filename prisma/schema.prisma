@@ -96,6 +96,20 @@ model Manager {
   updatedAt        DateTime          @updatedAt
   invoicesCriadas  Invoice[]         @relation("InvoiceCreatedBy")
   activationTokens AccountActivationToken[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  managerId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  manager   Manager   @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@index([managerId])
 }
 
 model AccountActivationToken {
