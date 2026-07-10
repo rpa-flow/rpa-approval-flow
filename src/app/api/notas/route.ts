@@ -99,9 +99,10 @@ export async function GET(request: NextRequest) {
         }
       }
     },
-    orderBy: {
-      createdAt: "desc"
-    },
+    orderBy: [
+      { dataAtualizacao: "desc" },
+      { dataEmissao: "desc" }
+    ],
     ...(pagination ? { skip: (pagination.page - 1) * pageSize, take: pageSize } : {})
   });
 
