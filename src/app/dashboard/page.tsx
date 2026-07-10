@@ -68,6 +68,23 @@ function formatCompany(invoice: Invoice) {
   return `${name} - ${formatCnpj(cnpj)}`;
 }
 
+function formatRelativeUpdate(value: string) {
+  const date = new Date(value);
+  const timestamp = date.getTime();
+
+  if (Number.isNaN(timestamp)) return "-";
+
+  const diffMs = timestamp - Date.now();
+  const absDiffMs = Math.abs(diffMs);
+  const formatter = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+
+  if (absDiffMs < 60_000) return "agora";
+  if (absDiffMs < 3_600_000) return formatter.format(Math.round(diffMs / 60_000), "minute");
+  if (absDiffMs < 86_400_000) return formatter.format(Math.round(diffMs / 3_600_000), "hour");
+  if (absDiffMs < 604_800_000) return formatter.format(Math.round(diffMs / 86_400_000), "day");
+
+  return date.toLocaleDateString("pt-BR");
+}
 
 function formatInputDate(value: string) {
   if (!value) return "";
@@ -418,8 +435,8 @@ export default function DashboardPage() {
               <th className="px-2 py-3 text-center" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
               <th className="px-2 py-3 text-center" style={{ minWidth: "10rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
               <th className="px-3 py-3 text-center">Responsável</th>
-              <th className="px-2 py-3 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th>
-              <th className="sticky right-0 z-20 bg-surface-container-low px-2 py-3 text-center shadow-[-8px_0_16px_rgba(25,28,32,0.06)]" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -432,8 +449,8 @@ export default function DashboardPage() {
                 <td className="px-2 py-3 text-center text-slate-700" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataCompetencia ? new Date(invoice.dataCompetencia).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-2 py-3 text-center" style={{ minWidth: "10rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
                 <td className="px-3 py-3 text-center text-slate-700">{invoice.responsavelValidacao ?? "-"}</td>
-                <td className="px-2 py-3 text-center text-slate-600" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</span></td>
-                <td className="sticky right-0 z-10 bg-surface-container-lowest px-2 py-3 text-center shadow-[-8px_0_16px_rgba(25,28,32,0.06)]" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2.5 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
+                <td className="px-2 py-3 text-center text-slate-600" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
+                <td className="px-2 py-3 text-center" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2.5 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
               </tr>
               {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de compra:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
