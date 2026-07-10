@@ -68,6 +68,65 @@ function formatCompany(invoice: Invoice) {
   return `${name} - ${formatCnpj(cnpj)}`;
 }
 
+
+function formatInputDate(value: string) {
+  if (!value) return "";
+
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+function isInvalidDateRange(from: string, to: string) {
+  return Boolean(from && to && from > to);
+}
+
+type DateRangeFilterProps = {
+  legend: string;
+  from: string;
+  to: string;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+};
+
+function DateRangeFilter({ legend, from, to, onFromChange, onToChange }: DateRangeFilterProps) {
+  const invalid = isInvalidDateRange(from, to);
+  const normalizedLegend = legend.toLowerCase();
+
+  return (
+    <fieldset className={`rounded-md border bg-surface-container-lowest p-3 ${invalid ? "border-rose-300" : "border-border"}`}>
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{legend}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs font-medium text-slate-600">
+          De
+          <input
+            type="date"
+            lang="pt-BR"
+            value={from}
+            onChange={(event) => onFromChange(event.target.value)}
+            aria-label={`${legend}: data inicial`}
+            aria-invalid={invalid}
+            className="mt-1 min-w-0"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Até
+          <input
+            type="date"
+            lang="pt-BR"
+            value={to}
+            onChange={(event) => onToChange(event.target.value)}
+            aria-label={`${legend}: data final`}
+            aria-invalid={invalid}
+            className="mt-1 min-w-0"
+          />
+        </label>
+      </div>
+      {invalid && <p className="mt-2 text-xs font-medium text-rose-700">A data inicial de {normalizedLegend} é maior que a final.</p>}
+    </fieldset>
+  );
+}
+
 function toLocalDateInputValue(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -256,6 +315,17 @@ export default function DashboardPage() {
     }
   }
 
+  const activeFilters = [
+    statusFilter !== "TODOS" ? { key: "status", label: `Status: ${statusFilter === "LANCADAS" ? "Lançadas" : statusFilter.replaceAll("_", " ")}`, clear: () => setStatusFilter("TODOS") } : null,
+    supplierFilter !== "TODOS" ? { key: "supplier", label: `Fornecedor: ${supplierOptions.find((supplier) => supplier.id === supplierFilter)?.nome ?? "Selecionado"}`, clear: () => setSupplierFilter("TODOS") } : null,
+    takerFilter.trim() ? { key: "taker", label: `Tomador: ${takerFilter.trim()}`, clear: () => setTakerFilter("") } : null,
+    issueFrom || issueTo ? { key: "issue", label: `Emissão: ${issueFrom ? formatInputDate(issueFrom) : "início"} até ${issueTo ? formatInputDate(issueTo) : "fim"}`, clear: () => { setIssueFrom(""); setIssueTo(""); } } : null,
+    competenceFrom || competenceTo ? { key: "competence", label: `Competência: ${competenceFrom ? formatInputDate(competenceFrom) : "início"} até ${competenceTo ? formatInputDate(competenceTo) : "fim"}`, clear: () => { setCompetenceFrom(""); setCompetenceTo(""); } } : null,
+    updatedFrom || updatedTo ? { key: "updated", label: `Atualização: ${updatedFrom ? formatInputDate(updatedFrom) : "início"} até ${updatedTo ? formatInputDate(updatedTo) : "fim"}`, clear: () => { setUpdatedFrom(""); setUpdatedTo(""); } } : null
+  ].filter((filter): filter is { key: string; label: string; clear: () => void } => Boolean(filter));
+
+  const hasInvalidDateRange = isInvalidDateRange(issueFrom, issueTo) || isInvalidDateRange(competenceFrom, competenceTo) || isInvalidDateRange(updatedFrom, updatedTo);
+
   return <AppLayout onClick={() => setMenuState(null)}>
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
@@ -270,50 +340,57 @@ export default function DashboardPage() {
         <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
       </div>
 
-      <div className="grid gap-3 rounded-md border border-border bg-surface-container-low p-3 md:grid-cols-3 xl:grid-cols-6">
-        <label>
-          Status
-          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
-            <option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option>
-          </select>
-        </label>
-        <label>
-          Fornecedor
-          <select value={supplierFilter} onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }}>
-            <option value="TODOS">Todos fornecedores</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.nome}</option>)}
-          </select>
-        </label>
-        <label>
-          Tomador
-          <input value={takerFilter} onChange={(e) => { setTakerFilter(e.target.value); setPage(1); }} placeholder="Buscar por tomador" />
-        </label>
-        <label>
-          Emissão de
-          <input type="date" value={issueFrom} onChange={(e) => { setIssueFrom(e.target.value); setPage(1); }} />
-        </label>
-        <label>
-          Emissão até
-          <input type="date" value={issueTo} onChange={(e) => { setIssueTo(e.target.value); setPage(1); }} />
-        </label>
-        <label>
-          Competência de
-          <input type="date" value={competenceFrom} onChange={(e) => { setCompetenceFrom(e.target.value); setPage(1); }} />
-        </label>
-        <label>
-          Competência até
-          <input type="date" value={competenceTo} onChange={(e) => { setCompetenceTo(e.target.value); setPage(1); }} />
-        </label>
-        <label>
-          Atualização de
-          <input type="date" value={updatedFrom} onChange={(e) => { setUpdatedFrom(e.target.value); setPage(1); }} />
-        </label>
-        <label>
-          Atualização até
-          <input type="date" value={updatedTo} onChange={(e) => { setUpdatedTo(e.target.value); setPage(1); }} />
-        </label>
-        <div className="flex items-end">
-          <button type="button" className="btn-secondary w-full" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setIssueFrom(""); setIssueTo(""); setCompetenceFrom(""); setCompetenceTo(""); setPage(1); }}>Limpar filtros</button>
+      <div className="space-y-3 rounded-md border border-border bg-surface-container-low p-3">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_auto] lg:items-start">
+          <fieldset className="rounded-md border border-border bg-surface-container-lowest p-3">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Filtros principais</legend>
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <label className="text-xs font-medium text-slate-600">
+                Status
+                <select className="mt-1" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+                  <option value="TODOS">Todos status</option><option value="LANCADAS">Lançadas</option><option value="AGUARDANDO_APROVACAO">Pendente</option><option value="APROVADO">Aprovada</option><option value="RECUSADO">Reprovada</option><option value="PROCESSADO">Processada</option><option value="DADOS_INCONSISTENTES">Dados inconsistentes</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium text-slate-600 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                Fornecedor
+                <select className="mt-1" value={supplierFilter} onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }}>
+                  <option value="TODOS">Todos fornecedores</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.nome}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-medium text-slate-600 sm:col-span-3 lg:col-span-1 xl:col-span-1">
+                Tomador
+                <input className="mt-1" value={takerFilter} onChange={(e) => { setTakerFilter(e.target.value); setPage(1); }} placeholder="Nome do tomador" />
+              </label>
+            </div>
+          </fieldset>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <DateRangeFilter legend="Emissão" from={issueFrom} to={issueTo} onFromChange={(value) => { setIssueFrom(value); setPage(1); }} onToChange={(value) => { setIssueTo(value); setPage(1); }} />
+            <DateRangeFilter legend="Competência" from={competenceFrom} to={competenceTo} onFromChange={(value) => { setCompetenceFrom(value); setPage(1); }} onToChange={(value) => { setCompetenceTo(value); setPage(1); }} />
+            <DateRangeFilter legend="Atualização" from={updatedFrom} to={updatedTo} onFromChange={(value) => { setUpdatedFrom(value); setPage(1); }} onToChange={(value) => { setUpdatedTo(value); setPage(1); }} />
+          </div>
+
+          <div className="flex h-full items-end lg:justify-end">
+            <button type="button" className="btn-secondary w-full whitespace-nowrap lg:w-auto" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setIssueFrom(""); setIssueTo(""); setCompetenceFrom(""); setCompetenceTo(""); setPage(1); }}>Limpar filtros</button>
+          </div>
         </div>
+
+        {(activeFilters.length > 0 || hasInvalidDateRange) && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                className="rounded-full border border-blue-200 !bg-blue-50 px-3 py-1 text-xs font-semibold !text-blue-800 hover:!bg-blue-100"
+                onClick={() => { filter.clear(); setPage(1); }}
+                aria-label={`Remover filtro ${filter.label}`}
+              >
+                {filter.label} ×
+              </button>
+            ))}
+            {hasInvalidDateRange && <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Revise os intervalos de data</span>}
+          </div>
+        )}
       </div>
 
       <div className="table-shell">
