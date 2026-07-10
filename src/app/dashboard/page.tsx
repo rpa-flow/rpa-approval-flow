@@ -23,7 +23,7 @@ type Invoice = {
   valorServico?: number | null;
   tomadorNome?: string | null;
   tomadorCnpj?: string | null;
-  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null };
+  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
   empresa?: { cnpj?: string | null; nomeExibicao?: string | null };
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
@@ -54,6 +54,17 @@ const STATUS_COLORS: Record<string, string> = {
 
 function onlyDigits(value?: string | null) {
   return value?.replace(/\D/g, "") ?? "";
+}
+
+function getManagerNames(invoice: Invoice) {
+  return invoice.fornecedor.managerSuppliers
+    ?.map((link) => link.manager?.nome)
+    .filter((name): name is string => Boolean(name))
+    .join(", ") || null;
+}
+
+function getResponsibleName(invoice: Invoice) {
+  return invoice.responsavelValidacao || getManagerNames(invoice) || "-";
 }
 
 function formatCnpj(value?: string | null) {
@@ -448,7 +459,7 @@ export default function DashboardPage() {
                 <td className="px-2 py-3 text-center text-slate-700" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-2 py-3 text-center text-slate-700" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataCompetencia ? new Date(invoice.dataCompetencia).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-2 py-3 text-center" style={{ minWidth: "10rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
-                <td className="px-3 py-3 text-center text-slate-700">{invoice.responsavelValidacao ?? "-"}</td>
+                <td className="px-3 py-3 text-center text-slate-700">{getResponsibleName(invoice)}</td>
                 <td className="px-2 py-3 text-center text-slate-600" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
                 <td className="px-2 py-3 text-center" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2.5 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
               </tr>

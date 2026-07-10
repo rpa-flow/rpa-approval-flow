@@ -55,7 +55,14 @@ export async function GET(request: NextRequest, { params }: Params) {
           id: true,
           nome: true,
           cnpj: true,
-          codigoExterno: true
+          codigoExterno: true,
+          managerSuppliers: {
+            select: {
+              manager: {
+                select: { id: true, nome: true, email: true }
+              }
+            }
+          }
         }
       }
     }

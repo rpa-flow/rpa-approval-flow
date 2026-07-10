@@ -46,7 +46,7 @@ type Invoice = {
   ocContrato?: string | null;
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
-  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null };
+  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
 };
 
 const STATUS_COLORS: Record<InvoiceStatus, string> = {
@@ -65,6 +65,17 @@ const APPROVED_STATUS_CHANGE_OPTIONS: Array<{ value: Exclude<InvoiceStatus, "APR
   { value: "PROCESSADO", label: "Marcar processada", description: "Confirma manualmente que a nota já foi processada." },
   { value: "EXPIRADA", label: "Expirada", description: "Indica que a aprovação não deve mais seguir o fluxo atual." }
 ];
+
+function getManagerNames(invoice: Invoice) {
+  return invoice.fornecedor.managerSuppliers
+    ?.map((link) => link.manager?.nome)
+    .filter((name): name is string => Boolean(name))
+    .join(", ") || null;
+}
+
+function getResponsibleName(invoice: Invoice) {
+  return invoice.responsavelValidacao || getManagerNames(invoice) || "-";
+}
 
 function formatCurrency(value?: number | null) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -311,7 +322,7 @@ export default function NotaDetalhePage() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <DetailItem label="Responsável validação" value={invoice.responsavelValidacao} />
+          <DetailItem label="Responsável validação" value={getResponsibleName(invoice)} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
           <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />
           <DetailItem label="Ordem de compra" value={invoice.ordemCompra} />
