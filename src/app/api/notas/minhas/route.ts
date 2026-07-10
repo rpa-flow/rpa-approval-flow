@@ -112,9 +112,10 @@ export async function GET(request: NextRequest) {
         }
       }
     },
-    orderBy: {
-      createdAt: "desc"
-    },
+    orderBy: [
+      { dataAtualizacao: "desc" },
+      { dataEmissao: "desc" }
+    ],
     skip: (pagination.page - 1) * pageSize,
     take: pageSize
   });
