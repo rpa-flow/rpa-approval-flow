@@ -110,6 +110,7 @@ export const updateSupplierSchema = z.object({
   cnpj: z.string().regex(/^\d{14}$/).nullable().optional(),
   codigoExterno: z.string().trim().min(1).max(120).nullable().optional(),
   categoryIds: z.array(z.string().min(1)).optional(),
+  managerIds: z.array(z.string().min(1)).optional(),
   addManager: z.object({
     id: z.string().min(1).optional(),
     nome: z.string().min(2).optional(),
