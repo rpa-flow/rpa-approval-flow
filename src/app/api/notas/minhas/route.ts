@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
   const taker = request.nextUrl.searchParams.get("taker")?.trim();
   const updatedFrom = parseDay(request.nextUrl.searchParams.get("updatedFrom"));
   const updatedTo = parseDay(request.nextUrl.searchParams.get("updatedTo"), true);
+  const issueFrom = parseDay(request.nextUrl.searchParams.get("issueFrom"));
+  const issueTo = parseDay(request.nextUrl.searchParams.get("issueTo"), true);
+  const competenceFrom = parseDay(request.nextUrl.searchParams.get("competenceFrom"));
+  const competenceTo = parseDay(request.nextUrl.searchParams.get("competenceTo"), true);
 
   const scopeWhere: Prisma.InvoiceWhereInput =
     manager.role === "ADMIN"
@@ -56,6 +60,24 @@ export async function GET(request: NextRequest) {
       dataAtualizacao: {
         ...(updatedFrom ? { gte: updatedFrom } : {}),
         ...(updatedTo ? { lte: updatedTo } : {})
+      }
+    });
+  }
+
+  if (issueFrom || issueTo) {
+    filters.push({
+      dataEmissao: {
+        ...(issueFrom ? { gte: issueFrom } : {}),
+        ...(issueTo ? { lte: issueTo } : {})
+      }
+    });
+  }
+
+  if (competenceFrom || competenceTo) {
+    filters.push({
+      dataCompetencia: {
+        ...(competenceFrom ? { gte: competenceFrom } : {}),
+        ...(competenceTo ? { lte: competenceTo } : {})
       }
     });
   }
