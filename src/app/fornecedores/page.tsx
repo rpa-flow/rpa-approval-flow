@@ -30,7 +30,7 @@ export default function FornecedoresPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ nome: "", cnpj: "", codigoExterno: "", selectedManagerId: "", createNewManager: false, addManagerNome: "", addManagerEmail: "", addManagerSenha: "", categoryIds: [] as string[] });
+  const [editForm, setEditForm] = useState({ nome: "", cnpj: "", codigoExterno: "", selectedManagerId: "", createNewManager: false, addManagerNome: "", addManagerEmail: "", addManagerSenha: "", categoryIds: [] as string[], managerIds: [] as string[] });
   const [managerSearch, setManagerSearch] = useState("");
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -97,10 +97,34 @@ export default function FornecedoresPage() {
     if (!res.ok) return setMessage("Erro ao cadastrar fornecedor. Verifique os dados.");
     setCreateForm(EMPTY_CREATE_FORM); setShowCreateForm(false); setPage(1); setMessage("Fornecedor cadastrado com sucesso. Use a tela de gestores para revisar os vínculos."); await loadData(); await loadSuppliers(); }
 
-  function iniciarEdicao(supplier: SupplierListItem) { setEditingSupplierId(supplier.id); setEditForm({ nome: supplier.nome, cnpj: supplier.cnpj ?? "", codigoExterno: supplier.codigoExterno ?? "", selectedManagerId: "", createNewManager: false, addManagerNome: "", addManagerEmail: "", addManagerSenha: "", categoryIds: supplier.categories?.map((c) => c.id) ?? [] }); }
+  function iniciarEdicao(supplier: SupplierListItem) {
+    setEditingSupplierId(supplier.id);
+    setManagerSearch("");
+    setEditForm({
+      nome: supplier.nome,
+      cnpj: supplier.cnpj ?? "",
+      codigoExterno: supplier.codigoExterno ?? "",
+      selectedManagerId: "",
+      createNewManager: false,
+      addManagerNome: "",
+      addManagerEmail: "",
+      addManagerSenha: "",
+      categoryIds: supplier.categories?.map((c) => c.id) ?? [],
+      managerIds: supplier.managers.map((manager) => manager.id)
+    });
+  }
+
+  function toggleManager(managerId: string) {
+    setEditForm((previous) => ({
+      ...previous,
+      managerIds: previous.managerIds.includes(managerId)
+        ? previous.managerIds.filter((id) => id !== managerId)
+        : [...previous.managerIds, managerId]
+    }));
+  }
 
   async function salvarEdicao(e: React.FormEvent) { e.preventDefault(); if (!editingSupplierId) return;
-    const res = await fetch(`/api/fornecedores/${editingSupplierId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: editForm.nome, cnpj: editForm.cnpj.replace(/\D/g, "") || null, codigoExterno: editForm.codigoExterno.trim() || null, addManager: editForm.createNewManager ? { nome: editForm.addManagerNome || undefined, email: editForm.addManagerEmail, senha: editForm.addManagerSenha || undefined } : editForm.selectedManagerId ? { id: editForm.selectedManagerId } : undefined, categoryIds: editForm.categoryIds }) });
+    const res = await fetch(`/api/fornecedores/${editingSupplierId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome: editForm.nome, cnpj: editForm.cnpj.replace(/\D/g, "") || null, codigoExterno: editForm.codigoExterno.trim() || null, managerIds: editForm.managerIds, addManager: editForm.createNewManager ? { nome: editForm.addManagerNome || undefined, email: editForm.addManagerEmail, senha: editForm.addManagerSenha || undefined } : editForm.selectedManagerId ? { id: editForm.selectedManagerId } : undefined, categoryIds: editForm.categoryIds }) });
     if (!res.ok) return setMessage("Erro ao salvar edição do fornecedor.");
     setEditingSupplierId(null); setMessage("Fornecedor atualizado com sucesso."); await loadData(); await loadSuppliers(); }
 
@@ -143,7 +167,7 @@ export default function FornecedoresPage() {
           <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div>
               <h3 className="text-lg font-semibold">Editar fornecedor</h3>
-              <p className="text-sm text-slate-500">Atualize dados cadastrais. Para trocar vários vínculos, prefira a tela de gestores.</p>
+              <p className="text-sm text-slate-500">Atualize dados cadastrais e gerencie todos os gestores vinculados ao fornecedor.</p>
             </div>
             <button type="button" className="btn-secondary" onClick={() => setEditingSupplierId(null)}>Fechar</button>
           </div>
@@ -154,7 +178,44 @@ export default function FornecedoresPage() {
             <label>Código externo no RPA<input value={editForm.codigoExterno} onChange={(e) => setEditForm((p) => ({ ...p, codigoExterno: e.target.value }))} /></label>
                       <label className="md:col-span-2">Categorias<select multiple value={editForm.categoryIds} onChange={(e) => setEditForm((p) => ({ ...p, categoryIds: Array.from(e.target.selectedOptions).map((o) => o.value) }))}>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
             <label className="md:col-span-2">Buscar gestor<input placeholder="Filtrar por nome ou e-mail" value={managerSearch} onChange={(e) => setManagerSearch(e.target.value)} /></label>
-            <label className="md:col-span-2">Adicionar gestor existente<select className="w-full" value={editForm.selectedManagerId} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerId: e.target.value }))}><option value="">Nenhum</option>{filteredManagers.map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.email})</option>)}</select><span className="mt-1 block text-xs text-slate-500">Este atalho apenas adiciona um responsável. Para revisar todos os fornecedores de um gestor, use a tela Gestores.</span></label>
+            <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-slate-800">Gestores vinculados</p>
+                  <p className="text-xs text-slate-500">Marque os gestores que devem permanecer vinculados após salvar.</p>
+                </div>
+                <span className="badge badge-slate">{editForm.managerIds.length} selecionado(s)</span>
+              </div>
+              {editForm.managerIds.length ? (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {managers.filter((manager) => editForm.managerIds.includes(manager.id)).map((manager) => (
+                    <span key={manager.id} className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                      {manager.nome}
+                      <button type="button" className="!bg-transparent !p-0 !text-rose-600 hover:!text-rose-700" onClick={() => toggleManager(manager.id)} aria-label={`Remover ${manager.nome}`}>×</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="mb-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-500">Nenhum gestor vinculado</p>}
+              <div className="grid max-h-56 gap-2 overflow-y-auto pr-1">
+                {filteredManagers.map((manager) => (
+                  <label key={manager.id} className="checkbox rounded-md border border-border bg-white p-3">
+                    <input type="checkbox" checked={editForm.managerIds.includes(manager.id)} onChange={() => toggleManager(manager.id)} />
+                    <span>
+                      <strong className="block text-slate-800">{manager.nome}</strong>
+                      <span className="text-xs text-slate-500">{manager.email}</span>
+                    </span>
+                  </label>
+                ))}
+                {!filteredManagers.length && <p className="muted small">Nenhum gestor encontrado para a busca informada.</p>}
+              </div>
+            </div>
+            <label className="md:col-span-2">Adicionar gestor existente ao salvar<select className="w-full" value={editForm.selectedManagerId} disabled={editForm.createNewManager} onChange={(e) => setEditForm((p) => ({ ...p, selectedManagerId: e.target.value }))}><option value="">Nenhum</option>{managers.filter((m) => !editForm.managerIds.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.email})</option>)}</select><span className="mt-1 block text-xs text-slate-500">O gestor selecionado será somado à lista marcada acima.</span></label>
+            <label className="checkbox md:col-span-2 rounded-md border border-border bg-surface-container-low p-3"><input type="checkbox" checked={editForm.createNewManager} onChange={(e) => setEditForm((p) => ({ ...p, createNewManager: e.target.checked, selectedManagerId: e.target.checked ? "" : p.selectedManagerId }))} />Criar novo gestor ao salvar</label>
+            {editForm.createNewManager && <>
+              <label>Nome do novo gestor<input value={editForm.addManagerNome} onChange={(e) => setEditForm((p) => ({ ...p, addManagerNome: e.target.value }))} /></label>
+              <label>E-mail do novo gestor<input type="email" value={editForm.addManagerEmail} onChange={(e) => setEditForm((p) => ({ ...p, addManagerEmail: e.target.value }))} /></label>
+              <label>Senha inicial<input type="password" minLength={6} value={editForm.addManagerSenha} onChange={(e) => setEditForm((p) => ({ ...p, addManagerSenha: e.target.value }))} /></label>
+            </>}
             </div>
             <div className="shrink-0 border-t border-slate-100 bg-transparent px-4 py-3 sm:px-5">
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

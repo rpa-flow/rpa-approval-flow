@@ -2,14 +2,14 @@
 
 import { ComponentType, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Building2, FileText, LayoutDashboard, Settings, Tags, UserCircle, Users } from "lucide-react";
+import { BarChart3, Building2, FileText, Truck, LayoutDashboard, Settings, Tags, UserCircle, Users } from "lucide-react";
 import { AppHeader } from "@/app/components/app-header";
 
 const DEFAULT_HEADER_LINKS: Array<{ href: string; label: string; icon: ComponentType<{ size?: number | string; className?: string }> }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/notas", label: "Lançar nota", icon: FileText },
-  { href: "/fornecedores", label: "Fornecedores", icon: Building2 },
+  { href: "/fornecedores", label: "Fornecedores", icon: Truck },
   { href: "/empresas", label: "Empresas", icon: Building2 },
   { href: "/gestores", label: "Gestores", icon: Users },
   { href: "/categorias-fornecedores", label: "Categorias", icon: Tags },

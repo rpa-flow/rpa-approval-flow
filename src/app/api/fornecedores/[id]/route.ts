@@ -52,6 +52,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     }
 
+    let managerIds = parsed.data.managerIds ? Array.from(new Set(parsed.data.managerIds)) : undefined;
+
     if (parsed.data.addManager) {
       const { id, email, nome, senha } = parsed.data.addManager;
 
@@ -78,19 +80,36 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         });
       }
 
-      await prisma.managerSupplier.upsert({
-        where: {
-          managerId_supplierId: {
-            managerId: manager.id,
-            supplierId: params.id
-          }
-        },
-        update: {},
-        create: {
-          managerId: manager.id,
-          supplierId: params.id
-        }
-      });
+      managerIds = Array.from(new Set([...(managerIds ?? []), manager.id]));
+    }
+
+    if (managerIds) {
+      const existingManagers = managerIds.length
+        ? await prisma.manager.findMany({ where: { id: { in: managerIds } }, select: { id: true } })
+        : [];
+      const existingManagerIds = new Set(existingManagers.map((manager) => manager.id));
+      const invalidManagerIds = managerIds.filter((managerId) => !existingManagerIds.has(managerId));
+
+      if (invalidManagerIds.length) {
+        return NextResponse.json(
+          { error: "Gestor informado não encontrado.", invalidManagerIds },
+          { status: 400 }
+        );
+      }
+
+      await prisma.$transaction([
+        prisma.managerSupplier.deleteMany({
+          where: managerIds.length
+            ? { supplierId: params.id, managerId: { notIn: managerIds } }
+            : { supplierId: params.id }
+        }),
+        ...(managerIds.length
+          ? [prisma.managerSupplier.createMany({
+              data: managerIds.map((managerId) => ({ managerId, supplierId: params.id })),
+              skipDuplicates: true
+            })]
+          : [])
+      ]);
     }
 
     const fullSupplier = await prisma.supplier.findUnique({

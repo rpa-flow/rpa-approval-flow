@@ -68,6 +68,23 @@ function formatCompany(invoice: Invoice) {
   return `${name} - ${formatCnpj(cnpj)}`;
 }
 
+function formatRelativeUpdate(value: string) {
+  const date = new Date(value);
+  const timestamp = date.getTime();
+
+  if (Number.isNaN(timestamp)) return "-";
+
+  const diffMs = timestamp - Date.now();
+  const absDiffMs = Math.abs(diffMs);
+  const formatter = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+
+  if (absDiffMs < 60_000) return "agora";
+  if (absDiffMs < 3_600_000) return formatter.format(Math.round(diffMs / 60_000), "minute");
+  if (absDiffMs < 86_400_000) return formatter.format(Math.round(diffMs / 3_600_000), "hour");
+  if (absDiffMs < 604_800_000) return formatter.format(Math.round(diffMs / 86_400_000), "day");
+
+  return date.toLocaleDateString("pt-BR");
+}
 
 function formatInputDate(value: string) {
   if (!value) return "";
@@ -408,19 +425,32 @@ export default function DashboardPage() {
       </div>
 
       <div className="table-shell">
-        <table className="min-w-full text-sm">
-          <thead><tr><th className="px-4 py-3 text-left">Fornecedor / NF</th><th className="px-4 py-3 text-left">Empresa</th><th className="px-6 py-3 text-right" style={{ minWidth: "11rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th><th className="px-4 py-3 text-left" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th><th className="px-4 py-3 text-left" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th><th className="px-4 py-3 text-left" style={{ minWidth: "12rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th><th className="px-4 py-3 text-left">Responsável</th><th className="px-4 py-3 text-left" style={{ minWidth: "9rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th><th className="px-4 py-3 text-right" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th></tr></thead>
+        <table className="min-w-[64rem] text-sm">
+          <thead>
+            <tr>
+              <th className="px-3 py-3 text-center">Fornecedor / NF</th>
+              <th className="px-3 py-3 text-center">Empresa</th>
+              <th className="px-3 py-3 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "10rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
+              <th className="px-3 py-3 text-center">Responsável</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th>
+              <th className="px-2 py-3 text-center" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-slate-100">
             {invoices.map((invoice) => <Fragment key={invoice.id}>
               <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                <td className="px-4 py-3"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
-                <td className="px-4 py-3 text-slate-700"><div className="font-medium text-slate-800">{invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada"}</div><div className="whitespace-nowrap text-xs text-slate-500">{formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj)}</div></td>
-                <td className="px-6 py-3 text-right font-medium tabular-nums text-slate-800" style={{ minWidth: "11rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
-                <td className="px-4 py-3 text-slate-700" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
-                <td className="px-4 py-3 text-slate-700" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataCompetencia ? new Date(invoice.dataCompetencia).toLocaleDateString("pt-BR") : "-"}</span></td>
-                <td className="px-4 py-3" style={{ minWidth: "12rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
-                <td className="px-4 py-3 text-slate-700">{invoice.responsavelValidacao ?? "-"}</td><td className="px-4 py-3 text-slate-600" style={{ minWidth: "9rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")}</span></td>
-                <td className="px-4 py-3 text-right" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-3 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
+                <td className="px-3 py-3 text-center"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
+                <td className="px-3 py-3 text-center text-slate-700"><div className="font-medium text-slate-800">{invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada"}</div><div className="whitespace-nowrap text-xs text-slate-500">{formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj)}</div></td>
+                <td className="px-3 py-3 text-center font-medium tabular-nums text-slate-800" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
+                <td className="px-2 py-3 text-center text-slate-700" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
+                <td className="px-2 py-3 text-center text-slate-700" style={{ minWidth: "7rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataCompetencia ? new Date(invoice.dataCompetencia).toLocaleDateString("pt-BR") : "-"}</span></td>
+                <td className="px-2 py-3 text-center" style={{ minWidth: "10rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span></td>
+                <td className="px-3 py-3 text-center text-slate-700">{invoice.responsavelValidacao ?? "-"}</td>
+                <td className="px-2 py-3 text-center text-slate-600" style={{ minWidth: "6.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
+                <td className="px-2 py-3 text-center" style={{ minWidth: "6rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2.5 py-1.5 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
               </tr>
               {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de compra:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
