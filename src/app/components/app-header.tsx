@@ -30,21 +30,16 @@ type SidebarTooltip = {
 
 export function AppHeader({ links, onLogout }: AppHeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [hoverExpanded, setHoverExpanded] = useState(false);
   const [sidebarTooltip, setSidebarTooltip] = useState<SidebarTooltip>(null);
   const pathname = usePathname();
 
-  useEffect(() => {
-    const storedValue = window.localStorage.getItem("minas-sidebar-collapsed");
-    if (storedValue) {
-      setCollapsed(storedValue === "true");
-    }
-  }, []);
+  const collapsed = sidebarCollapsed && !hoverExpanded;
 
   useEffect(() => {
     const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
     document.documentElement.style.setProperty("--app-sidebar-width", width);
-    window.localStorage.setItem("minas-sidebar-collapsed", String(collapsed));
     if (!collapsed) {
       setSidebarTooltip(null);
     }
@@ -108,6 +103,15 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
           collapsed ? "w-[4.75rem]" : "w-64"
         )}
         aria-label="Navegação principal"
+        onMouseEnter={() => {
+          if (sidebarCollapsed) {
+            setHoverExpanded(true);
+          }
+        }}
+        onMouseLeave={() => {
+          setHoverExpanded(false);
+          setSidebarTooltip(null);
+        }}
       >
         <div className={cn("flex min-h-20 items-center gap-3 border-b border-border px-3", collapsed && "justify-center")}>
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded bg-white p-1 shadow-sm ring-1 ring-border">
@@ -142,7 +146,10 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
             className="h-10 w-full justify-center"
             aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
             aria-pressed={collapsed}
-            onClick={() => setCollapsed((current) => !current)}
+            onClick={() => {
+              setSidebarCollapsed((current) => !current);
+              setHoverExpanded(false);
+            }}
           >
             <Menu size={18} />
           </Button>
