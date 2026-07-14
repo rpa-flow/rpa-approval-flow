@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { AppLayout, DataTable, FormField, PaginationControls, SectionCard, StatusBadge } from "@/components/ui-kit";
+import { NfseProcessingSection } from "./components/nfse-processing-section";
+import { NfseProcessingStatusBadge } from "./components/nfse-processing-status-badge";
 import type { PaginationMetadata } from "@/lib/pagination";
 
 type Me = { manager: { role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
@@ -18,6 +20,7 @@ type Company = {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  nfseNsuSummary?: { processingStatus: string; pendingGapCount: number; retryErrorCount: number; lastScanAt: string | null; lastDocumentDownloadedAt: string | null } | null;
 };
 type CompaniesResponse = { items: Company[]; pagination: PaginationMetadata };
 
@@ -69,7 +72,8 @@ export default function EmpresasPage() {
   const loadCompanies = useCallback(async () => {
     const params = new URLSearchParams({
       page: String(page),
-      pageSize: String(pageSize)
+      pageSize: String(pageSize),
+      includeNfseSummary: "true"
     });
 
     if (debouncedSearch) params.set("search", debouncedSearch);
@@ -253,6 +257,7 @@ export default function EmpresasPage() {
             { key: "displayName", header: "Empresa", cell: (company) => <span className="font-semibold text-slate-900">{company.displayName}</span> },
             { key: "cnpj", header: "CNPJ", cell: (company) => <span className="whitespace-nowrap font-mono text-slate-700">{formatCnpj(company.cnpj)}</span> },
             { key: "status", header: "Status", cell: (company) => <StatusBadge status={company.active ? "ATIVO" : "INATIVO"} label={company.active ? "Ativa" : "Inativa"} /> },
+            { key: "nfse", header: "NFS-e", cell: (company) => <div className="space-y-1"><NfseProcessingStatusBadge status={company.nfseNsuSummary?.processingStatus} /><div className="text-xs text-slate-500">Gaps: {company.nfseNsuSummary?.pendingGapCount ?? 0} · Erros: {company.nfseNsuSummary?.retryErrorCount ?? 0}</div></div> },
             { key: "updatedAt", header: "Atualização", cell: (company) => <span className="text-slate-600">{new Date(company.updatedAt).toLocaleString("pt-BR")}</span> }
           ]}
           actions={(company) => (
@@ -272,6 +277,8 @@ export default function EmpresasPage() {
           onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
         />
       </SectionCard>
+
+      {editingCompanyId && <NfseProcessingSection companyId={editingCompanyId} />}
 
       {message && <Alert variant={message.startsWith("Erro") ? "destructive" : "success"}>{message}</Alert>}
     </AppLayout>
