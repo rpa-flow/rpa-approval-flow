@@ -231,11 +231,12 @@ th { font-size: .72rem; font-weight: 600; letter-spacing: 0; text-transform: upp
 td { vertical-align: middle; }
 .table-shell th,
 .table-shell td {
+  padding: .5rem .45rem;
   word-break: normal;
 }
 .table-shell th:last-child,
 .table-shell td:last-child {
-  min-width: 7rem;
+  min-width: 6rem;
   white-space: nowrap;
 }
 .table-shell .badge,

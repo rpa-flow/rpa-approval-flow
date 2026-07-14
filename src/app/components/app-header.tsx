@@ -21,10 +21,6 @@ type AppHeaderProps = {
 
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_COLLAPSED_WIDTH = "4.75rem";
-const SIDEBAR_WIDTH_PX = 256;
-const SIDEBAR_COLLAPSED_WIDTH_PX = 76;
-const AUTO_COLLAPSE_MIN_CONTENT_WIDTH = 1180;
-const DESKTOP_BREAKPOINT = 1024;
 
 type SidebarTooltip = {
   label: string;
@@ -34,66 +30,20 @@ type SidebarTooltip = {
 
 export function AppHeader({ links, onLogout }: AppHeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [userCollapsed, setUserCollapsed] = useState(false);
-  const [autoCollapsed, setAutoCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [sidebarTooltip, setSidebarTooltip] = useState<SidebarTooltip>(null);
   const pathname = usePathname();
 
-  useEffect(() => {
-    const storedValue = window.localStorage.getItem("minas-sidebar-collapsed");
-    if (storedValue) {
-      setUserCollapsed(storedValue === "true");
-    }
-  }, []);
-
-  const collapsed = userCollapsed || (autoCollapsed && !hoverExpanded);
-  const isAutoHoverMode = autoCollapsed && !userCollapsed;
+  const collapsed = sidebarCollapsed && !hoverExpanded;
 
   useEffect(() => {
     const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
     document.documentElement.style.setProperty("--app-sidebar-width", width);
-    window.localStorage.setItem("minas-sidebar-collapsed", String(userCollapsed));
     if (!collapsed) {
       setSidebarTooltip(null);
     }
-  }, [collapsed, userCollapsed]);
-
-  useEffect(() => {
-    const shouldAutoCollapse = () => {
-      if (window.innerWidth < DESKTOP_BREAKPOINT || userCollapsed) {
-        return false;
-      }
-
-      const expandedAvailableWidth = window.innerWidth - SIDEBAR_WIDTH_PX;
-      const collapsedAvailableWidth = window.innerWidth - SIDEBAR_COLLAPSED_WIDTH_PX;
-      const wideTables = Array.from(document.querySelectorAll<HTMLElement>(".table-shell, .overflow-x-auto"));
-      const contentNeedsMoreRoom = wideTables.some((element) => {
-        const requiredWidth = element.scrollWidth;
-        return requiredWidth > expandedAvailableWidth && requiredWidth <= collapsedAvailableWidth + 24;
-      });
-
-      return expandedAvailableWidth < AUTO_COLLAPSE_MIN_CONTENT_WIDTH || contentNeedsMoreRoom;
-    };
-
-    const updateAutoCollapse = () => {
-      setAutoCollapsed(shouldAutoCollapse());
-    };
-
-    updateAutoCollapse();
-    window.addEventListener("resize", updateAutoCollapse);
-
-    const appLayout = document.querySelector(".app-layout");
-    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateAutoCollapse) : null;
-    if (resizeObserver && appLayout) {
-      resizeObserver.observe(appLayout);
-    }
-
-    return () => {
-      window.removeEventListener("resize", updateAutoCollapse);
-      resizeObserver?.disconnect();
-    };
-  }, [pathname, links.length, userCollapsed]);
+  }, [collapsed]);
 
   const showCollapsedTooltip = (label: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
@@ -154,7 +104,7 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
         )}
         aria-label="Navegação principal"
         onMouseEnter={() => {
-          if (isAutoHoverMode) {
+          if (sidebarCollapsed) {
             setHoverExpanded(true);
           }
         }}
@@ -197,9 +147,8 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
             aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
             aria-pressed={collapsed}
             onClick={() => {
-              setUserCollapsed((current) => !current);
+              setSidebarCollapsed((current) => !current);
               setHoverExpanded(false);
-              setAutoCollapsed(false);
             }}
           >
             <Menu size={18} />
