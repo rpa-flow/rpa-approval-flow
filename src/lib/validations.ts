@@ -50,7 +50,9 @@ export const createInvoiceSchema = z
     valorTotalRetido: z.number().optional(),
     valorLiquido: z.number().optional(),
     valorServico: z.number().optional(),
-    aliquota: z.number().optional()
+    aliquota: z.number().optional(),
+    observacaoValidacao: z.string().trim().max(500).nullable().optional(),
+    reason: z.string().trim().max(500).optional()
   })
   .refine((data) => Boolean(data.xml) || Boolean(data.numeroNota && (data.fornecedorId || data.prestadorNome || data.prestadorCnpj)), {
     message:
