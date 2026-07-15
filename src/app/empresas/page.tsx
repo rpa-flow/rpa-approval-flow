@@ -351,6 +351,8 @@ export default function EmpresasPage() {
         </>
       )}
 
+      {editingCompanyId && <NfseProcessingSection companyId={editingCompanyId} />}
+
       {message && <Alert variant={message.startsWith("Erro") ? "destructive" : "success"}>{message}</Alert>}
     </AppLayout>
   );
