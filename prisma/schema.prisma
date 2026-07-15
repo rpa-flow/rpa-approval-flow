@@ -46,6 +46,13 @@ enum SupplierRiskLevel {
   ALTO
 }
 
+enum NfseNsuStatus {
+  Downloaded
+  PendingGap
+  RetryError
+  IgnoredByRule
+}
+
 
 model Company {
   id          String   @id @default(cuid())
@@ -54,6 +61,9 @@ model Company {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  nfseNsuCheckpoint NfseNsuCheckpoint?
+  nfseNsuControls   NfseNsuControl[]
 
   @@index([active])
 }
@@ -306,4 +316,72 @@ model SupplierNotificationConfig {
   supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
+}
+
+
+model NfseNsuCheckpoint {
+  id                       String   @id @default(cuid())
+  companyId                String   @unique
+  cnpj                     String   @unique
+  lastContiguousNsu        BigInt
+  highestScannedNsu        BigInt
+  lastScanAt               DateTime?
+  lastDocumentDownloadedAt DateTime?
+  version                  Int      @default(1)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  company                  Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([lastScanAt])
+  @@index([lastDocumentDownloadedAt])
+}
+
+model NfseNsuControl {
+  id                    String        @id @default(cuid())
+  companyId             String
+  cnpj                  String
+  nsu                   BigInt
+  status                NfseNsuStatus
+  attempts              Int           @default(0)
+  firstAttemptAt        DateTime
+  lastAttemptAt         DateTime
+  lastHttpStatus        Int?
+  lastError             String?
+  documentId            String?
+  accessKey             String?
+  ignoreReason          String?
+  wasLastAttemptScanned Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  company               Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  attemptsHistory       NfseNsuAttempt[]
+
+  @@unique([companyId, nsu])
+  @@index([companyId, status])
+  @@index([companyId, nsu])
+  @@index([companyId, lastAttemptAt])
+  @@index([status, lastAttemptAt])
+  @@index([status, firstAttemptAt])
+}
+
+model NfseNsuAttempt {
+  id              String        @id @default(cuid())
+  nsuControlId    String
+  idempotencyKey  String        @unique
+  resultStatus    NfseNsuStatus
+  httpStatus      Int?
+  errorMessage    String?
+  wasNsuScanned   Boolean
+  documentId      String?
+  accessKey       String?
+  ignoreReason    String?
+  attemptedAt     DateTime
+  createdAt       DateTime      @default(now())
+
+  nsuControl       NfseNsuControl @relation(fields: [nsuControlId], references: [id], onDelete: Cascade)
+
+  @@index([nsuControlId, attemptedAt])
+  @@index([resultStatus, attemptedAt])
 }
