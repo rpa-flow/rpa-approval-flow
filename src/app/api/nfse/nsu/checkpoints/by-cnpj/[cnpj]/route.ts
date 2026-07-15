@@ -4,8 +4,8 @@ import { nfseNsuCheckpointUpdateSchema } from "@/lib/validations";
 import { getCheckpointByCnpj, normalizeCnpj, updateCheckpoint, NfseNsuNotFoundError } from "@/lib/nfse-nsu";
 import { authorizeNfseNsuRead, authorizeNfseNsuWrite, handleNfseNsuError } from "../../../_utils/route-helpers";
 
-export async function GET(_request: NextRequest, { params }: { params: { cnpj: string } }) {
-  const unauthorized = await authorizeNfseNsuRead();
+export async function GET(request: NextRequest, { params }: { params: { cnpj: string } }) {
+  const unauthorized = await authorizeNfseNsuRead(request);
   if (unauthorized) return unauthorized;
   try { return NextResponse.json(await getCheckpointByCnpj(params.cnpj)); } catch (error) { return handleNfseNsuError(error); }
 }
