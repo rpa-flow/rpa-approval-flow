@@ -4,6 +4,7 @@ import { getSessionManager } from "@/lib/auth";
 import { getPaginationMetadata, getPaginationParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { companySchema } from "@/lib/validations";
+import { getCompanySummariesMap } from "@/lib/nfse-nsu";
 
 async function validateAdmin() {
   const manager = await getSessionManager();
@@ -48,6 +49,11 @@ export async function GET(request: NextRequest) {
     skip: (pagination.page - 1) * pageSize,
     take: pageSize
   });
+
+  if (request.nextUrl.searchParams.get("includeNfseSummary") === "true") {
+    const summaries = await getCompanySummariesMap(companies.map((company) => company.id));
+    return NextResponse.json({ items: companies.map((company) => ({ ...company, nfseNsuSummary: summaries.get(company.id) ?? null })), pagination });
+  }
 
   return NextResponse.json({ items: companies, pagination });
 }

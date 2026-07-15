@@ -193,3 +193,33 @@ export const supplierCategorySchema = z.object({
   descricao: z.string().max(200).optional().nullable(),
   ativo: z.boolean().optional()
 });
+
+export const nfseNsuStatusSchema = z.enum(["Downloaded", "PendingGap", "RetryError", "IgnoredByRule"]);
+const nfseNsuDateSchema = z.string().datetime();
+export const nfseNsuAttemptSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(180),
+  companyId: z.string().trim().min(1),
+  cnpj: z.string().transform((v) => v.replace(/\D/g, "")).pipe(z.string().regex(/^\d{14}$/)),
+  nsu: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  status: nfseNsuStatusSchema,
+  attemptedAt: nfseNsuDateSchema,
+  wasNsuScanned: z.boolean(),
+  httpStatus: z.number().int().min(100).max(599).nullable().optional(),
+  errorMessage: z.string().trim().max(1000).nullable().optional(),
+  documentId: z.string().trim().max(120).nullable().optional(),
+  accessKey: z.string().trim().max(80).nullable().optional(),
+  ignoreReason: z.string().trim().max(1000).nullable().optional()
+}).superRefine((data, ctx) => {
+  if (data.status === "PendingGap" && data.wasNsuScanned !== true) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wasNsuScanned"], message: "PendingGap exige WasNsuScanned = true." });
+  if (data.status === "RetryError" && !data.errorMessage) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["errorMessage"], message: "RetryError exige ErrorMessage." });
+  if (data.status === "IgnoredByRule" && data.wasNsuScanned !== true) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wasNsuScanned"], message: "IgnoredByRule exige WasNsuScanned = true." });
+  if (data.status === "IgnoredByRule" && !data.ignoreReason) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ignoreReason"], message: "IgnoredByRule exige IgnoreReason." });
+});
+
+export const nfseNsuCheckpointUpdateSchema = z.object({
+  lastContiguousNsu: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  highestScannedNsu: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  lastScanAt: nfseNsuDateSchema.nullable().optional(),
+  lastDocumentDownloadedAt: nfseNsuDateSchema.nullable().optional(),
+  expectedVersion: z.number().int().min(0)
+}).refine((data) => data.lastContiguousNsu <= data.highestScannedNsu, { path: ["lastContiguousNsu"], message: "LastContiguousNsu deve ser menor ou igual a HighestScannedNsu." });
