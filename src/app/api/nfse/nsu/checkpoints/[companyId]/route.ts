@@ -3,8 +3,8 @@ import { nfseNsuCheckpointUpdateSchema } from "@/lib/validations";
 import { getCheckpoint, updateCheckpoint } from "@/lib/nfse-nsu";
 import { authorizeNfseNsuRead, authorizeNfseNsuWrite, handleNfseNsuError } from "../../_utils/route-helpers";
 
-export async function GET(_request: NextRequest, { params }: { params: { companyId: string } }) {
-  const unauthorized = await authorizeNfseNsuRead();
+export async function GET(request: NextRequest, { params }: { params: { companyId: string } }) {
+  const unauthorized = await authorizeNfseNsuRead(request);
   if (unauthorized) return unauthorized;
   try { return NextResponse.json(await getCheckpoint(params.companyId)); } catch (error) { return handleNfseNsuError(error); }
 }
