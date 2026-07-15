@@ -57,6 +57,11 @@ function validateInvoiceIngestApiKey(request: NextRequest) {
   return null;
 }
 
+function isInvoiceCreatedEmailDisabled() {
+  const value = process.env.DISABLE_INVOICE_CREATED_EMAIL?.trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes" || value === "sim" || value === "on";
+}
+
 export type CreateInvoiceOptions = {
   initialStatus?: InvoiceStatus;
   sendCreatedEmail?: boolean;
@@ -284,7 +289,7 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
   await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status, reason: validationReason } });
   await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: options.auditDescription ?? "Nota criada e encaminhada para aprovação", newStatus: invoice.status, reason: validationReason, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: invoice as unknown as any });
 
-  if (options.sendCreatedEmail ?? true) {
+  if ((options.sendCreatedEmail ?? true) && !isInvoiceCreatedEmailDisabled()) {
     try {
       await sendInvoiceCreatedEmail({
         invoiceNumber: invoice.numeroNota,
