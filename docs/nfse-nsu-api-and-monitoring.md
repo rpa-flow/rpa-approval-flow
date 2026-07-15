@@ -68,18 +68,6 @@ Esta etapa **não implementa** download de notas, consulta ao ADN, processamento
 
 Para relatórios, `Downloaded` e `IgnoredByRule` são resolvidos; `PendingGap` e `RetryError` são pendentes.
 
-## Autenticação
-
-Os endpoints de NSU aceitam sessão administrativa (`ADMIN`) ou, para integrações externas, o header `x-api-key` validado contra `INVOICE_INGEST_API_KEY`.
-
-Exemplo:
-
-```bash
-curl.exe -i -X GET "https://seu-dominio/api/nfse/nsu/checkpoints/by-cnpj/31096483000101" -H "x-api-key: SUA_API_KEY_REAL" -H "Accept: application/json"
-```
-
-Para consultar por CNPJ, prefira `/api/nfse/nsu/checkpoints/by-cnpj/{cnpj}`. Para compatibilidade com integrações simples, `GET /api/nfse/nsu/checkpoints/{valor}` também interpreta `{valor}` como CNPJ quando ele contém 14 dígitos; nos demais casos, espera o `Company.id` interno.
-
 ## Endpoints de gravação
 
 ### `POST /api/nfse/nsu/attempts`
@@ -122,7 +110,7 @@ Resposta:
 
 ## Endpoints de checkpoint
 
-Os endpoints de leitura e escrita de checkpoint também reutilizam `x-api-key` com `INVOICE_INGEST_API_KEY` ou sessão administrativa.
+Os endpoints de escrita de checkpoint também reutilizam `x-api-key` com `INVOICE_INGEST_API_KEY` ou sessão administrativa.
 
 
 - `GET /api/nfse/nsu/checkpoints/{companyId}`
@@ -150,7 +138,7 @@ A API valida valores não negativos, `lastContiguousNsu <= highestScannedNsu`, i
 - `GET /api/companies/{companyId}/nfse/nsus`
 - `GET /api/companies/{companyId}/nfse/nsus/{nsu}/attempts`
 
-A listagem de NSUs é paginada e permite filtros por status, faixa de NSU, datas, tentativas mínimas, somente gaps, somente erros e somente resolvidos. Estes endpoints também aceitam `x-api-key` para leitura externa.
+A listagem de NSUs é paginada e permite filtros por status, faixa de NSU, datas, tentativas mínimas, somente gaps, somente erros e somente resolvidos.
 
 ## Endpoints de relatório
 
@@ -158,7 +146,7 @@ A listagem de NSUs é paginada e permite filtros por status, faixa de NSU, datas
 - `GET /api/nfse/nsu/reports/dashboard`
 - `GET /api/nfse/nsu/reports/integrity`
 
-O relatório de empresas retorna uma linha por empresa com contadores por status, checkpoints, pendências e situação de processamento. Estes endpoints também aceitam `x-api-key` para leitura externa.
+O relatório de empresas retorna uma linha por empresa com contadores por status, checkpoints, pendências e situação de processamento.
 
 ## Regras de idempotência
 

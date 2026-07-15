@@ -10,9 +10,7 @@ export async function authorizeNfseNsuWrite(request: NextRequest) {
   if (manager.role !== "ADMIN") return NextResponse.json({ error: "Somente ADMIN pode executar esta operação." }, { status: 403 });
   return null;
 }
-export async function authorizeNfseNsuRead(request?: Request) {
-  const configured = process.env.INVOICE_INGEST_API_KEY;
-  if (configured && request?.headers.get("x-api-key") === configured) return null;
+export async function authorizeNfseNsuRead() {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   if (manager.role !== "ADMIN") return NextResponse.json({ error: "Somente ADMIN pode consultar o monitoramento de NSU." }, { status: 403 });
