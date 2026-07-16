@@ -198,6 +198,7 @@ export default function DashboardPage() {
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const [isApproving, setIsApproving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const router = useRouter();
 
   const loadMe = useCallback(async () => {
@@ -344,6 +345,41 @@ export default function DashboardPage() {
     }
   }
 
+  async function exportarNotas() {
+    setIsExporting(true);
+    setMessage("");
+    const params = new URLSearchParams();
+    if (statusFilter !== "TODOS") params.set("status", statusFilter);
+    if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
+    if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
+    if (updatedFrom) params.set("updatedFrom", updatedFrom);
+    if (updatedTo) params.set("updatedTo", updatedTo);
+    if (issueFrom) params.set("issueFrom", issueFrom);
+    if (issueTo) params.set("issueTo", issueTo);
+    if (competenceFrom) params.set("competenceFrom", competenceFrom);
+    if (competenceTo) params.set("competenceTo", competenceTo);
+
+    try {
+      const response = await fetch(`/api/notas/minhas/export?${params.toString()}`);
+      if (!response.ok) throw new Error("export_failed");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `notas-fiscais-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessageType("success");
+      setMessage("Planilha XLSX gerada com sucesso.");
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível gerar a planilha XLSX. Tente novamente.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const activeFilters = [
     statusFilter !== "TODOS" ? { key: "status", label: `Status: ${statusFilter === "LANCADAS" ? "Lançadas" : statusFilter.replaceAll("_", " ")}`, clear: () => setStatusFilter("TODOS") } : null,
     supplierFilter !== "TODOS" ? { key: "supplier", label: `Fornecedor: ${supplierOptions.find((supplier) => supplier.id === supplierFilter)?.nome ?? "Selecionado"}`, clear: () => setSupplierFilter("TODOS") } : null,
@@ -367,7 +403,10 @@ export default function DashboardPage() {
           <h2 className="section-title">Notas em acompanhamento</h2>
           <p className="section-description">Filtre, analise detalhes e execute aprovações sem sair da central operacional.</p>
         </div>
-        <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => void exportarNotas()} disabled={isExporting || hasInvalidDateRange} title={hasInvalidDateRange ? "Corrija os intervalos de data antes de exportar." : undefined}>{isExporting ? "Gerando XLSX..." : "Baixar XLSX"}</button>
+          <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
+        </div>
       </div>
 
       <div className="space-y-3 rounded-md border border-border bg-surface-container-low p-3">
