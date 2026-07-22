@@ -16,6 +16,7 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
   const statusParam = searchParams.get("status");
   const supplierId = searchParams.get("supplierId");
   const taker = searchParams.get("taker")?.trim();
+  const responsible = searchParams.get("responsible")?.trim();
   const updatedFrom = parseDay(searchParams.get("updatedFrom"));
   const updatedTo = parseDay(searchParams.get("updatedTo"), true);
   const issueFrom = parseDay(searchParams.get("issueFrom"));
@@ -39,6 +40,14 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
 
   if (supplierId && supplierId !== "TODOS") filters.push({ fornecedorId: supplierId });
   if (taker) filters.push({ tomadorNome: { contains: taker, mode: "insensitive" } });
+  if (responsible && responsible !== "TODOS") {
+    filters.push({
+      OR: [
+        { responsavelValidacao: { contains: responsible, mode: "insensitive" } },
+        { fornecedor: { managerSuppliers: { some: { manager: { nome: { contains: responsible, mode: "insensitive" } } } } } }
+      ]
+    });
+  }
 
   if (updatedFrom || updatedTo) filters.push({ dataAtualizacao: { ...(updatedFrom ? { gte: updatedFrom } : {}), ...(updatedTo ? { lte: updatedTo } : {}) } });
   if (issueFrom || issueTo) filters.push({ dataEmissao: { ...(issueFrom ? { gte: issueFrom } : {}), ...(issueTo ? { lte: issueTo } : {}) } });

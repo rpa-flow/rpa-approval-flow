@@ -37,10 +37,12 @@ type Invoice = {
 };
 
 type SupplierOption = { id: string; nome: string };
+type ManagerOption = { id: string; nome: string };
 type NotesResponse = {
   items: Invoice[];
   pagination: PaginationMetadata;
   supplierOptions: SupplierOption[];
+  managerOptions: ManagerOption[];
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -166,6 +168,7 @@ export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+  const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
   const [pagination, setPagination] = useState<PaginationMetadata>({
     page: 1,
     pageSize: 10,
@@ -180,6 +183,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
   const [takerFilter, setTakerFilter] = useState("");
+  const [responsibleFilter, setResponsibleFilter] = useState("TODOS");
   const [debouncedTakerFilter, setDebouncedTakerFilter] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
@@ -216,6 +220,7 @@ export default function DashboardPage() {
     if (statusFilter !== "TODOS") params.set("status", statusFilter);
     if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
     if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
+    if (responsibleFilter !== "TODOS") params.set("responsible", responsibleFilter);
     if (updatedFrom) params.set("updatedFrom", updatedFrom);
     if (updatedTo) params.set("updatedTo", updatedTo);
     if (issueFrom) params.set("issueFrom", issueFrom);
@@ -237,10 +242,11 @@ export default function DashboardPage() {
       setInvoices(data.items);
       setPagination(data.pagination);
       setSupplierOptions(data.supplierOptions);
+      setManagerOptions(data.managerOptions);
     } finally {
       setIsLoadingNotes(false);
     }
-  }, [competenceFrom, competenceTo, debouncedTakerFilter, issueFrom, issueTo, page, pageSize, router, statusFilter, supplierFilter, updatedFrom, updatedTo]);
+  }, [competenceFrom, competenceTo, debouncedTakerFilter, issueFrom, issueTo, page, pageSize, responsibleFilter, router, statusFilter, supplierFilter, updatedFrom, updatedTo]);
 
   useEffect(() => { loadMe(); }, [loadMe]);
   useEffect(() => { loadData(); }, [loadData]);
@@ -352,6 +358,7 @@ export default function DashboardPage() {
     if (statusFilter !== "TODOS") params.set("status", statusFilter);
     if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
     if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
+    if (responsibleFilter !== "TODOS") params.set("responsible", responsibleFilter);
     if (updatedFrom) params.set("updatedFrom", updatedFrom);
     if (updatedTo) params.set("updatedTo", updatedTo);
     if (issueFrom) params.set("issueFrom", issueFrom);
@@ -383,6 +390,7 @@ export default function DashboardPage() {
   const activeFilters = [
     statusFilter !== "TODOS" ? { key: "status", label: `Status: ${statusFilter === "LANCADAS" ? "Lançadas" : statusFilter.replaceAll("_", " ")}`, clear: () => setStatusFilter("TODOS") } : null,
     supplierFilter !== "TODOS" ? { key: "supplier", label: `Fornecedor: ${supplierOptions.find((supplier) => supplier.id === supplierFilter)?.nome ?? "Selecionado"}`, clear: () => setSupplierFilter("TODOS") } : null,
+    responsibleFilter !== "TODOS" ? { key: "responsible", label: `Responsável: ${responsibleFilter}`, clear: () => setResponsibleFilter("TODOS") } : null,
     takerFilter.trim() ? { key: "taker", label: `Tomador: ${takerFilter.trim()}`, clear: () => setTakerFilter("") } : null,
     issueFrom || issueTo ? { key: "issue", label: `Emissão: ${issueFrom ? formatInputDate(issueFrom) : "início"} até ${issueTo ? formatInputDate(issueTo) : "fim"}`, clear: () => { setIssueFrom(""); setIssueTo(""); } } : null,
     competenceFrom || competenceTo ? { key: "competence", label: `Competência: ${competenceFrom ? formatInputDate(competenceFrom) : "início"} até ${competenceTo ? formatInputDate(competenceTo) : "fim"}`, clear: () => { setCompetenceFrom(""); setCompetenceTo(""); } } : null,
@@ -410,7 +418,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-3 rounded-md border border-border bg-surface-container-low p-3">
-        <div className="grid gap-2 md:grid-cols-[minmax(8rem,0.8fr)_minmax(12rem,1.2fr)_minmax(12rem,1.4fr)_auto] md:items-end">
+        <div className="grid gap-2 md:grid-cols-[minmax(8rem,0.8fr)_minmax(12rem,1.2fr)_minmax(12rem,1fr)_minmax(12rem,1.2fr)_auto] md:items-end">
           <label className="text-xs font-medium text-slate-600">
             Status
             <select className="mt-1" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -421,6 +429,12 @@ export default function DashboardPage() {
             Empresa/Fornecedor
             <select className="mt-1" value={supplierFilter} onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }}>
               <option value="TODOS">Todos fornecedores</option>{supplierOptions.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.nome}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Responsável
+            <select className="mt-1" value={responsibleFilter} onChange={(e) => { setResponsibleFilter(e.target.value); setPage(1); }}>
+              <option value="TODOS">Todos responsáveis</option>{managerOptions.map((manager) => <option key={manager.id} value={manager.nome}>{manager.nome}</option>)}
             </select>
           </label>
           <label className="text-xs font-medium text-slate-600">
@@ -438,7 +452,7 @@ export default function DashboardPage() {
               Mais filtros
               {activeAdvancedFiltersCount > 0 && <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{activeAdvancedFiltersCount}</span>}
             </button>
-            <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setIssueFrom(""); setIssueTo(""); setCompetenceFrom(""); setCompetenceTo(""); setPage(1); }}>Limpar filtros</button>
+            <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setResponsibleFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setIssueFrom(""); setIssueTo(""); setCompetenceFrom(""); setCompetenceTo(""); setPage(1); }}>Limpar filtros</button>
           </div>
         </div>
 
