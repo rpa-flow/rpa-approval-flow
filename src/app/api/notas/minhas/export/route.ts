@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
       valorTotalRetido: true,
       valorLiquido: true,
       valorServico: true,
-      aliquota: true
+      aliquota: true,
+      codigoDelphi: true
     },
     orderBy: { createdAt: "desc" }
   });
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
     valorLiquido: Number(invoice.valorLiquido ?? 0),
     valorServico: Number(invoice.valorServico ?? 0),
     aliquota: Number(invoice.aliquota ?? 0),
+    codigoDelphi: invoice.codigoDelphi ?? "",
     ocContrato: invoice.ocContrato ?? "",
     dataPagamento: formatDate(invoice.dataPagamento),
     ordemCompra: invoice.ordemCompra ?? "",
