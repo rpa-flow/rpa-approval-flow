@@ -49,7 +49,15 @@ export async function GET(request: NextRequest) {
       valorLiquido: true,
       valorServico: true,
       aliquota: true,
-      codigoDelphi: true
+      codigoDelphi: true,
+      responsavelValidacao: true,
+      fornecedor: {
+        select: {
+          managerSuppliers: {
+            select: { manager: { select: { nome: true } } }
+          }
+        }
+      }
     },
     orderBy: { createdAt: "desc" }
   });
@@ -69,38 +77,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const rows = invoices.map((invoice) => ({
-    codigoIdentificador: invoice.codigoIdentificador,
-    numeroNota: invoice.numeroNota,
-    nDfse: invoice.nDfse ?? "",
-    Status: invoice.status.replaceAll("_", " "),
-    createdAt: formatDateTime(invoice.createdAt),
-    localEmissao: invoice.localEmissao ?? "",
-    localPrestacao: invoice.localPrestacao ?? "",
-    municipioIncidencia: invoice.municipioIncidencia ?? "",
-    itemTributacaoNac: invoice.itemTributacaoNac ?? "",
-    itemTributacaoMun: invoice.itemTributacaoMun ?? "",
-    nbsDescricao: invoice.nbsDescricao ?? "",
-    dataEmissao: formatDate(invoice.dataEmissao),
-    dataCompetencia: formatDate(invoice.dataCompetencia),
-    prestadorCnpj: invoice.prestadorCnpj ?? "",
-    prestadorNome: invoice.prestadorNome ?? "",
-    prestadorEmail: invoice.prestadorEmail ?? "",
-    tomadorCnpj: invoice.tomadorCnpj ?? "",
-    tomadorNome: invoice.tomadorNome ?? "",
-    tomadorEmail: invoice.tomadorEmail ?? "",
-    valorBaseCalculo: Number(invoice.valorBaseCalculo ?? 0),
-    valorIssqn: Number(invoice.valorIssqn ?? 0),
-    valorTotalRetido: Number(invoice.valorTotalRetido ?? 0),
-    valorLiquido: Number(invoice.valorLiquido ?? 0),
-    valorServico: Number(invoice.valorServico ?? 0),
-    aliquota: Number(invoice.aliquota ?? 0),
-    codigoDelphi: invoice.codigoDelphi ?? "",
-    ocContrato: invoice.ocContrato ?? "",
-    dataPagamento: formatDate(invoice.dataPagamento),
-    ordemCompra: invoice.ordemCompra ?? "",
-    nsu: nsuByAccessKey.get(invoice.codigoIdentificador) ?? ""
-  }));
+  const rows = invoices.map((invoice) => {
+    const managerNames = invoice.fornecedor.managerSuppliers
+      .map((link) => link.manager.nome)
+      .filter(Boolean)
+      .join(", ");
+
+    return {
+      codigoIdentificador: invoice.codigoIdentificador,
+      numeroNota: invoice.numeroNota,
+      nDfse: invoice.nDfse ?? "",
+      Status: invoice.status.replaceAll("_", " "),
+      responsavel: invoice.responsavelValidacao || managerNames || "",
+      createdAt: formatDateTime(invoice.createdAt),
+      localEmissao: invoice.localEmissao ?? "",
+      localPrestacao: invoice.localPrestacao ?? "",
+      municipioIncidencia: invoice.municipioIncidencia ?? "",
+      itemTributacaoNac: invoice.itemTributacaoNac ?? "",
+      itemTributacaoMun: invoice.itemTributacaoMun ?? "",
+      nbsDescricao: invoice.nbsDescricao ?? "",
+      dataEmissao: formatDate(invoice.dataEmissao),
+      dataCompetencia: formatDate(invoice.dataCompetencia),
+      prestadorCnpj: invoice.prestadorCnpj ?? "",
+      prestadorNome: invoice.prestadorNome ?? "",
+      prestadorEmail: invoice.prestadorEmail ?? "",
+      tomadorCnpj: invoice.tomadorCnpj ?? "",
+      tomadorNome: invoice.tomadorNome ?? "",
+      tomadorEmail: invoice.tomadorEmail ?? "",
+      valorBaseCalculo: Number(invoice.valorBaseCalculo ?? 0),
+      valorIssqn: Number(invoice.valorIssqn ?? 0),
+      valorTotalRetido: Number(invoice.valorTotalRetido ?? 0),
+      valorLiquido: Number(invoice.valorLiquido ?? 0),
+      valorServico: Number(invoice.valorServico ?? 0),
+      aliquota: Number(invoice.aliquota ?? 0),
+      codigoDelphi: invoice.codigoDelphi ?? "",
+      ocContrato: invoice.ocContrato ?? "",
+      dataPagamento: formatDate(invoice.dataPagamento),
+      ordemCompra: invoice.ordemCompra ?? "",
+      nsu: nsuByAccessKey.get(invoice.codigoIdentificador) ?? ""
+    };
+  });
   rows.sort((a, b) => {
     const nsuA = nsuByAccessKey.get(a.codigoIdentificador);
     const nsuB = nsuByAccessKey.get(b.codigoIdentificador);

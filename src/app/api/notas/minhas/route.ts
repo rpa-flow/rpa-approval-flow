@@ -26,12 +26,25 @@ export async function GET(request: NextRequest) {
         ? { invoices: { some: { criadoPorId: manager.id } } }
         : { id: { in: getAllowedSupplierIds(manager) } };
 
-  const [total, supplierOptions] = await Promise.all([
+  const managerWhere: Prisma.ManagerWhereInput =
+    manager.role === "ADMIN"
+      ? { ativo: true }
+      : manager.role === "FORNECEDOR"
+        ? { managerSuppliers: { some: { supplier: { invoices: { some: { criadoPorId: manager.id } } } } }, ativo: true }
+        : { managerSuppliers: { some: { supplierId: { in: getAllowedSupplierIds(manager) } } }, ativo: true };
+
+  const [total, supplierOptions, managerOptions] = await Promise.all([
     prisma.invoice.count({ where }),
     prisma.supplier.findMany({
       where: supplierWhere,
       select: { id: true, nome: true },
       orderBy: { nome: "asc" }
+    }),
+    prisma.manager.findMany({
+      where: managerWhere,
+      select: { id: true, nome: true },
+      orderBy: { nome: "asc" },
+      distinct: ["nome"]
     })
   ]);
 
@@ -89,7 +102,8 @@ export async function GET(request: NextRequest) {
         return rest;
       }),
       pagination,
-      supplierOptions
+      supplierOptions,
+      managerOptions
     }
   );
 }
