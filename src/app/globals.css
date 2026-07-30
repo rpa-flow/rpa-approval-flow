@@ -125,6 +125,11 @@ input, select, textarea {
   height: 3rem;
   min-height: 3rem;
 }
+@media (min-width: 640px) {
+  .approval-field-row .approval-field-label {
+    min-height: 2.5rem;
+  }
+}
 input::placeholder, textarea::placeholder { color: #73777f; }
 input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible {
   outline: none;
