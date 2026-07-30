@@ -106,6 +106,25 @@ input, select, textarea {
   background: var(--surface-container-lowest);
   transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
+.approval-field {
+  align-content: start;
+  min-width: 0;
+}
+.approval-field-label {
+  display: flex;
+  min-height: 1.25rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .25rem;
+  color: var(--muted);
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.approval-field-control {
+  height: 3rem;
+  min-height: 3rem;
+}
 input::placeholder, textarea::placeholder { color: #73777f; }
 input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible {
   outline: none;
