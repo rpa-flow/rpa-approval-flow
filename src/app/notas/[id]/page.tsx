@@ -44,6 +44,7 @@ type Invoice = {
   codigoDelphi?: string | null;
   ordemCompra?: string | null;
   ocContrato?: string | null;
+  numeroParcelas: number;
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
   fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
@@ -96,6 +97,10 @@ function toLocalDateInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function DetailItem({ label, value }: { label: string; value?: string | number | null }) {
   return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
     <p className="text-xs font-bold uppercase text-muted">{label}</p>
@@ -122,6 +127,8 @@ export default function NotaDetalhePage() {
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
+  const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
+  const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
@@ -166,6 +173,8 @@ export default function NotaDetalhePage() {
     nextDay.setDate(nextDay.getDate() + 1);
     setPaymentDate(loadedInvoice.dataPagamento ? toLocalDateInputValue(new Date(loadedInvoice.dataPagamento)) : toLocalDateInputValue(nextDay));
     setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
+    setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
+    setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
     setLoading(false);
   }, [params.id, router]);
 
@@ -184,6 +193,12 @@ export default function NotaDetalhePage() {
       return;
     }
 
+    if (!installmentCount || Number(installmentCount) < 1) {
+      setMessageType("error");
+      setMessage("Informe um número de parcelas maior ou igual a 1.");
+      return;
+    }
+
     setIsApproving(true);
     setMessage("");
 
@@ -195,6 +210,8 @@ export default function NotaDetalhePage() {
           status: "APROVADO",
           dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
           ordemCompra: purchaseOrder.trim() || null,
+          ocContrato: contractPurchaseOrder.trim() || null,
+          numeroParcelas: Number(installmentCount),
           serviceEvaluation: {
             rating: evaluation.rating,
             comment: "Qualificação registrada",
@@ -215,6 +232,8 @@ export default function NotaDetalhePage() {
       setMessage("Nota aprovada com sucesso.");
       setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
       setPurchaseOrder("");
+      setContractPurchaseOrder("");
+      setInstallmentCount("1");
       await loadData();
     } catch {
       setMessageType("error");
@@ -325,9 +344,10 @@ export default function NotaDetalhePage() {
           <DetailItem label="Responsável validação" value={getResponsibleName(invoice)} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
           <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />
-          <DetailItem label="Ordem de compra" value={invoice.ordemCompra} />
+          <DetailItem label="Ordem de Compra – Pontual" value={invoice.ordemCompra} />
           <DetailItem label="Código Delphi" value={invoice.codigoDelphi} />
-          <DetailItem label="OC contrato" value={invoice.ocContrato} />
+          <DetailItem label="Ordem de Compra – Contrato" value={invoice.ocContrato} />
+          <DetailItem label="Número de parcelas" value={invoice.numeroParcelas ?? 1} />
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
         </div>
 
@@ -356,7 +376,9 @@ export default function NotaDetalhePage() {
           <label>Qualifica?<select aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label>
           <label>Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
           <label>Data de vencimento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
-          <label>Ordem de compra <span className="text-xs font-normal text-slate-500">(opcional)</span><input value={purchaseOrder} onChange={(event) => setPurchaseOrder(event.target.value)} maxLength={120} placeholder="Informe a ordem de compra, se houver" /></label>
+          <label>Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
+          <label>Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
+          <label>Número de parcelas<input type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
           <QualificationProcedureLink />
           <button type="button" className="btn-primary w-full" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Aprovar nota"}</button>
         </section>}

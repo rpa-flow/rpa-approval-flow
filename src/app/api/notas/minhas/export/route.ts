@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       dataPagamento: true,
       ordemCompra: true,
       ocContrato: true,
+      numeroParcelas: true,
       prestadorCnpj: true,
       prestadorNome: true,
       prestadorEmail: true,
@@ -114,6 +115,7 @@ export async function GET(request: NextRequest) {
       ocContrato: invoice.ocContrato ?? "",
       dataPagamento: formatDate(invoice.dataPagamento),
       ordemCompra: invoice.ordemCompra ?? "",
+      numeroParcelas: invoice.numeroParcelas,
       nsu: nsuByAccessKey.get(invoice.codigoIdentificador) ?? ""
     };
   });

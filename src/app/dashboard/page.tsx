@@ -32,6 +32,7 @@ type Invoice = {
   statusIntegracaoDelphi?: IntegrationStatus | null;
   ordemCompra?: string | null;
   ocContrato?: string | null;
+  numeroParcelas: number;
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
 };
@@ -201,6 +202,8 @@ export default function DashboardPage() {
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
+  const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
+  const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const router = useRouter();
@@ -296,6 +299,8 @@ export default function DashboardPage() {
     nextDay.setDate(nextDay.getDate() + 1);
     setPaymentDate(toLocalDateInputValue(nextDay));
     setPurchaseOrder(invoice.ordemCompra ?? "");
+    setContractPurchaseOrder(invoice.ocContrato ?? "");
+    setInstallmentCount(String(invoice.numeroParcelas ?? 1));
     setApproveModal(invoice);
     setMenuState(null);
   }
@@ -313,11 +318,19 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!installmentCount || Number(installmentCount) < 1) {
+      setMessageType("error");
+      setMessage("Informe um número de parcelas maior ou igual a 1.");
+      return;
+    }
+
     setIsApproving(true);
     const approved = await atualizarNota(approveModal.id, {
       status: "APROVADO",
       dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
       ordemCompra: purchaseOrder.trim() || null,
+      ocContrato: contractPurchaseOrder.trim() || null,
+      numeroParcelas: Number(installmentCount),
       serviceEvaluation: {
         rating: evaluation.rating,
         comment: `Qualificação registrada`,
@@ -333,6 +346,8 @@ export default function DashboardPage() {
     setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
     setPaymentDate("");
     setPurchaseOrder("");
+    setContractPurchaseOrder("");
+    setInstallmentCount("1");
   }
 
   async function verHistorico(invoice: Invoice) {
@@ -516,7 +531,7 @@ export default function DashboardPage() {
                 <td className="px-1.5 py-2 text-center text-slate-600" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de compra:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>OC/Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3"><p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de Compra – Pontual:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>Ordem de Compra – Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Número de parcelas:</strong> {invoice.numeroParcelas ?? 1}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
             {!invoices.length && <tr><td colSpan={9} className="px-4 py-10"><div className="empty-state">{isLoadingNotes ? "Carregando notas..." : "Nenhuma nota encontrada para os filtros selecionados."}</div></td></tr>}
           </tbody>
@@ -547,7 +562,11 @@ export default function DashboardPage() {
       <div className="space-y-4">
         <div role="group" aria-labelledby="dashboard-rating-label"><p id="dashboard-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
         <div className="grid gap-3 sm:grid-cols-3"><label className="content-start">Qualifica?<select aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="content-start">Classificação de risco<select value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="content-start">Data de pagamento<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label></div>
-        <label>Ordem de compra <span className="text-xs font-normal text-slate-500">(opcional)</span><input value={purchaseOrder} onChange={(event) => setPurchaseOrder(event.target.value)} maxLength={120} placeholder="Informe a ordem de compra, se houver" /></label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label>Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
+          <label>Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
+          <label>Número de parcelas<input type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
+        </div>
         <QualificationProcedureLink />
       </div>
       <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>

@@ -188,6 +188,7 @@ model Invoice {
   dataPagamento       DateTime?
   ordemCompra         String?
   ocContrato          String?
+  numeroParcelas      Int              @default(1)
   dataLancamentoDelphi DateTime?
   codigoDelphi        String?
   statusIntegracaoDelphi DelphiIntegrationStatus @default(AGUARDANDO)
