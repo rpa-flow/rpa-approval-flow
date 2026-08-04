@@ -28,6 +28,7 @@ export async function GET() {
       nome: manager.nome,
       email: manager.email,
       role: manager.role,
+      acessoRelatorios: manager.acessoRelatorios,
       suppliers: suppliers.map((supplier) => ({
         supplierId: supplier.id,
         supplierName: supplier.nome

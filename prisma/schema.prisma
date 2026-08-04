@@ -113,6 +113,7 @@ model Manager {
   senhaHash        String
   role             UserRole          @default(GESTOR)
   ativo            Boolean           @default(true)
+  acessoRelatorios Boolean           @default(false)
   managerSuppliers ManagerSupplier[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

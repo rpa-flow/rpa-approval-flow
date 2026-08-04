@@ -133,6 +133,7 @@ export const managerSchema = z.object({
   senha: z.string().min(6),
   role: userRoleSchema.default("GESTOR"),
   ativo: z.boolean().optional(),
+  acessoRelatorios: z.boolean().default(false),
   supplierIds: z.array(z.string().min(1)).default([])
 });
 
@@ -142,6 +143,7 @@ export const updateManagerSchema = z.object({
   senha: z.string().min(6).optional().or(z.literal("")),
   role: userRoleSchema,
   ativo: z.boolean(),
+  acessoRelatorios: z.boolean().default(false),
   supplierIds: z.array(z.string().min(1)).default([])
 });
 
