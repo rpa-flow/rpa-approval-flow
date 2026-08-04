@@ -5,14 +5,19 @@ import { getAllowedSupplierIds } from "@/lib/auth";
 
 export const APPROVAL_SLA_HOURS = 48;
 
-export type ReportsScope = { role: UserRole; allowedSupplierIds?: string[] };
+export type ReportsScope = { hasGlobalAccess: boolean; allowedSupplierIds?: string[] };
 
 export function canViewReports(manager: { role: UserRole; acessoRelatorios: boolean }) {
   return manager.role === "ADMIN" || manager.acessoRelatorios;
 }
 
-export function getReportsScope(manager: { role: UserRole; managerSuppliers: { supplierId: string }[] }): ReportsScope {
-  return manager.role === "ADMIN" ? { role: manager.role } : { role: manager.role, allowedSupplierIds: getAllowedSupplierIds(manager as never) };
+export function getReportsScope(manager: { role: UserRole; acessoRelatorios: boolean; managerSuppliers: { supplierId: string }[] }): ReportsScope {
+  if (canViewReports(manager)) return { hasGlobalAccess: true };
+
+  return {
+    hasGlobalAccess: false,
+    allowedSupplierIds: getAllowedSupplierIds(manager as never)
+  };
 }
 
 export function parseFilters(request: NextRequest) {
@@ -31,7 +36,7 @@ export function parseFilters(request: NextRequest) {
 
 export function invoiceWhere(scope: ReportsScope, filters: ReturnType<typeof parseFilters>): Prisma.InvoiceWhereInput {
   return {
-    ...(scope.role !== "ADMIN" ? { fornecedorId: { in: scope.allowedSupplierIds } } : {}),
+    ...(!scope.hasGlobalAccess ? { fornecedorId: { in: scope.allowedSupplierIds ?? [] } } : {}),
     ...(filters.supplierId ? { fornecedorId: filters.supplierId } : {}),
     ...(filters.managerId ? { criadoPorId: filters.managerId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
