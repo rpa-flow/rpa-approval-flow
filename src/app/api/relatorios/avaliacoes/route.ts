@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionManager } from "@/lib/auth";
-import { getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
+import { canViewReports, getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
 
 export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  if (!canViewReports(manager)) return NextResponse.json({ error: "Acesso aos relatórios não permitido." }, { status: 403 });
 
   const filters = parseFilters(request);
   const invoices = await loadInvoices(getReportsScope(manager), filters);

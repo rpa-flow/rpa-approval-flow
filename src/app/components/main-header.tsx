@@ -26,6 +26,7 @@ type MainHeaderProps = {
 
 export function MainHeader(_: MainHeaderProps) {
   const [role, setRole] = useState<ManagerRole | null>(null);
+  const [acessoRelatorios, setAcessoRelatorios] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -36,7 +37,10 @@ export function MainHeader(_: MainHeaderProps) {
         const res = await fetch("/api/auth/me");
         if (!res.ok) return;
         const data = await res.json();
-        if (isMounted) setRole(data.manager.role as ManagerRole);
+        if (isMounted) {
+          setRole(data.manager.role as ManagerRole);
+          setAcessoRelatorios(Boolean(data.manager.acessoRelatorios));
+        }
       } catch {
         // Mantém fallback sem o link de lançamento para perfis não conhecidos.
       }
@@ -50,6 +54,10 @@ export function MainHeader(_: MainHeaderProps) {
 
   const filteredLinks = useMemo(() => {
     return DEFAULT_HEADER_LINKS.filter((link) => {
+      if (link.href === "/relatorios") {
+        return role === "ADMIN" || acessoRelatorios;
+      }
+
       if (link.href === "/notas") {
         return role === "ADMIN" || role === "FORNECEDOR";
       }
@@ -60,7 +68,7 @@ export function MainHeader(_: MainHeaderProps) {
 
       return true;
     });
-  }, [role]);
+  }, [acessoRelatorios, role]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });

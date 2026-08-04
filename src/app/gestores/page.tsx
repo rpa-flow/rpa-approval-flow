@@ -15,6 +15,7 @@ type ManagerListItem = {
   email: string;
   role: UserRole;
   ativo: boolean;
+  acessoRelatorios: boolean;
   suppliers: SupplierOption[];
 };
 type ManagersResponse = { items: ManagerListItem[]; pagination: PaginationMetadata };
@@ -25,6 +26,7 @@ type ManagerForm = {
   senha: string;
   role: UserRole;
   ativo: boolean;
+  acessoRelatorios: boolean;
   supplierIds: string[];
 };
 
@@ -34,6 +36,7 @@ const EMPTY_FORM: ManagerForm = {
   senha: "",
   role: "GESTOR",
   ativo: true,
+  acessoRelatorios: false,
   supplierIds: []
 };
 
@@ -140,6 +143,7 @@ export default function GestoresPage() {
       senha: "",
       role: manager.role,
       ativo: manager.ativo,
+      acessoRelatorios: manager.acessoRelatorios,
       supplierIds: manager.suppliers.map((supplier) => supplier.id)
     });
     setShowForm(true);
@@ -200,6 +204,7 @@ export default function GestoresPage() {
         email: manager.email,
         role: manager.role,
         ativo: !manager.ativo,
+        acessoRelatorios: manager.acessoRelatorios,
         supplierIds: manager.suppliers.map((supplier) => supplier.id)
       })
     });
@@ -224,6 +229,7 @@ export default function GestoresPage() {
       email: form.email,
       role: form.role,
       ativo: form.ativo,
+      acessoRelatorios: form.acessoRelatorios,
       supplierIds: form.supplierIds,
       ...(form.senha ? { senha: form.senha } : {})
     };
@@ -294,6 +300,7 @@ export default function GestoresPage() {
               <tr>
                 <th className="px-4 py-3 text-left">Gestor</th>
                 <th className="px-4 py-3 text-left">Perfil</th>
+                <th className="px-4 py-3 text-left">Relatórios</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-left">Fornecedores vinculados</th>
                 <th className="px-4 py-3 text-right">Ações</th>
@@ -308,6 +315,11 @@ export default function GestoresPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="badge badge-blue">{roleLabels[manager.role]}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`badge ${manager.role === "ADMIN" || manager.acessoRelatorios ? "badge-success" : "badge-slate"}`}>
+                      {manager.role === "ADMIN" || manager.acessoRelatorios ? "Permitido" : "Sem acesso"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`badge ${manager.ativo ? "badge-success" : "badge-slate"}`}>
@@ -460,6 +472,15 @@ export default function GestoresPage() {
                   onChange={(e) => setForm((current) => ({ ...current, ativo: e.target.checked }))}
                 />
                 Usuário ativo
+              </label>
+              <label className="checkbox md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.role === "ADMIN" || form.acessoRelatorios}
+                  disabled={form.role === "ADMIN"}
+                  onChange={(e) => setForm((current) => ({ ...current, acessoRelatorios: e.target.checked }))}
+                />
+                {form.role === "ADMIN" ? "Administradores sempre acessam relatórios" : "Permitir acesso aos relatórios"}
               </label>
             </div>
 

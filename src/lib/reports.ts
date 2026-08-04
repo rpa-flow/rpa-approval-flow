@@ -7,6 +7,10 @@ export const APPROVAL_SLA_HOURS = 48;
 
 export type ReportsScope = { role: UserRole; allowedSupplierIds?: string[] };
 
+export function canViewReports(manager: { role: UserRole; acessoRelatorios: boolean }) {
+  return manager.role === "ADMIN" || manager.acessoRelatorios;
+}
+
 export function getReportsScope(manager: { role: UserRole; managerSuppliers: { supplierId: string }[] }): ReportsScope {
   return manager.role === "ADMIN" ? { role: manager.role } : { role: manager.role, allowedSupplierIds: getAllowedSupplierIds(manager as never) };
 }

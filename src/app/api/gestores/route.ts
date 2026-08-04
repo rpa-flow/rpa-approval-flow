@@ -24,6 +24,7 @@ const managerSelect = {
   email: true,
   role: true,
   ativo: true,
+  acessoRelatorios: true,
   managerSuppliers: {
     include: {
       supplier: {
@@ -58,6 +59,7 @@ function serializeManager(manager: ManagerWithRelations) {
     email: manager.email,
     role: manager.role,
     ativo: manager.ativo,
+    acessoRelatorios: manager.acessoRelatorios,
     suppliers: manager.managerSuppliers.map((link) => link.supplier)
   };
 }
