@@ -15,7 +15,8 @@ A rota `/relatorios` centraliza KPIs executivos e relatórios operacionais de no
 
 Todos os endpoints aplicam autenticação e escopo por perfil:
 - `ADMIN`: visão global
-- `GESTOR`/`FORNECEDOR`: apenas fornecedores vinculados
+- usuário com `acessoRelatorios`: visão global de todos os gestores e fornecedores, independentemente dos vínculos cadastrados
+- demais usuários: sem acesso aos relatórios; caso o escopo seja reutilizado internamente, ele permanece limitado aos fornecedores vinculados
 
 ## Arquitetura
 - Filtros e escopo ficam em `src/lib/reports.ts`.
