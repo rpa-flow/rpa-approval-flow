@@ -199,6 +199,9 @@ export default function DashboardPage() {
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
+  const [rejectModal, setRejectModal] = useState<Invoice | null>(null);
+  const [rejectionObservation, setRejectionObservation] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
@@ -305,10 +308,40 @@ export default function DashboardPage() {
     setMenuState(null);
   }
 
+  function abrirModalRecusa(invoice: Invoice) {
+    setRejectModal(invoice);
+    setRejectionObservation("");
+    setMenuState(null);
+  }
+
   function handleMenuPointerDown(event: React.PointerEvent<HTMLButtonElement>, action: () => void) {
     event.preventDefault();
     event.stopPropagation();
     action();
+  }
+
+  async function recusarNota() {
+    if (!rejectModal) return;
+
+    const observation = rejectionObservation.trim();
+    if (!observation) {
+      setMessageType("error");
+      setMessage("Informe a observação para recusar a nota.");
+      return;
+    }
+
+    setIsRejecting(true);
+    const refused = await atualizarNota(rejectModal.id, {
+      status: "RECUSADO",
+      reason: observation,
+      observacaoValidacao: observation
+    });
+    setIsRejecting(false);
+
+    if (!refused) return;
+
+    setRejectModal(null);
+    setRejectionObservation("");
   }
 
   async function aprovarComAvaliacao() {
@@ -555,12 +588,20 @@ export default function DashboardPage() {
     {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
     {menuState && <div className="fixed z-50 w-[calc(100vw-1rem)] max-w-60 rounded-md border border-border bg-surface-container-lowest p-2 shadow-elevated" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
       {['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalAprovacao(menuState.invoice))}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
-      {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { const qualifica = window.confirm("A nota qualifica para este processo?") ? "SIM" : "NAO"; void atualizarNota(menuState.invoice.id, { status: "RECUSADO", reason: `Qualifica: ${qualifica === "SIM" ? "Sim" : "Não"}`, observacaoValidacao: qualifica === "SIM" ? "Sim" : "Não" }); })}>⛔ Reprovar</button>}
+      {menuState.invoice.status === 'AGUARDANDO_APROVACAO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalRecusa(menuState.invoice))}>⛔ Reprovar</button>}
       {menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); })}>↩️ Revogar aprovação</button>}
       <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); })}>🔎 Ver detalhes</button>
       <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { setExpandedId(menuState.invoice.id); setMenuState(null); })}>▾ Expandir resumo</button>
       <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => void verHistorico(menuState.invoice))}>🕒 Ver histórico</button>
     </div>}
+
+
+    {rejectModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setRejectModal(null)} />}
+    {rejectModal && <section role="dialog" aria-modal="true" aria-labelledby="reject-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto w-auto max-w-lg rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-24 sm:w-[92vw] sm:p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="section-header"><div><h3 id="reject-modal-title" className="section-title">Reprovar nota</h3><p className="section-description">Informe a observação obrigatória para recusar a nota {rejectModal.numeroNota}.</p></div><span className="badge bg-rose-100 text-rose-800">Recusa</span></div>
+      <label className="approval-field mt-4"><span className="approval-field-label">Observação obrigatória</span><textarea className="approval-field-control" value={rejectionObservation} onChange={(event) => setRejectionObservation(event.target.value)} rows={5} maxLength={500} placeholder="Descreva o motivo da recusa" required /></label>
+      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setRejectModal(null)}>Cancelar</button><button type="button" className="btn-primary !bg-rose-700 hover:!bg-rose-800" onClick={recusarNota} disabled={isRejecting || !rejectionObservation.trim()}>{isRejecting ? "Registrando..." : "Confirmar reprovação"}</button></div>
+    </section>}
 
     {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setApproveModal(null)} />}
     {approveModal && <section role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6" onClick={(e) => e.stopPropagation()}>

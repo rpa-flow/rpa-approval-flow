@@ -142,11 +142,26 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
+  const validationObservation = typeof payloadToSave.observacaoValidacao === "string" && payloadToSave.observacaoValidacao.trim().length > 0
+    ? payloadToSave.observacaoValidacao.trim()
+    : null;
+
   if (isChangingApprovedStatus && !reason) {
     return NextResponse.json(
       { error: "Informe o motivo para alterar ou cancelar uma aprovação." },
       { status: 400 }
     );
+  }
+
+  if (payloadToSave.status === "RECUSADO" && !reason && !validationObservation) {
+    return NextResponse.json(
+      { error: "Informe a observação para recusar a nota." },
+      { status: 400 }
+    );
+  }
+
+  if (validationObservation) {
+    payloadToSave.observacaoValidacao = validationObservation;
   }
 
   if (payloadToSave.status === "PROCESSADO") {
