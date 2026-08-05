@@ -7,10 +7,38 @@ import { ChartCard, EmptyState, ErrorState, KpiCard, LoadingState, ReportPageLay
 import { Input } from "@/components/ui/input";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormField } from "@/components/ui-kit";
+import { Button } from "@/components/ui/button";
 
 type SummaryData = { total: number; approved: number; refused: number; processed: number; pending: number };
 type CreatedProcessedData = { monthly: Array<{ month: string; created: number; processed: number; difference: number; conversionRate: number }> };
 type SlaData = { monthly: Array<{ month: string; total: number; outOfSla: number; avgApprovalHours: number; outOfSlaRate: number }>; ranking: Array<{ numeroNota: string; fornecedor: string; gestor: string; approvalHours: number; outOfSla: boolean }> };
+
+const csvCell = (value: unknown) => {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+const csvSection = (title: string, headers: string[], rows: unknown[][]) => [
+  [title],
+  headers,
+  ...rows
+];
+
+function downloadCsv(filename: string, sections: unknown[][][]) {
+  const lines = sections
+    .flatMap((section, index) => (index === 0 ? section : [[""], ...section]))
+    .map((row) => row.map(csvCell).join(","));
+  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 type RatingsRiskData = { summary: { totalInvoices: number; totalEvaluated: number; averageRating: number; highRiskEvaluations: number }; distribution: Record<string, number>; risks: Record<string, number>; supplierRanking: Array<{ supplierName: string; totalInvoices: number; evaluatedInvoices: number; avgRating: number; evaluationCoverage: number; highRisk: number; mediumRisk: number; lowRisk: number }> };
 
 export default function RelatoriosPage() {
@@ -46,6 +74,38 @@ export default function RelatoriosPage() {
     return Object.entries(ratingsRisk.risks).map(([level, value]) => [level, `${"█".repeat(Math.max(1, value))} (${value})`]);
   }, [ratingsRisk]);
 
+  const exportRatingsReport = () => {
+    if (!ratingsRisk) return;
+
+    const periodLabel = from || to ? `${from || "início"}_a_${to || "hoje"}` : "todos-os-periodos";
+    const filePeriod = periodLabel.replace(/[^a-z0-9_-]/gi, "-");
+
+    downloadCsv(`relatorio-avaliacoes-${filePeriod}.csv`, [
+      csvSection("Resumo", ["Indicador", "Valor"], [
+        ["Total de notas", ratingsRisk.summary.totalInvoices],
+        ["Notas avaliadas", ratingsRisk.summary.totalEvaluated],
+        ["Média de avaliação", ratingsRisk.summary.averageRating.toFixed(2)],
+        ["Avaliações de risco alto", ratingsRisk.summary.highRiskEvaluations]
+      ]),
+      csvSection("Distribuição de avaliações", ["Nota", "Quantidade"], Object.entries(ratingsRisk.distribution)),
+      csvSection("Distribuição de risco", ["Risco", "Quantidade"], Object.entries(ratingsRisk.risks)),
+      csvSection(
+        "Avaliações e riscos por fornecedor",
+        ["Fornecedor", "Notas", "Avaliadas", "Média", "% Cobertura", "Risco Alto", "Risco Médio", "Risco Baixo"],
+        ratingsRisk.supplierRanking.map((supplier) => [
+          supplier.supplierName,
+          supplier.totalInvoices,
+          supplier.evaluatedInvoices,
+          supplier.avgRating,
+          `${supplier.evaluationCoverage}%`,
+          supplier.highRisk,
+          supplier.mediumRisk,
+          supplier.lowRisk
+        ])
+      )
+    ]);
+  };
+
   return <AppLayout>
     <MainHeader title="Relatórios executivos" subtitle="Histórico mensal, SLA, avaliações e risco" />
     <ReportPageLayout title="Dashboard Executivo" filters={<div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end"><div className="grid gap-3 sm:grid-cols-2"><FormField label="Data inicial"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField><FormField label="Data final"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></FormField></div><TabsList role="tablist" aria-label="Tipo de relatório"><TabsTrigger type="button" active={tab === "geral"} onClick={() => setTab("geral")}>Visão Geral</TabsTrigger><TabsTrigger type="button" active={tab === "avaliacoes"} onClick={() => setTab("avaliacoes")}>Avaliações & Risco</TabsTrigger></TabsList></div>}>
@@ -64,6 +124,11 @@ export default function RelatoriosPage() {
       </>}
 
       {!loading && !error && tab === "avaliacoes" && <>
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={exportRatingsReport} disabled={!ratingsRisk}>
+            Exportar CSV
+          </Button>
+        </div>
         {ratingsRisk && <section className="grid gap-3 md:grid-cols-4">
           <KpiCard title="Notas avaliadas" value={String(ratingsRisk.summary.totalEvaluated)} description="Com avaliação registrada" />
           <KpiCard title="Média de avaliação" value={ratingsRisk.summary.averageRating.toFixed(2)} description="Escala 1 a 5" />
