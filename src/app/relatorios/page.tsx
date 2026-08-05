@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
 import { ChartCard, EmptyState, ErrorState, KpiCard, LoadingState, ReportPageLayout, ReportTable } from "@/app/components/reports/report-components";
@@ -13,30 +14,17 @@ type SummaryData = { total: number; approved: number; refused: number; processed
 type CreatedProcessedData = { monthly: Array<{ month: string; created: number; processed: number; difference: number; conversionRate: number }> };
 type SlaData = { monthly: Array<{ month: string; total: number; outOfSla: number; avgApprovalHours: number; outOfSlaRate: number }>; ranking: Array<{ numeroNota: string; fornecedor: string; gestor: string; approvalHours: number; outOfSla: boolean }> };
 
-const csvCell = (value: unknown) => {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-};
+type WorkbookSheet = { name: string; headers: string[]; rows: unknown[][] };
 
-const csvSection = (title: string, headers: string[], rows: unknown[][]) => [
-  [title],
-  headers,
-  ...rows
-];
+function downloadWorkbook(filename: string, sheets: WorkbookSheet[]) {
+  const workbook = XLSX.utils.book_new();
 
-function downloadCsv(filename: string, sections: unknown[][][]) {
-  const lines = sections
-    .flatMap((section, index) => (index === 0 ? section : [[""], ...section]))
-    .map((row) => row.map(csvCell).join(","));
-  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  for (const sheet of sheets) {
+    const worksheet = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+  }
+
+  XLSX.writeFile(workbook, filename);
 }
 
 type RatingsRiskData = { summary: { totalInvoices: number; totalEvaluated: number; averageRating: number; highRiskEvaluations: number }; distribution: Record<string, number>; risks: Record<string, number>; supplierRanking: Array<{ supplierName: string; totalInvoices: number; evaluatedInvoices: number; avgRating: number; evaluationCoverage: number; highRisk: number; mediumRisk: number; lowRisk: number }> };
@@ -80,19 +68,31 @@ export default function RelatoriosPage() {
     const periodLabel = from || to ? `${from || "início"}_a_${to || "hoje"}` : "todos-os-periodos";
     const filePeriod = periodLabel.replace(/[^a-z0-9_-]/gi, "-");
 
-    downloadCsv(`relatorio-avaliacoes-${filePeriod}.csv`, [
-      csvSection("Resumo", ["Indicador", "Valor"], [
-        ["Total de notas", ratingsRisk.summary.totalInvoices],
-        ["Notas avaliadas", ratingsRisk.summary.totalEvaluated],
-        ["Média de avaliação", ratingsRisk.summary.averageRating.toFixed(2)],
-        ["Avaliações de risco alto", ratingsRisk.summary.highRiskEvaluations]
-      ]),
-      csvSection("Distribuição de avaliações", ["Nota", "Quantidade"], Object.entries(ratingsRisk.distribution)),
-      csvSection("Distribuição de risco", ["Risco", "Quantidade"], Object.entries(ratingsRisk.risks)),
-      csvSection(
-        "Avaliações e riscos por fornecedor",
-        ["Fornecedor", "Notas", "Avaliadas", "Média", "% Cobertura", "Risco Alto", "Risco Médio", "Risco Baixo"],
-        ratingsRisk.supplierRanking.map((supplier) => [
+    downloadWorkbook(`relatorio-avaliacoes-${filePeriod}.xlsx`, [
+      {
+        name: "Resumo",
+        headers: ["Indicador", "Valor"],
+        rows: [
+          ["Total de notas", ratingsRisk.summary.totalInvoices],
+          ["Notas avaliadas", ratingsRisk.summary.totalEvaluated],
+          ["Média de avaliação", ratingsRisk.summary.averageRating.toFixed(2)],
+          ["Avaliações de risco alto", ratingsRisk.summary.highRiskEvaluations]
+        ]
+      },
+      {
+        name: "Distribuição notas",
+        headers: ["Nota", "Quantidade"],
+        rows: Object.entries(ratingsRisk.distribution)
+      },
+      {
+        name: "Distribuição risco",
+        headers: ["Risco", "Quantidade"],
+        rows: Object.entries(ratingsRisk.risks)
+      },
+      {
+        name: "Fornecedores",
+        headers: ["Fornecedor", "Notas", "Avaliadas", "Média", "% Cobertura", "Risco Alto", "Risco Médio", "Risco Baixo"],
+        rows: ratingsRisk.supplierRanking.map((supplier) => [
           supplier.supplierName,
           supplier.totalInvoices,
           supplier.evaluatedInvoices,
@@ -102,7 +102,7 @@ export default function RelatoriosPage() {
           supplier.mediumRisk,
           supplier.lowRisk
         ])
-      )
+      }
     ]);
   };
 
@@ -126,7 +126,7 @@ export default function RelatoriosPage() {
       {!loading && !error && tab === "avaliacoes" && <>
         <div className="flex justify-end">
           <Button type="button" variant="outline" onClick={exportRatingsReport} disabled={!ratingsRisk}>
-            Exportar CSV
+            Exportar XLSX
           </Button>
         </div>
         {ratingsRisk && <section className="grid gap-3 md:grid-cols-4">
