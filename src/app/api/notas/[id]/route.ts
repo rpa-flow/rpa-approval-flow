@@ -34,6 +34,11 @@ function getServiceDescriptionFromXml(invoice: { xmlOriginal?: string | null; nb
   }
 }
 
+
+function hasPurchaseOrderOrContract(values: { ordemCompra?: string | null; ocContrato?: string | null }) {
+  return Boolean(values.ordemCompra?.trim() || values.ocContrato?.trim());
+}
+
 async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: string | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
   const allowedSupplierIds = getAllowedSupplierIds(manager);
   return manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id;
@@ -162,6 +167,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         { status: 400 }
       );
     }
+
+    const approvalPurchaseOrder = payloadToSave.ordemCompra === undefined ? existing.ordemCompra : payloadToSave.ordemCompra;
+    const approvalContractOrder = payloadToSave.ocContrato === undefined ? existing.ocContrato : payloadToSave.ocContrato;
+
+    if (!hasPurchaseOrderOrContract({ ordemCompra: approvalPurchaseOrder, ocContrato: approvalContractOrder })) {
+      return NextResponse.json(
+        { error: "Informe a ordem de compra ou a ordem de contrato para aprovar a nota." },
+        { status: 400 }
+      );
+    }
+
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
     payloadToSave.tentativasNotificacao = 0;
