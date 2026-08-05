@@ -130,6 +130,8 @@ export default function NotaDetalhePage() {
   const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
+  const [rejectionObservation, setRejectionObservation] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
 
@@ -185,6 +187,49 @@ export default function NotaDetalhePage() {
       document.getElementById("revogar-aprovacao")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [invoice, loading]);
+
+  async function recusarNota() {
+    if (!invoice) return;
+
+    const observation = rejectionObservation.trim();
+    if (!observation) {
+      setMessageType("error");
+      setMessage("Informe a observação para recusar a nota.");
+      return;
+    }
+
+    setIsRejecting(true);
+    setMessage("");
+
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "RECUSADO",
+          reason: observation,
+          observacaoValidacao: observation
+        })
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        setMessageType("error");
+        setMessage(error?.error ?? "Não foi possível reprovar a nota.");
+        return;
+      }
+
+      setMessageType("success");
+      setMessage("Nota reprovada com sucesso.");
+      setRejectionObservation("");
+      await loadData();
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor para reprovar a nota. Recarregue a página e tente novamente.");
+    } finally {
+      setIsRejecting(false);
+    }
+  }
 
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
@@ -286,6 +331,7 @@ export default function NotaDetalhePage() {
   }
 
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO");
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
 
   return <AppLayout>
@@ -356,6 +402,16 @@ export default function NotaDetalhePage() {
 
       <aside className="space-y-4">
 
+
+        {canReject && <section className="card space-y-4 border-rose-200 bg-rose-50/50 ring-1 ring-rose-100">
+          <div>
+            <h3 className="section-title">Reprovar nota</h3>
+            <p className="section-description">Recuse a nota diretamente, sem precisar aprová-la antes. A observação é obrigatória e será registrada no histórico.</p>
+          </div>
+          <label className="approval-field"><span className="approval-field-label">Observação obrigatória</span><textarea className="approval-field-control" value={rejectionObservation} onChange={(event) => setRejectionObservation(event.target.value)} rows={4} maxLength={500} placeholder="Descreva o motivo da recusa" required /></label>
+          <button type="button" className="btn-primary w-full !bg-rose-700 hover:!bg-rose-800" onClick={recusarNota} disabled={isRejecting || !rejectionObservation.trim()}>{isRejecting ? "Registrando..." : "Reprovar nota"}</button>
+        </section>}
+
         {canChangeApprovedStatus && <section id="revogar-aprovacao" className="card space-y-4 border-amber-200 bg-amber-50/50 scroll-mt-6 ring-1 ring-amber-100">
           <div>
             <h3 className="section-title">Revogar ou alterar aprovação</h3>
@@ -364,7 +420,7 @@ export default function NotaDetalhePage() {
           <label>Novo status<select value={statusChange.status} onChange={(event) => setStatusChange((prev) => ({ ...prev, status: event.target.value as Exclude<InvoiceStatus, "APROVADO"> }))}>{APPROVED_STATUS_CHANGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <p className="rounded-md border border-amber-200 bg-surface-container-lowest p-3 text-xs font-semibold text-amber-900">{APPROVED_STATUS_CHANGE_OPTIONS.find((option) => option.value === statusChange.status)?.description}</p>
           <label>Motivo da alteração<textarea value={statusChange.reason} onChange={(event) => setStatusChange((prev) => ({ ...prev, reason: event.target.value }))} rows={4} maxLength={500} placeholder="Descreva o erro ou motivo para cancelar/alterar a aprovação" /></label>
-          <button type="button" className="btn-secondary w-full" onClick={alterarStatusAprovado} disabled={isChangingStatus}>{isChangingStatus ? "Registrando..." : statusChange.status === "AGUARDANDO_APROVACAO" ? "Cancelar aprovação" : "Alterar status"}</button>
+          <button type="button" className="btn-secondary w-full" onClick={alterarStatusAprovado} disabled={isChangingStatus || !statusChange.reason.trim()}>{isChangingStatus ? "Registrando..." : statusChange.status === "AGUARDANDO_APROVACAO" ? "Cancelar aprovação" : "Alterar status"}</button>
         </section>}
 
         {canApprove && <section className="card space-y-4">

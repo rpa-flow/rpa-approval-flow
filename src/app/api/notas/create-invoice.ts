@@ -66,6 +66,7 @@ export type CreateInvoiceOptions = {
   initialStatus?: InvoiceStatus;
   sendCreatedEmail?: boolean;
   auditDescription?: string;
+  defaultRejectionObservation?: string;
 };
 
 export async function createInvoiceFromRequest(request: NextRequest, options: CreateInvoiceOptions = {}) {
@@ -236,7 +237,14 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
 
   const initialStatus = options.initialStatus ?? InvoiceStatus.AGUARDANDO_APROVACAO;
   const isRejectedOnCreate = initialStatus === InvoiceStatus.RECUSADO;
-  const validationReason = parsed.data.observacaoValidacao ?? parsed.data.reason ?? null;
+  const validationReason = parsed.data.observacaoValidacao?.trim() || parsed.data.reason?.trim() || options.defaultRejectionObservation?.trim() || null;
+
+  if (isRejectedOnCreate && !validationReason) {
+    return NextResponse.json(
+      { error: "Informe a observação para recusar a nota." },
+      { status: 400 }
+    );
+  }
 
   const invoice = await prisma.invoice.create({
     data: {
