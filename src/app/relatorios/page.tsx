@@ -1,16 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
 import { ChartCard, EmptyState, ErrorState, KpiCard, LoadingState, ReportPageLayout, ReportTable } from "@/app/components/reports/report-components";
 import { Input } from "@/components/ui/input";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormField } from "@/components/ui-kit";
+import { Button } from "@/components/ui/button";
 
 type SummaryData = { total: number; approved: number; refused: number; processed: number; pending: number };
 type CreatedProcessedData = { monthly: Array<{ month: string; created: number; processed: number; difference: number; conversionRate: number }> };
 type SlaData = { monthly: Array<{ month: string; total: number; outOfSla: number; avgApprovalHours: number; outOfSlaRate: number }>; ranking: Array<{ numeroNota: string; fornecedor: string; gestor: string; approvalHours: number; outOfSla: boolean }> };
+
+type WorkbookSheet = { name: string; headers: string[]; rows: unknown[][] };
+
+function downloadWorkbook(filename: string, sheets: WorkbookSheet[]) {
+  const workbook = XLSX.utils.book_new();
+
+  for (const sheet of sheets) {
+    const worksheet = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+  }
+
+  XLSX.writeFile(workbook, filename);
+}
+
 type RatingsRiskData = { summary: { totalInvoices: number; totalEvaluated: number; averageRating: number; highRiskEvaluations: number }; distribution: Record<string, number>; risks: Record<string, number>; supplierRanking: Array<{ supplierName: string; totalInvoices: number; evaluatedInvoices: number; avgRating: number; evaluationCoverage: number; highRisk: number; mediumRisk: number; lowRisk: number }> };
 
 export default function RelatoriosPage() {
@@ -46,6 +62,50 @@ export default function RelatoriosPage() {
     return Object.entries(ratingsRisk.risks).map(([level, value]) => [level, `${"█".repeat(Math.max(1, value))} (${value})`]);
   }, [ratingsRisk]);
 
+  const exportRatingsReport = () => {
+    if (!ratingsRisk) return;
+
+    const periodLabel = from || to ? `${from || "início"}_a_${to || "hoje"}` : "todos-os-periodos";
+    const filePeriod = periodLabel.replace(/[^a-z0-9_-]/gi, "-");
+
+    downloadWorkbook(`relatorio-avaliacoes-${filePeriod}.xlsx`, [
+      {
+        name: "Resumo",
+        headers: ["Indicador", "Valor"],
+        rows: [
+          ["Total de notas", ratingsRisk.summary.totalInvoices],
+          ["Notas avaliadas", ratingsRisk.summary.totalEvaluated],
+          ["Média de avaliação", ratingsRisk.summary.averageRating.toFixed(2)],
+          ["Avaliações de risco alto", ratingsRisk.summary.highRiskEvaluations]
+        ]
+      },
+      {
+        name: "Distribuição notas",
+        headers: ["Nota", "Quantidade"],
+        rows: Object.entries(ratingsRisk.distribution)
+      },
+      {
+        name: "Distribuição risco",
+        headers: ["Risco", "Quantidade"],
+        rows: Object.entries(ratingsRisk.risks)
+      },
+      {
+        name: "Fornecedores",
+        headers: ["Fornecedor", "Notas", "Avaliadas", "Média", "% Cobertura", "Risco Alto", "Risco Médio", "Risco Baixo"],
+        rows: ratingsRisk.supplierRanking.map((supplier) => [
+          supplier.supplierName,
+          supplier.totalInvoices,
+          supplier.evaluatedInvoices,
+          supplier.avgRating,
+          `${supplier.evaluationCoverage}%`,
+          supplier.highRisk,
+          supplier.mediumRisk,
+          supplier.lowRisk
+        ])
+      }
+    ]);
+  };
+
   return <AppLayout>
     <MainHeader title="Relatórios executivos" subtitle="Histórico mensal, SLA, avaliações e risco" />
     <ReportPageLayout title="Dashboard Executivo" filters={<div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end"><div className="grid gap-3 sm:grid-cols-2"><FormField label="Data inicial"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField><FormField label="Data final"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></FormField></div><TabsList role="tablist" aria-label="Tipo de relatório"><TabsTrigger type="button" active={tab === "geral"} onClick={() => setTab("geral")}>Visão Geral</TabsTrigger><TabsTrigger type="button" active={tab === "avaliacoes"} onClick={() => setTab("avaliacoes")}>Avaliações & Risco</TabsTrigger></TabsList></div>}>
@@ -64,6 +124,11 @@ export default function RelatoriosPage() {
       </>}
 
       {!loading && !error && tab === "avaliacoes" && <>
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={exportRatingsReport} disabled={!ratingsRisk}>
+            Exportar XLSX
+          </Button>
+        </div>
         {ratingsRisk && <section className="grid gap-3 md:grid-cols-4">
           <KpiCard title="Notas avaliadas" value={String(ratingsRisk.summary.totalEvaluated)} description="Com avaliação registrada" />
           <KpiCard title="Média de avaliação" value={ratingsRisk.summary.averageRating.toFixed(2)} description="Escala 1 a 5" />
