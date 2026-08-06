@@ -331,7 +331,7 @@ export default function NotaDetalhePage() {
   }
 
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
-  const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "AGUARDANDO_APROVACAO");
+  const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
 
   return <AppLayout>
