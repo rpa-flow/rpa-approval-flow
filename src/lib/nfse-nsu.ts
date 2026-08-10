@@ -389,7 +389,7 @@ export function buildNsuWhere(companyId: string, sp: URLSearchParams): Prisma.Nf
 
 export async function listCompanyNfseNsus(companyId: string, sp: URLSearchParams) {
   await assertCompanyExists(companyId);
-  const { page: requestedPage, pageSize } = getPaginationParams(sp);
+  const { page: requestedPage, pageSize } = getPaginationParams(sp, 50);
   const where = buildNsuWhere(companyId, sp);
   const total = await prisma.nfseNsuControl.count({ where });
   const pagination = getPaginationMetadata(total, requestedPage, pageSize);
