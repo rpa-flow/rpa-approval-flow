@@ -1,6 +1,7 @@
 import { Prisma, NfseNsuStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaginationMetadata, getPaginationParams } from "@/lib/pagination";
+import { resolveNfseNsuTransition } from "@/lib/nfse-nsu-state";
 
 export const RESOLVED_NFSE_NSU_STATUSES = [NfseNsuStatus.Downloaded, NfseNsuStatus.IgnoredByRule] as const;
 export const PENDING_NFSE_NSU_STATUSES = [NfseNsuStatus.PendingGap, NfseNsuStatus.RetryError] as const;
@@ -133,6 +134,10 @@ export async function registerNfseNsuAttempt(input: RegisterNfseNsuAttemptInput)
   const signature = attemptSignature(input);
   return prisma.$transaction(async (tx) => {
     await assertCompany(input.companyId, input.cnpj, tx as any);
+    // Serialize all state changes for the same logical NSU. Unlike a row lock,
+    // this also protects the interval before the control row exists.
+    const lockKey = `${input.companyId}:${signature.cnpj}:${input.nsu}`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))::text`;
     const existingAttempt = await tx.nfseNsuAttempt.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
       include: { nsuControl: true }
@@ -143,7 +148,14 @@ export async function registerNfseNsuAttempt(input: RegisterNfseNsuAttemptInput)
         throw new NfseNsuConflictError("Chave de idempotência já utilizada com conteúdo diferente.");
       }
       console.info("[nfse-nsu:attempt:duplicate]", { companyId: input.companyId, cnpj: signature.cnpj, nsu: input.nsu, idempotencyKey: input.idempotencyKey });
-      return serializeControl(existingAttempt.nsuControl, { attemptId: existingAttempt.id, idempotent: true });
+      return serializeControl(existingAttempt.nsuControl, {
+        attemptId: existingAttempt.id,
+        idempotent: true,
+        attemptRegistered: false,
+        effectiveStateChanged: existingAttempt.effectiveStateChanged,
+        effectiveStatus: existingAttempt.nsuControl.status,
+        ignoredBecauseAlreadyDownloaded: existingAttempt.ignoredBecauseAlreadyDownloaded
+      });
     }
 
     const attemptedAt = new Date(input.attemptedAt);
@@ -162,6 +174,7 @@ export async function registerNfseNsuAttempt(input: RegisterNfseNsuAttemptInput)
       }
     });
     const previousStatus = current.status;
+    const transition = resolveNfseNsuTransition(previousStatus, input.status, current.attempts > 0);
     const attempt = await tx.nfseNsuAttempt.create({ data: {
       nsuControlId: current.id,
       idempotencyKey: input.idempotencyKey,
@@ -172,23 +185,36 @@ export async function registerNfseNsuAttempt(input: RegisterNfseNsuAttemptInput)
       documentId: signature.documentId,
       accessKey: signature.accessKey,
       ignoreReason: signature.ignoreReason,
-      attemptedAt
+      attemptedAt,
+      effectiveStateChanged: transition.effectiveStateChanged,
+      ignoredBecauseAlreadyDownloaded: transition.ignoredBecauseAlreadyDownloaded
     }});
+    const isLatestAttempt = current.attempts === 0 || attemptedAt >= current.lastAttemptAt;
     const data: Prisma.NfseNsuControlUpdateInput = {
-      status: input.status,
+      status: transition.effectiveStatus,
       attempts: { increment: 1 },
       firstAttemptAt: current.attempts === 0 || attemptedAt < current.firstAttemptAt ? attemptedAt : current.firstAttemptAt,
-      lastAttemptAt: attemptedAt,
-      lastHttpStatus: input.httpStatus ?? null,
-      wasLastAttemptScanned: input.wasNsuScanned,
-      lastError: input.status === NfseNsuStatus.RetryError ? signature.errorMessage : null,
-      documentId: (input.status === NfseNsuStatus.Downloaded || input.status === NfseNsuStatus.IgnoredByRule) ? signature.documentId : null,
-      accessKey: (input.status === NfseNsuStatus.Downloaded || input.status === NfseNsuStatus.IgnoredByRule) ? signature.accessKey : null,
-      ignoreReason: input.status === NfseNsuStatus.IgnoredByRule ? signature.ignoreReason : null
+      ...(isLatestAttempt ? {
+        lastAttemptAt: attemptedAt,
+        lastHttpStatus: input.httpStatus ?? null,
+        wasLastAttemptScanned: input.wasNsuScanned,
+        lastError: input.status === NfseNsuStatus.RetryError ? signature.errorMessage : null
+      } : {}),
+      ...(input.status === NfseNsuStatus.Downloaded ? { documentId: signature.documentId, accessKey: signature.accessKey, ignoreReason: null } : {}),
+      ...(transition.effectiveStatus !== NfseNsuStatus.Downloaded && input.status === NfseNsuStatus.IgnoredByRule
+        ? { documentId: signature.documentId, accessKey: signature.accessKey, ignoreReason: signature.ignoreReason }
+        : {})
     };
     const updated = await tx.nfseNsuControl.update({ where: { id: current.id }, data });
     console.info("[nfse-nsu:attempt:registered]", { companyId: input.companyId, cnpj: signature.cnpj, nsu: input.nsu, idempotencyKey: input.idempotencyKey, previousStatus, newStatus: input.status, attempts: updated.attempts, httpStatus: input.httpStatus ?? null });
-    return serializeControl(updated, { attemptId: attempt.id, idempotent: false });
+    return serializeControl(updated, {
+      attemptId: attempt.id,
+      idempotent: false,
+      attemptRegistered: true,
+      effectiveStateChanged: transition.effectiveStateChanged,
+      effectiveStatus: updated.status,
+      ignoredBecauseAlreadyDownloaded: transition.ignoredBecauseAlreadyDownloaded
+    });
   });
 }
 
@@ -338,7 +364,10 @@ export function buildNsuWhere(companyId: string, sp: URLSearchParams): Prisma.Nf
   const and: Prisma.NfseNsuControlWhereInput[] = [];
   const status = sp.get("status");
   if (status && Object.values(NfseNsuStatus).includes(status as NfseNsuStatus)) and.push({ status: status as NfseNsuStatus });
-  if (sp.get("onlyGaps") === "true") and.push({ status: NfseNsuStatus.PendingGap });
+  if (sp.get("onlyGaps") === "true") and.push({
+    status: NfseNsuStatus.PendingGap,
+    attemptsHistory: { none: { resultStatus: NfseNsuStatus.Downloaded } }
+  });
   if (sp.get("onlyErrors") === "true") and.push({ status: NfseNsuStatus.RetryError });
   if (sp.get("onlyResolved") === "true") and.push({ status: { in: RESOLVED_NFSE_NSU_STATUSES as any } });
   const nsu: Prisma.BigIntFilter = {};
@@ -383,7 +412,7 @@ export async function listNsuAttempts(companyId: string, nsu: number) {
   const control = await prisma.nfseNsuControl.findUnique({ where: { companyId_nsu: { companyId, nsu: BigInt(nsu) } } });
   if (!control) throw new NfseNsuNotFoundError("NSU não encontrado para esta empresa.");
   const attempts = await prisma.nfseNsuAttempt.findMany({ where: { nsuControlId: control.id }, orderBy: { attemptedAt: "desc" } });
-  return { items: attempts.map((a) => ({ attemptedAt: toIso(a.attemptedAt), resultStatus: a.resultStatus, httpStatus: a.httpStatus, errorMessage: a.errorMessage, wasNsuScanned: a.wasNsuScanned, documentId: a.documentId, accessKey: a.accessKey, ignoreReason: a.ignoreReason })) };
+  return { items: attempts.map((a) => ({ attemptedAt: toIso(a.attemptedAt), resultStatus: a.resultStatus, httpStatus: a.httpStatus, errorMessage: a.errorMessage, wasNsuScanned: a.wasNsuScanned, documentId: a.documentId, accessKey: a.accessKey, ignoreReason: a.ignoreReason, effectiveStateChanged: a.effectiveStateChanged, ignoredBecauseAlreadyDownloaded: a.ignoredBecauseAlreadyDownloaded })) };
 }
 
 export async function listNfseNsuCompaniesReport(sp: URLSearchParams) {

@@ -361,6 +361,7 @@ model NfseNsuControl {
   attemptsHistory       NfseNsuAttempt[]
 
   @@unique([companyId, nsu])
+  @@unique([companyId, cnpj, nsu])
   @@index([companyId, status])
   @@index([companyId, nsu])
   @@index([companyId, lastAttemptAt])
@@ -379,8 +380,10 @@ model NfseNsuAttempt {
   documentId      String?
   accessKey       String?
   ignoreReason    String?
-  attemptedAt     DateTime
-  createdAt       DateTime      @default(now())
+  attemptedAt                     DateTime
+  effectiveStateChanged           Boolean       @default(false)
+  ignoredBecauseAlreadyDownloaded Boolean       @default(false)
+  createdAt                       DateTime       @default(now())
 
   nsuControl       NfseNsuControl @relation(fields: [nsuControlId], references: [id], onDelete: Cascade)
 
