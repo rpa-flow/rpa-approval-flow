@@ -362,6 +362,8 @@ export default function NotaDetalhePage() {
           </div>
         </div>
 
+        {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
+
         <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Valor de serviço" value={formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
@@ -404,7 +406,6 @@ export default function NotaDetalhePage() {
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
         </div>
 
-        {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
         {invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
       </section>
 
