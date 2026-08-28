@@ -61,7 +61,14 @@ export default function EmpresasPage() {
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [linkedCompanyId, setLinkedCompanyId] = useState<string | null>(null);
+  const [isDeepLinkReady, setIsDeepLinkReady] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    setLinkedCompanyId(new URLSearchParams(window.location.search).get("empresa"));
+    setIsDeepLinkReady(true);
+  }, []);
 
   const loadMe = useCallback(async () => {
     const meRes = await fetch("/api/auth/me");
@@ -83,6 +90,7 @@ export default function EmpresasPage() {
 
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (statusFilter !== "TODAS") params.set("status", statusFilter);
+    if (linkedCompanyId) params.set("id", linkedCompanyId);
 
     setIsLoadingCompanies(true);
     try {
@@ -97,13 +105,22 @@ export default function EmpresasPage() {
       const payload = await companiesRes.json() as CompaniesResponse;
       setCompanies(payload.items);
       setPagination(payload.pagination);
+      if (linkedCompanyId) {
+        const linkedCompany = payload.items.find((company) => company.id === linkedCompanyId);
+        if (linkedCompany) {
+          setSelectedCompany(linkedCompany);
+          setViewMode("details");
+        } else {
+          setMessage("Erro ao localizar a empresa indicada no diagnóstico.");
+        }
+      }
     } finally {
       setIsLoadingCompanies(false);
     }
-  }, [debouncedSearch, page, pageSize, router, statusFilter]);
+  }, [debouncedSearch, linkedCompanyId, page, pageSize, router, statusFilter]);
 
   useEffect(() => { loadMe(); }, [loadMe]);
-  useEffect(() => { if (me?.manager.role === "ADMIN") loadCompanies(); }, [loadCompanies, me?.manager.role]);
+  useEffect(() => { if (me?.manager.role === "ADMIN" && isDeepLinkReady) loadCompanies(); }, [isDeepLinkReady, loadCompanies, me?.manager.role]);
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(timeout);
@@ -169,6 +186,10 @@ export default function EmpresasPage() {
   }
 
   function backToList() {
+    if (linkedCompanyId) {
+      window.history.replaceState(null, "", "/empresas");
+      setLinkedCompanyId(null);
+    }
     setEditingCompanyId(null);
     setSelectedCompany(null);
     setForm(EMPTY_FORM);

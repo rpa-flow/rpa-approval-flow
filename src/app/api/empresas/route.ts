@@ -14,11 +14,13 @@ async function validateAdmin() {
 }
 
 function buildCompanyWhere(searchParams: URLSearchParams): Prisma.CompanyWhereInput {
+  const companyId = searchParams.get("id")?.trim();
   const search = searchParams.get("search")?.replace(/\D/g, "") || searchParams.get("search")?.trim();
   const rawSearch = searchParams.get("search")?.trim();
   const status = searchParams.get("status");
   const filters: Prisma.CompanyWhereInput[] = [];
 
+  if (companyId) filters.push({ id: companyId });
   if (status === "ATIVAS") filters.push({ active: true });
   if (status === "INATIVAS") filters.push({ active: false });
 
