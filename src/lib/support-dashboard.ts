@@ -55,8 +55,6 @@ export type SupportDashboard = {
   };
 };
 
-type ActivityBucket = { date: Date | string; errors: bigint | number; downloads: bigint | number };
-
 function saoPauloDateKey(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIME_ZONE,
@@ -107,8 +105,16 @@ export async function getSupportDashboard(
     situacaoNotaFiscal: { not: InvoiceSituation.CANCELADA }
   };
 
+  const activityAttempts = await prisma.nfseNsuAttempt.findMany({
+    where: {
+      attemptedAt: { gte: historyStart },
+      resultStatus: { in: [NfseNsuStatus.RetryError, NfseNsuStatus.Downloaded] }
+    },
+    select: { attemptedAt: true, resultStatus: true },
+    orderBy: { attemptedAt: "asc" }
+  });
+
   const [
-    activityBuckets,
     currentErrorTotal,
     currentErrors,
     overdueCount,
@@ -125,16 +131,6 @@ export async function getSupportDashboard(
     invoicesProcessingError,
     delphiFailures
   ] = await Promise.all([
-    prisma.$queryRaw<ActivityBucket[]>(Prisma.sql`
-      SELECT DATE("attemptedAt" AT TIME ZONE ${TIME_ZONE}) AS "date",
-        COUNT(*) FILTER (WHERE "resultStatus" = ${NfseNsuStatus.RetryError}::"NfseNsuStatus")::bigint AS "errors",
-        COUNT(*) FILTER (WHERE "resultStatus" = ${NfseNsuStatus.Downloaded}::"NfseNsuStatus")::bigint AS "downloads"
-      FROM "NfseNsuAttempt"
-      WHERE "attemptedAt" >= ${historyStart}
-        AND "resultStatus" IN (${NfseNsuStatus.RetryError}::"NfseNsuStatus", ${NfseNsuStatus.Downloaded}::"NfseNsuStatus")
-      GROUP BY DATE("attemptedAt" AT TIME ZONE ${TIME_ZONE})
-      ORDER BY "date" ASC
-    `),
     prisma.nfseNsuControl.count({ where: { status: NfseNsuStatus.RetryError } }),
     prisma.nfseNsuControl.findMany({
       where: { status: NfseNsuStatus.RetryError },
@@ -180,13 +176,14 @@ export async function getSupportDashboard(
     prisma.invoice.count({ where: { statusIntegracaoDelphi: DelphiIntegrationStatus.FALHA } })
   ]);
 
-  const bucketMap = new Map(
-    activityBuckets.map((bucket) => {
-      // PostgreSQL devolve `date` como meia-noite UTC; preserve a data civil agregada.
-      const key = typeof bucket.date === "string" ? bucket.date.slice(0, 10) : bucket.date.toISOString().slice(0, 10);
-      return [key, { errors: Number(bucket.errors), downloads: Number(bucket.downloads) }];
-    })
-  );
+  const bucketMap = new Map<string, { errors: number; downloads: number }>();
+  for (const attempt of activityAttempts) {
+    const key = saoPauloDateKey(attempt.attemptedAt);
+    const bucket = bucketMap.get(key) ?? { errors: 0, downloads: 0 };
+    if (attempt.resultStatus === NfseNsuStatus.RetryError) bucket.errors += 1;
+    if (attempt.resultStatus === NfseNsuStatus.Downloaded) bucket.downloads += 1;
+    bucketMap.set(key, bucket);
+  }
   const byDay = Array.from({ length: filters.periodDays }, (_, index) => {
     const date = shiftDateKey(historyStartKey, index);
     return { date, errors: bucketMap.get(date)?.errors ?? 0, downloads: bucketMap.get(date)?.downloads ?? 0 };
