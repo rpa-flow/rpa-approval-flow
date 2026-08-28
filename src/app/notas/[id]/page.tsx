@@ -16,6 +16,7 @@ type Invoice = {
   numeroNota: string;
   codigoIdentificador: string;
   status: InvoiceStatus;
+  statusProcessamento: "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "ERRO";
   dataAtualizacao: string;
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
@@ -84,6 +85,12 @@ function formatCurrency(value?: number | null) {
 
 function formatDate(value?: string | null) {
   return value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "-";
+}
+
+function formatCompetence(value?: string | null) {
+  return value
+    ? new Intl.DateTimeFormat("pt-BR", { month: "2-digit", year: "numeric", timeZone: "UTC" }).format(new Date(value))
+    : "-";
 }
 
 function formatDateTime(value?: string | null) {
@@ -355,10 +362,12 @@ export default function NotaDetalhePage() {
           </div>
         </div>
 
+        {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
+
         <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Valor de serviço" value={formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
-          <DetailItem label="Competência" value={formatDate(invoice.dataCompetencia)} />
+          <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
           <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />
           <DetailItem label="CNPJ fornecedor" value={invoice.fornecedor.cnpj ?? invoice.prestadorCnpj} />
           <DetailItem label="Código externo" value={invoice.fornecedor.codigoExterno} />
@@ -397,7 +406,7 @@ export default function NotaDetalhePage() {
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
         </div>
 
-        {invoice.observacaoValidacao && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
+        {invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
       </section>
 
       <aside className="space-y-4">
