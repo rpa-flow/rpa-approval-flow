@@ -287,7 +287,14 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
       responsavelValidacao: isRejectedOnCreate ? (manager?.nome ?? "Integração Delphi") : undefined,
       dataValidacao: isRejectedOnCreate ? new Date() : undefined,
       observacaoValidacao: isRejectedOnCreate ? validationReason : undefined,
-      criadoPorId: manager?.id
+      criadoPorId: manager?.id,
+      ...("documentDetail" in nfseData
+        ? {
+            documentDetail: {
+              create: nfseData.documentDetail
+            }
+          }
+        : {})
     },
     include: {
       fornecedor: true

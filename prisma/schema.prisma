@@ -219,10 +219,27 @@ model Invoice {
   notifications       NoteNotification[]
   auditLogs           NoteAuditLog[]
   serviceEvaluation   ServiceEvaluation?
+  documentDetail      InvoiceDocumentDetail?
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
   @@index([criadoPorId])
+}
+
+model InvoiceDocumentDetail {
+  id              String   @id @default(cuid())
+  invoiceId       String   @unique
+  documentFamily  String
+  layout          String
+  layoutVersion   String?
+  schemaVersion   Int      @default(1)
+  additionalData  Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([documentFamily, layout])
 }
 
 model ServiceEvaluation {
