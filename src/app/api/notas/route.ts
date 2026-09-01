@@ -15,6 +15,12 @@ function shouldIncludeExtras(request: NextRequest) {
   return request.nextUrl.searchParams.get("includeExtras") === "true";
 }
 
+function getSerieFromExtras(extras: Record<string, string>) {
+  return extras["NFSe.infNFSe.DPS.infDPS.serie"]
+    ?? extras["CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Rps.IdentificacaoRps.Serie"]
+    ?? null;
+}
+
 function serializeInvoiceResponse<T extends { xmlOriginal?: string | null }>(invoice: T, includeXml: boolean) {
   if (includeXml) return invoice;
   const { xmlOriginal, ...rest } = invoice;
@@ -62,24 +68,54 @@ export async function GET(request: NextRequest) {
     ],
     ...(pagination ? { skip: (pagination.page - 1) * pageSize, take: pageSize } : {})
   });
+  const documentDetails = includeExtras
+    ? await prisma.invoiceDocumentDetail.findMany({
+        where: { invoiceId: { in: invoices.map((invoice) => invoice.id) } },
+        select: { invoiceId: true, additionalData: true }
+      })
+    : [];
+  const extrasByInvoiceId = new Map(
+    documentDetails.map((detail) => [detail.invoiceId, detail.additionalData])
+  );
 
   const response = invoices.map((invoice) => {
     const base = serializeInvoiceResponse(invoice, includeXml);
 
-    if (!includeExtras || !invoice.xmlOriginal) {
+    if (!includeExtras) {
+      return base;
+    }
+
+    const storedExtras = extrasByInvoiceId.get(invoice.id);
+    const hasStoredExtras = Boolean(
+      storedExtras && typeof storedExtras === "object" && !Array.isArray(storedExtras)
+    );
+    if (!invoice.xmlOriginal && !hasStoredExtras) {
       return base;
     }
 
     try {
-      const parsed = parseNFSeXml(invoice.xmlOriginal);
+      const parsed = !hasStoredExtras && invoice.xmlOriginal ? parseNFSeXml(invoice.xmlOriginal) : null;
+      const extras = hasStoredExtras
+        ? (storedExtras as Record<string, string>)
+        : (parsed?.extras ?? {});
       return {
         ...base,
-        serie: parsed.serie ?? null,
-        extras: parsed.extras,
-        extrasByFieldName: groupExtrasByFieldName(parsed.extras),
-        extrasSimple: simplifyExtrasByFieldName(parsed.extras)
+        serie: hasStoredExtras ? getSerieFromExtras(extras) : (parsed?.serie ?? null),
+        extras,
+        extrasByFieldName: groupExtrasByFieldName(extras),
+        extrasSimple: simplifyExtrasByFieldName(extras)
       };
     } catch {
+      if (hasStoredExtras) {
+        const extras = storedExtras as Record<string, string>;
+        return {
+          ...base,
+          serie: null,
+          extras,
+          extrasByFieldName: groupExtrasByFieldName(extras),
+          extrasSimple: simplifyExtrasByFieldName(extras)
+        };
+      }
       return {
         ...base,
         serie: null,

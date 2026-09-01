@@ -1,4 +1,12 @@
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
+
+export type InvoiceDocumentDetailDto = {
+  documentFamily: "NFSE";
+  layout: "NACIONAL" | "ABRASF";
+  layoutVersion?: string;
+  schemaVersion: 1;
+  additionalData: Record<string, string>;
+};
 
 export type NormalizedInvoiceDto = {
   codigoIdentificador: string;
@@ -28,6 +36,7 @@ export type NormalizedInvoiceDto = {
   valorServico?: string;
   aliquota?: string;
   extras: Record<string, string>;
+  documentDetail: InvoiceDocumentDetailDto;
 };
 
 function text(value: unknown): string | undefined {
@@ -71,7 +80,9 @@ function getByPath(obj: any, path: string[]): unknown {
 
 const EXTRAS_BLOCKED_PATH_PREFIXES = [
   "?xml",
-  "NFSe.Signature"
+  "NFSe.Signature",
+  "CompNfse.Signature",
+  "CompNfse.Nfse.Signature"
 ];
 
 function shouldSkipExtrasPath(path: string) {
@@ -129,29 +140,28 @@ export function simplifyExtrasByFieldName(extras: Record<string, string>) {
   return simplified;
 }
 
-export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
-  const parser = new XMLParser({
+function createParser() {
+  return new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "",
     removeNSPrefix: true,
     parseTagValue: false
   });
+}
 
-  const doc = parser.parse(xml);
-  const infNfse = doc?.NFSe?.infNFSe;
-  const dps = infNfse?.DPS?.infDPS;
-
-  if (!infNfse) {
-    throw new Error("XML inválido: bloco infNFSe não encontrado.");
-  }
-
-  const rawId = text(infNfse.Id) ?? "";
-  const numericId = rawId.replace(/\D/g, "");
+function validateIdentifier(rawId: unknown) {
+  const numericId = text(rawId)?.replace(/\D/g, "") ?? "";
   if (numericId.length < 44 || numericId.length > 50) {
     throw new Error("Identificador inválido: esperado código numérico entre 44 e 50 dígitos.");
   }
+  return numericId;
+}
 
-  const codigoIdentificador = numericId;
+function parseNacional(doc: any): NormalizedInvoiceDto {
+  const infNfse = doc.NFSe.infNFSe;
+  const dps = infNfse?.DPS?.infDPS;
+  const codigoIdentificador = validateIdentifier(infNfse.Id);
+
   const extras: Record<string, string> = {};
   flattenXmlFields(doc, "", extras);
   const descricaoServico = firstTextByPath(infNfse, [
@@ -164,6 +174,7 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
   ]);
 
   const knownPaths = [
+    "NFSe.versao",
     "NFSe.infNFSe.Id",
     "NFSe.infNFSe.nNFSe",
     "NFSe.infNFSe.nDFSe",
@@ -173,15 +184,9 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
     "NFSe.infNFSe.xTribNac",
     "NFSe.infNFSe.xTribMun",
     "NFSe.infNFSe.xNBS",
-    "NFSe.infNFSe.xDescServ",
-    "NFSe.infNFSe.xServ",
     "NFSe.infNFSe.dhProc",
-    "NFSe.infNFSe.DPS.infDPS.serie",
     "NFSe.infNFSe.DPS.infDPS.dhEmi",
     "NFSe.infNFSe.DPS.infDPS.dCompet",
-    "NFSe.infNFSe.DPS.infDPS.serv.cServ.xDescServ",
-    "NFSe.infNFSe.DPS.infDPS.servico.descricao",
-    "NFSe.infNFSe.DPS.infDPS.servico.discriminacao",
     "NFSe.infNFSe.emit.CNPJ",
     "NFSe.infNFSe.emit.xNome",
     "NFSe.infNFSe.emit.email",
@@ -229,6 +234,121 @@ export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
     valorLiquido: decimal(getByPath(infNfse, ["valores", "vLiq"])),
     valorServico: decimal(getByPath(dps, ["valores", "vServPrest", "vServ"])),
     aliquota: decimal(getByPath(infNfse, ["valores", "pAliqAplic"])),
-    extras
+    extras,
+    documentDetail: {
+      documentFamily: "NFSE",
+      layout: "NACIONAL",
+      layoutVersion: text(doc.NFSe.versao),
+      schemaVersion: 1,
+      additionalData: extras
+    }
   };
+}
+
+function extractAbrasfNationalKey(otherInformation: unknown) {
+  const value = text(otherInformation);
+  const match = value?.match(/CHAVE\s+NFS-?E\s+NACIONAL\s*:\s*(\d{44,50})/i);
+  if (!match) {
+    throw new Error(
+      "Identificador da NFS-e ABRASF não encontrado: informe a CHAVE NFSE NACIONAL com 44 a 50 dígitos em OutrasInformacoes."
+    );
+  }
+  return validateIdentifier(match[1]);
+}
+
+function normalizeAbrasfDateTime(value: unknown) {
+  const parsed = text(value);
+  if (!parsed) return undefined;
+
+  const hasTimeWithoutOffset = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(parsed);
+  return hasTimeWithoutOffset ? `${parsed}-03:00` : parsed;
+}
+
+function parseAbrasf(doc: any): NormalizedInvoiceDto {
+  const nfse = doc.CompNfse.Nfse;
+  const infNfse = nfse.InfNfse;
+  const declaration = infNfse?.DeclaracaoPrestacaoServico?.InfDeclaracaoPrestacaoServico;
+  const service = declaration?.Servico;
+  const serviceValues = service?.Valores;
+  const nfseValues = infNfse?.ValoresNfse;
+  const provider = infNfse?.PrestadorServico;
+  const taker = declaration?.Tomador;
+  const codigoIdentificador = extractAbrasfNationalKey(infNfse?.OutrasInformacoes);
+  const extras: Record<string, string> = {};
+  flattenXmlFields(doc, "", extras);
+
+  const knownPaths = [
+    "CompNfse.Nfse.versao",
+    "CompNfse.Nfse.InfNfse.Numero",
+    "CompNfse.Nfse.InfNfse.DataEmissao",
+    "CompNfse.Nfse.InfNfse.ValoresNfse.BaseCalculo",
+    "CompNfse.Nfse.InfNfse.ValoresNfse.Aliquota",
+    "CompNfse.Nfse.InfNfse.ValoresNfse.ValorIss",
+    "CompNfse.Nfse.InfNfse.ValoresNfse.ValorLiquidoNfse",
+    "CompNfse.Nfse.InfNfse.PrestadorServico.IdentificacaoPrestador.CpfCnpj.Cnpj",
+    "CompNfse.Nfse.InfNfse.PrestadorServico.RazaoSocial",
+    "CompNfse.Nfse.InfNfse.PrestadorServico.Contato.Email",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Competencia",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Servico.Valores.ValorServicos",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Servico.Valores.ValorIss",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Servico.Valores.Aliquota",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Prestador.CpfCnpj.Cnpj",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Tomador.IdentificacaoTomador.CpfCnpj.Cnpj",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Tomador.RazaoSocial",
+    "CompNfse.Nfse.InfNfse.DeclaracaoPrestacaoServico.InfDeclaracaoPrestacaoServico.Tomador.Contato.Email"
+  ];
+  for (const knownPath of knownPaths) delete extras[knownPath];
+
+  return {
+    codigoIdentificador,
+    numeroNota: text(infNfse.Numero) ?? "SEM_NUMERO",
+    serie: text(declaration?.Rps?.IdentificacaoRps?.Serie),
+    descricaoServico: text(service?.Discriminacao),
+    dataEmissao: normalizeAbrasfDateTime(infNfse.DataEmissao),
+    dataCompetencia: text(declaration?.Competencia),
+    prestadorCnpj: text(provider?.IdentificacaoPrestador?.CpfCnpj?.Cnpj),
+    prestadorNome: text(provider?.RazaoSocial),
+    prestadorEmail: text(provider?.Contato?.Email),
+    tomadorCnpj: text(taker?.IdentificacaoTomador?.CpfCnpj?.Cnpj),
+    tomadorNome: text(taker?.RazaoSocial),
+    tomadorEmail: text(taker?.Contato?.Email),
+    valorBaseCalculo: decimal(nfseValues?.BaseCalculo),
+    valorIssqn: decimal(nfseValues?.ValorIss),
+    valorLiquido: decimal(nfseValues?.ValorLiquidoNfse),
+    valorServico: decimal(serviceValues?.ValorServicos),
+    aliquota: decimal(nfseValues?.Aliquota ?? serviceValues?.Aliquota),
+    extras,
+    documentDetail: {
+      documentFamily: "NFSE",
+      layout: "ABRASF",
+      layoutVersion: text(nfse.versao),
+      schemaVersion: 1,
+      additionalData: extras
+    }
+  };
+}
+
+export function parseNFSeXml(xml: string): NormalizedInvoiceDto {
+  const validation = XMLValidator.validate(xml);
+  if (validation !== true) {
+    throw new Error(`XML inválido: ${validation.err.msg}`);
+  }
+
+  const doc = createParser().parse(xml);
+  const isNacional = Boolean(doc?.NFSe?.infNFSe);
+  const isAbrasf = Boolean(doc?.CompNfse?.Nfse?.InfNfse);
+
+  if (isNacional && isAbrasf) {
+    throw new Error("XML inválido: mais de um leiaute de NFS-e foi identificado.");
+  }
+  if (isNacional) return parseNacional(doc);
+  if (isAbrasf) {
+    const version = text(doc.CompNfse.Nfse.versao);
+    if (version !== "2.02") {
+      throw new Error(`Leiaute ABRASF não suportado: versão ${version ?? "não informada"}.`);
+    }
+    return parseAbrasf(doc);
+  }
+
+  throw new Error("XML inválido: leiaute de NFS-e não reconhecido.");
 }
