@@ -68,6 +68,15 @@ const APPROVED_STATUS_CHANGE_OPTIONS: Array<{ value: Exclude<InvoiceStatus, "APR
   { value: "EXPIRADA", label: "Expirada", description: "Indica que a aprovação não deve mais seguir o fluxo atual." }
 ];
 
+const STATUS_OPTIONS: Array<{ value: InvoiceStatus; label: string }> = [
+  { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
+  { value: "APROVADO", label: "Aprovado" },
+  { value: "RECUSADO", label: "Recusado" },
+  { value: "PROCESSADO", label: "Processado" },
+  { value: "EXPIRADA", label: "Expirada" },
+  { value: "DADOS_INCONSISTENTES", label: "Dados inconsistentes" }
+];
+
 function getManagerNames(invoice: Invoice) {
   return invoice.fornecedor.managerSuppliers
     ?.map((link) => link.manager?.nome)
@@ -141,6 +150,9 @@ export default function NotaDetalhePage() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, recipients: "", reason: "", message: "" });
+  const [communicationImage, setCommunicationImage] = useState<File | null>(null);
+  const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -184,6 +196,10 @@ export default function NotaDetalhePage() {
     setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
     setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
     setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+    setCommunication((current) => ({
+      ...current,
+      status: STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
+    }));
     setLoading(false);
   }, [params.id, router]);
 
@@ -337,6 +353,41 @@ export default function NotaDetalhePage() {
     }
   }
 
+  async function sendStatusCommunication() {
+    if (!invoice) return;
+    setIsSendingCommunication(true);
+    setMessage("");
+
+    const formData = new FormData();
+    formData.set("status", communication.status);
+    formData.set("recipients", communication.recipients);
+    formData.set("reason", communication.reason);
+    formData.set("message", communication.message);
+    if (communicationImage) formData.set("image", communicationImage);
+
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}/comunicacao`, { method: "POST", body: formData });
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessageType("error");
+        setMessage(result?.error ?? "Não foi possível alterar o status e enviar o e-mail.");
+        if (result?.statusChanged) await loadData();
+        return;
+      }
+
+      setMessageType("success");
+      setMessage(result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
+      setCommunication((current) => ({ ...current, recipients: "", reason: "", message: "" }));
+      setCommunicationImage(null);
+      await loadData();
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor. Recarregue a página e tente novamente.");
+    } finally {
+      setIsSendingCommunication(false);
+    }
+  }
+
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
@@ -410,6 +461,21 @@ export default function NotaDetalhePage() {
       </section>
 
       <aside className="space-y-4">
+
+        {me?.manager.role === "ADMIN" && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Somente administradores</p>
+            <h3 className="section-title">Alterar status e comunicar</h3>
+            <p className="section-description">Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos.</p>
+          </div>
+          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => option.value !== invoice.status).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="approval-field"><span className="approval-field-label">Destinatários</span><textarea className="approval-field-control" value={communication.recipients} onChange={(event) => setCommunication((current) => ({ ...current, recipients: event.target.value }))} rows={3} placeholder="nome@empresa.com; outro@empresa.com" required /><span className="text-xs text-slate-500">Separe vários e-mails por vírgula, ponto e vírgula ou linha.</span></label>
+          <label className="approval-field"><span className="approval-field-label">Motivo da alteração</span><textarea className="approval-field-control" value={communication.reason} onChange={(event) => setCommunication((current) => ({ ...current, reason: event.target.value }))} rows={3} maxLength={500} placeholder="Explique por que o status está sendo alterado" required /></label>
+          <label className="approval-field"><span className="approval-field-label">Mensagem adicional <span className="text-xs font-normal text-slate-500">(opcional)</span></span><textarea className="approval-field-control" value={communication.message} onChange={(event) => setCommunication((current) => ({ ...current, message: event.target.value }))} rows={3} maxLength={2000} placeholder="Inclua orientações para os destinatários" /></label>
+          <label className="approval-field"><span className="approval-field-label">Imagem no corpo do e-mail <span className="text-xs font-normal text-slate-500">(opcional, até 5 MB)</span></span><input className="approval-field-control" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => setCommunicationImage(event.target.files?.[0] ?? null)} />{communicationImage && <span className="text-xs font-semibold text-blue-700">Selecionada: {communicationImage.name}</span>}</label>
+          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || !communication.recipients.trim() || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : "Alterar status e enviar e-mail"}</button>
+          <p className="text-xs text-slate-500">O e-mail incluirá número, código, fornecedor, valor, emissão, status anterior, novo status e motivo.</p>
+        </section>}
 
 
         {canReject && <section className="card space-y-4 border-rose-200 bg-rose-50/50 ring-1 ring-rose-100">
