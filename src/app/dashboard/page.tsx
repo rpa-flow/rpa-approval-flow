@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout, PaginationControls } from "@/components/ui-kit";
+import { AppLayout, EmptyState, ErrorState, LoadingState, PageHeader, PaginationControls } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink } from "@/components/evaluation-guidance";
 import type { PaginationMetadata } from "@/lib/pagination";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
@@ -189,6 +189,7 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [notesLoadError, setNotesLoadError] = useState(false);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [supplierFilter, setSupplierFilter] = useState("TODOS");
   const [takerFilter, setTakerFilter] = useState("");
@@ -243,10 +244,12 @@ export default function DashboardPage() {
     if (competenceTo) params.set("competenceTo", competenceTo);
 
     setIsLoadingNotes(true);
+    setNotesLoadError(false);
     try {
       const notesRes = await fetch(`/api/notas/minhas?${params.toString()}`);
       if (notesRes.status === 401) return router.push("/login");
       if (!notesRes.ok) {
+        setNotesLoadError(true);
         setMessageType("error");
         setMessage("Não foi possível carregar as notas.");
         return;
@@ -257,6 +260,10 @@ export default function DashboardPage() {
       setPagination(data.pagination);
       setSupplierOptions(data.supplierOptions);
       setManagerOptions(data.managerOptions);
+    } catch {
+      setNotesLoadError(true);
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor. Recarregue a página e tente novamente.");
     } finally {
       setIsLoadingNotes(false);
     }
@@ -472,24 +479,48 @@ export default function DashboardPage() {
   const hasInvalidDateRange = isInvalidDateRange(issueFrom, issueTo) || isInvalidDateRange(competenceFrom, competenceTo) || isInvalidDateRange(updatedFrom, updatedTo);
   const activeAdvancedFiltersCount = [issueFrom || issueTo, competenceFrom || competenceTo, updatedFrom || updatedTo].filter(Boolean).length;
 
+  function clearFilters() {
+    setStatusFilter("TODOS");
+    setSupplierFilter("TODOS");
+    setResponsibleFilter("TODOS");
+    setTakerFilter("");
+    setUpdatedFrom("");
+    setUpdatedTo("");
+    setIssueFrom("");
+    setIssueTo("");
+    setCompetenceFrom("");
+    setCompetenceTo("");
+    setPage(1);
+  }
+
   return <AppLayout onClick={() => setMenuState(null)}>
     <MainHeader title="Central operacional de notas fiscais" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
-    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role="status">{message}</p>}
+    <PageHeader
+      eyebrow="Central operacional"
+      title="Notas fiscais"
+      description="Acompanhe pendências, consulte o histórico e conclua aprovações em uma única fila de trabalho."
+    />
 
-    <section className="card mt-4 space-y-5" onClick={(e) => e.stopPropagation()}>
+    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role={messageType === "error" ? "alert" : "status"}>{message}</p>}
+
+    <section className="card mt-0 space-y-5" aria-labelledby="notes-heading" onClick={(e) => e.stopPropagation()}>
       <div className="section-header">
         <div>
-          <h2 className="section-title">Notas em acompanhamento</h2>
+          <h2 id="notes-heading" className="section-title">Notas em acompanhamento</h2>
           <p className="section-description">Filtre, analise detalhes e execute aprovações sem sair da central operacional.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
           <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => void exportarNotas()} disabled={isExporting || hasInvalidDateRange} title={hasInvalidDateRange ? "Corrija os intervalos de data antes de exportar." : undefined}>{isExporting ? "Gerando XLSX..." : "Baixar XLSX"}</button>
           <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
         </div>
       </div>
 
-      <div className="space-y-3 rounded-md border border-border bg-surface-container-low p-3">
+      <section className="space-y-3 rounded-md border border-border bg-surface-container-low p-3 sm:p-4" aria-labelledby="invoice-filters-heading">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 id="invoice-filters-heading" className="text-sm font-semibold text-text">Filtros de busca</h3>
+          <p className="text-xs text-muted">Refine a fila sem perder a visão geral.</p>
+        </div>
         <div className="grid gap-2 md:grid-cols-[minmax(8rem,0.8fr)_minmax(12rem,1.2fr)_minmax(12rem,1fr)_minmax(12rem,1.2fr)_auto] md:items-end">
           <label className="text-xs font-medium text-slate-600">
             Status
@@ -522,9 +553,9 @@ export default function DashboardPage() {
               aria-controls="advanced-invoice-filters"
             >
               Mais filtros
-              {activeAdvancedFiltersCount > 0 && <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{activeAdvancedFiltersCount}</span>}
+              {activeAdvancedFiltersCount > 0 && <span className="ml-2 rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">{activeAdvancedFiltersCount}</span>}
             </button>
-            <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => { setStatusFilter("TODOS"); setSupplierFilter("TODOS"); setResponsibleFilter("TODOS"); setTakerFilter(""); setUpdatedFrom(""); setUpdatedTo(""); setIssueFrom(""); setIssueTo(""); setCompetenceFrom(""); setCompetenceTo(""); setPage(1); }}>Limpar filtros</button>
+            <button type="button" className="btn-secondary whitespace-nowrap" onClick={clearFilters}>Limpar filtros</button>
           </div>
         </div>
 
@@ -558,39 +589,41 @@ export default function DashboardPage() {
             {hasInvalidDateRange && <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Revise os intervalos de data</span>}
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="table-shell">
-        <table className="min-w-[56rem] text-sm">
+      <div className="table-shell" aria-busy={isLoadingNotes}>
+        {isLoadingNotes && !invoices.length ? <div className="p-4 sm:p-5"><LoadingState rows={6} /></div> : notesLoadError && !invoices.length ? <div className="p-4 sm:p-5"><ErrorState title="Não foi possível carregar as notas" description="Verifique sua conexão e tente atualizar a lista." onRetry={() => void loadData()} /></div> : !invoices.length ? <div className="p-4 sm:p-5"><EmptyState title="Nenhuma nota encontrada" description={activeFilters.length ? "Ajuste ou limpe os filtros para consultar outras notas." : "As notas que exigirem acompanhamento aparecerão aqui."} action={activeFilters.length ? <button type="button" className="btn-secondary" onClick={clearFilters}>Limpar filtros</button> : undefined} /></div> : <>
+        {notesLoadError && <div className="border-b border-border p-4"><ErrorState title="Exibindo resultados anteriores" description="Não foi possível atualizar a lista para os filtros atuais. Tente novamente antes de realizar uma nova análise." onRetry={() => void loadData()} /></div>}
+        <p id="invoice-table-instructions" className="sr-only">A tabela pode ser rolada horizontalmente em telas estreitas. Selecione uma linha para expandir o resumo da nota.</p>
+        <table className="min-w-[56rem] text-sm" aria-describedby="invoice-table-instructions">
           <thead>
             <tr>
-              <th className="px-2 py-2 text-center">Fornecedor / NF</th>
-              <th className="px-2 py-2 text-center">Empresa</th>
-              <th className="px-2 py-2 text-center" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th>
-              <th className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th>
-              <th className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
-              <th className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
-              <th className="px-2 py-2 text-center">Responsável</th>
-              <th className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th>
-              <th className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th>
+              <th scope="col" className="px-2 py-2 text-left">Fornecedor / NF</th>
+              <th scope="col" className="px-2 py-2 text-left">Empresa</th>
+              <th scope="col" className="px-2 py-2 text-right" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th>
+              <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th>
+              <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
+              <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
+              <th scope="col" className="px-2 py-2 text-left">Responsável</th>
+              <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Atualização</th>
+              <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {invoices.map((invoice) => <Fragment key={invoice.id}>
-              <tr className="cursor-pointer" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                <td className="px-2 py-2 text-center"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="text-xs text-slate-500">NF {invoice.numeroNota}</div></td>
-                <td className="px-2 py-2 text-center text-slate-700"><div className="font-medium text-slate-800">{invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada"}</div><div className="whitespace-nowrap text-xs text-slate-500">{formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj)}</div></td>
-                <td className="px-2 py-2 text-center font-medium tabular-nums text-slate-800" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
+              <tr className="cursor-pointer focus-within:bg-surface-container-low" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
+                <td className="px-2 py-2 text-left"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="flex items-center gap-2"><span className="text-xs text-slate-500">NF {invoice.numeroNota}</span><button type="button" className="text-xs font-semibold text-brand underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-expanded={expandedId === invoice.id} aria-controls={`invoice-summary-${invoice.id}`} onClick={(event) => { event.stopPropagation(); setExpandedId(expandedId === invoice.id ? null : invoice.id); }}>{expandedId === invoice.id ? "Ocultar resumo" : "Ver resumo"}</button></div></td>
+                <td className="px-2 py-2 text-left text-slate-700"><div className="font-medium text-slate-800">{invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada"}</div><div className="whitespace-nowrap text-xs text-slate-500">{formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj)}</div></td>
+                <td className="px-2 py-2 text-right font-medium tabular-nums text-slate-800" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatCompetence(invoice.dataCompetencia)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="flex flex-col items-center gap-1"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>{invoice.statusProcessamento === "ERRO" && <span className="badge bg-rose-700 text-white ring-2 ring-rose-200">⚠ Erro no processamento</span>}</div></td>
-                <td className="px-2 py-2 text-center text-slate-700">{getResponsibleName(invoice)}</td>
+                <td className="px-2 py-2 text-left text-slate-700">{getResponsibleName(invoice)}</td>
                 <td className="px-1.5 py-2 text-center text-slate-600" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><button className="btn-secondary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>Ações ▾</button></td>
               </tr>
-              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3">{invoice.statusProcessamento === "ERRO" && <div className="sm:col-span-3 rounded-md border-2 border-rose-300 bg-rose-50 p-3 text-rose-900" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}<p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de Compra – Pontual:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>Ordem de Compra – Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Número de parcelas:</strong> {invoice.numeroParcelas ?? 1}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && <tr><td colSpan={9} className="bg-slate-50 p-0"><div id={`invoice-summary-${invoice.id}`} className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3">{invoice.statusProcessamento === "ERRO" && <div className="sm:col-span-3 rounded-md border-2 border-rose-300 bg-rose-50 p-3 text-rose-900" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}<p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de Compra – Pontual:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>Ordem de Compra – Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Número de parcelas:</strong> {invoice.numeroParcelas ?? 1}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
             </Fragment>)}
-            {!invoices.length && <tr><td colSpan={9} className="px-4 py-10"><div className="empty-state">{isLoadingNotes ? "Carregando notas..." : "Nenhuma nota encontrada para os filtros selecionados."}</div></td></tr>}
           </tbody>
         </table>
         <PaginationControls
@@ -600,6 +633,7 @@ export default function DashboardPage() {
           onPageChange={setPage}
           onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(1); }}
         />
+        </>}
       </div>
     </section>
 
