@@ -353,7 +353,7 @@ export default function DashboardPage() {
   async function aprovarComAvaliacao() {
     if (!approveModal || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setMessageType("error");
-      setMessage("Preencha a pontuação, o campo Qualifica e a classificação de risco para aprovar a nota.");
+      setMessage("Preencha a pontuação, o campo Qualifica, a classificação de risco e a data de pagamento para aprovar a nota.");
       return;
     }
 
