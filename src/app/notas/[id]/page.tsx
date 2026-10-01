@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
-import { AppLayout, EmptyState, ErrorState, LoadingState, PageHeader, SectionCard } from "@/components/ui-kit";
+import { AppLayout } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink, RatingScaleHint } from "@/components/evaluation-guidance";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
 
@@ -103,17 +103,17 @@ function onlyDigits(value: string) {
 }
 
 function DetailItem({ label, value }: { label: string; value?: string | number | null }) {
-  return <div className="min-w-0 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0">
-    <dt className="text-xs font-bold uppercase tracking-wide text-muted">{label}</dt>
-    <dd className="mt-1 break-words text-sm font-semibold text-text">{value ?? "-"}</dd>
+  return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
+    <p className="text-xs font-bold uppercase text-muted">{label}</p>
+    <p className="mt-1 text-sm font-semibold text-text">{value ?? "-"}</p>
   </div>;
 }
 
 function DetailTextItem({ label, value }: { label: string; value?: string | null }) {
-  return <section className="rounded-md border border-border bg-surface-container-low p-4" aria-label={label}>
-    <h3 className="text-xs font-bold uppercase tracking-wide text-muted">{label}</h3>
+  return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
+    <p className="text-xs font-bold uppercase text-muted">{label}</p>
     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-text">{value || "-"}</p>
-  </section>;
+  </div>;
 }
 
 export default function NotaDetalhePage() {
@@ -123,8 +123,6 @@ export default function NotaDetalhePage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [historyError, setHistoryError] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
@@ -134,9 +132,6 @@ export default function NotaDetalhePage() {
   const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
-  const approvalModalRef = useRef<HTMLElement>(null);
-  const approvalTriggerRef = useRef<HTMLButtonElement>(null);
-  const isApprovingRef = useRef(false);
   const [approvalError, setApprovalError] = useState("");
   const [rejectionObservation, setRejectionObservation] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
@@ -145,105 +140,54 @@ export default function NotaDetalhePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    setLoadError("");
-    setHistoryError("");
-    try {
-      const meRes = await fetch("/api/auth/me");
-      if (!meRes.ok) {
-        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-        return;
-      }
-      setMe(await meRes.json());
-
-      const [invoiceRes, historyRes] = await Promise.all([
-        fetch(`/api/notas/${params.id}`),
-        fetch(`/api/notas/${params.id}/historico`)
-      ]);
-
-      if (invoiceRes.status === 401 || historyRes.status === 401) {
-        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-        return;
-      }
-
-      if (invoiceRes.status === 403 || historyRes.status === 403) {
-        setLoadError("Você não tem acesso a esta nota fiscal.");
-        return;
-      }
-
-      if (!invoiceRes.ok) {
-        setLoadError("Nota fiscal não encontrada.");
-        return;
-      }
-
-      const loadedInvoice = await invoiceRes.json();
-      setInvoice(loadedInvoice);
-      if (historyRes.ok) setEvents(await historyRes.json());
-      else setHistoryError("Não foi possível carregar o histórico desta nota.");
-      setPaymentDate("");
-      setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
-      setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
-      setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
-    } catch {
-      setLoadError("Não foi possível carregar os detalhes da nota. Verifique sua conexão e tente novamente.");
-    } finally {
-      setLoading(false);
+    const meRes = await fetch("/api/auth/me");
+    if (!meRes.ok) {
+      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+      return;
     }
+    setMe(await meRes.json());
+
+    const [invoiceRes, historyRes] = await Promise.all([
+      fetch(`/api/notas/${params.id}`),
+      fetch(`/api/notas/${params.id}/historico`)
+    ]);
+
+    if (invoiceRes.status === 401 || historyRes.status === 401) {
+      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+      return;
+    }
+
+    if (invoiceRes.status === 403 || historyRes.status === 403) {
+      setMessageType("error");
+      setMessage("Você não tem acesso a esta nota fiscal.");
+      setLoading(false);
+      return;
+    }
+
+    if (!invoiceRes.ok) {
+      setMessageType("error");
+      setMessage("Nota fiscal não encontrada.");
+      setLoading(false);
+      return;
+    }
+
+    const loadedInvoice = await invoiceRes.json();
+    setInvoice(loadedInvoice);
+    if (historyRes.ok) setEvents(await historyRes.json());
+    setPaymentDate("");
+    setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
+    setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
+    setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+    setLoading(false);
   }, [params.id, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  useEffect(() => { isApprovingRef.current = isApproving; }, [isApproving]);
 
   useEffect(() => {
     if (!loading && invoice && window.location.hash === "#revogar-aprovacao") {
       document.getElementById("revogar-aprovacao")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [invoice, loading]);
-
-  useEffect(() => {
-    if (!isApprovalModalOpen) return;
-
-    const modal = approvalModalRef.current;
-    if (!modal) return;
-    const dialog: HTMLElement = modal;
-
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const focusableSelector = "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])";
-    const focusDialog = window.setTimeout(() => dialog.focus(), 0);
-
-    function keepFocusInDialog(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isApprovingRef.current) {
-        event.preventDefault();
-        setIsApprovalModalOpen(false);
-        return;
-      }
-
-      if (event.key !== "Tab") return;
-      const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements.at(-1);
-      if (!firstElement || !lastElement) {
-        event.preventDefault();
-        dialog.focus();
-      } else if (document.activeElement === dialog) {
-        event.preventDefault();
-        (event.shiftKey ? lastElement : firstElement).focus();
-      } else if (event.shiftKey && document.activeElement === firstElement) {
-        event.preventDefault();
-        lastElement.focus();
-      } else if (!event.shiftKey && document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
-      }
-    }
-
-    document.addEventListener("keydown", keepFocusInDialog);
-    return () => {
-      window.clearTimeout(focusDialog);
-      document.removeEventListener("keydown", keepFocusInDialog);
-      (approvalTriggerRef.current ?? previousFocus)?.focus();
-    };
-  }, [isApprovalModalOpen]);
 
   async function recusarNota() {
     if (!invoice) return;
@@ -409,37 +353,27 @@ export default function NotaDetalhePage() {
   return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
-    <PageHeader
-      eyebrow="Notas fiscais"
-      title="Detalhamento da nota"
-      description="Consulte os dados fiscais, acompanhe o histórico e execute a ação disponível para esta nota."
-      actions={<button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>}
-    />
+    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role="status">{message}</p>}
 
-    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role={messageType === "error" ? "alert" : "status"}>{message}</p>}
+    {loading && <section className="card mt-4"><p className="section-description">Carregando nota fiscal...</p></section>}
 
-    {loading && <LoadingState rows={6} />}
-
-    {!loading && !invoice && <ErrorState title="Não foi possível exibir esta nota" description={loadError || "A nota solicitada não está disponível."} onRetry={loadError.includes("carregar") ? () => void loadData() : undefined} />}
-
-    {!loading && invoice && <div className="mt-0 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <section className="order-2 space-y-5 card xl:order-1" aria-labelledby="invoice-data-heading">
-        <div className="flex flex-col justify-between gap-4 rounded-md border border-border bg-surface-container-low p-4 sm:flex-row sm:items-start">
+    {!loading && invoice && <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <section className="card space-y-5">
+        <div className="section-header">
           <div>
             <p className="text-sm font-semibold uppercase text-brand">Nota fiscal</p>
-            <h2 id="invoice-data-heading" className="section-title">NF {invoice.numeroNota}</h2>
+            <h2 className="section-title">NF {invoice.numeroNota}</h2>
             <p className="section-description">{invoice.fornecedor.nome} • código identificador {invoice.codigoIdentificador}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>
             <span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>
           </div>
         </div>
 
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
-        <section aria-labelledby="invoice-summary-heading">
-          <h3 id="invoice-summary-heading" className="mb-3 text-sm font-semibold text-text">Resumo da nota</h3>
-          <dl className="grid gap-x-6 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Valor de serviço" value={formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
           <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
@@ -449,37 +383,28 @@ export default function NotaDetalhePage() {
           <DetailItem label="Tomador" value={invoice.tomadorNome} />
           <DetailItem label="CNPJ tomador" value={invoice.tomadorCnpj} />
           <DetailItem label="E-mail tomador" value={invoice.tomadorEmail} />
-          </dl>
-        </section>
+        </div>
 
         <DetailTextItem label="Descrição do serviço" value={invoice.descricaoServico} />
 
-        <section aria-labelledby="invoice-tax-heading">
-          <h3 id="invoice-tax-heading" className="mb-3 text-sm font-semibold text-text">Serviço e tributação</h3>
-          <dl className="grid gap-x-6 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <DetailItem label="Local de emissão" value={invoice.localEmissao} />
           <DetailItem label="Local de prestação" value={invoice.localPrestacao} />
           <DetailItem label="Município de incidência" value={invoice.municipioIncidencia} />
           <DetailItem label="NBS / serviço" value={invoice.nbsDescricao} />
           <DetailItem label="Item tributação nacional" value={invoice.itemTributacaoNac} />
           <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
-          </dl>
-        </section>
+        </div>
 
-        <section aria-labelledby="invoice-values-heading">
-          <h3 id="invoice-values-heading" className="mb-3 text-sm font-semibold text-text">Valores e retenções</h3>
-          <dl className="grid gap-x-6 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-5">
           <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
           <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
           <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
           <DetailItem label="Total retido" value={formatCurrency(invoice.valorTotalRetido)} />
           <DetailItem label="Alíquota" value={invoice.aliquota === null || invoice.aliquota === undefined ? "-" : `${invoice.aliquota}%`} />
-          </dl>
-        </section>
+        </div>
 
-        <section aria-labelledby="invoice-followup-heading">
-          <h3 id="invoice-followup-heading" className="mb-3 text-sm font-semibold text-text">Acompanhamento e integração</h3>
-          <dl className="grid gap-x-6 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Responsável validação" value={getResponsibleName(invoice)} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
           <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />
@@ -488,13 +413,12 @@ export default function NotaDetalhePage() {
           <DetailItem label="Ordem de Compra – Contrato" value={invoice.ocContrato} />
           <DetailItem label="Número de parcelas" value={invoice.numeroParcelas ?? 1} />
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
-          </dl>
-        </section>
+        </div>
 
         {invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
       </section>
 
-      <aside className="order-1 space-y-4 xl:order-2">
+      <aside className="space-y-4">
 
 
         {canReject && <section className="card space-y-4 border-rose-200 bg-rose-50/50 ring-1 ring-rose-100">
@@ -522,22 +446,27 @@ export default function NotaDetalhePage() {
             <h3 className="section-title">Aprovar nota</h3>
             <p className="section-description">Abra a confirmação para registrar a avaliação e a data de pagamento obrigatórias.</p>
           </div>
-          <button ref={approvalTriggerRef} type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button>
+          <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button>
         </section>}
+
+        <section className="card">
+          <div className="section-header">
+            <div><h3 className="section-title">Histórico</h3><p className="section-description">Linha do tempo da nota.</p></div>
+            <span className="badge badge-slate">{events.length}</span>
+          </div>
+          <div className="space-y-3 border-l-2 border-border pl-4">{events.length ? events.map((event) => <article key={event.id} className="rounded-md border border-border bg-surface-container-low p-4"><p className="text-xs font-bold uppercase text-slate-500">{event.actionType}</p><p className="mt-1 text-sm font-semibold text-slate-900">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-slate-500">{event.actorName || "Sistema"} • {formatDateTime(event.createdAt)}</p>{event.reason && <p className="mt-2 text-xs font-semibold text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="mt-1 text-xs text-slate-700">{event.comment}</p>}</article>) : <p className="section-description">Nenhum histórico registrado.</p>}</div>
+        </section>
       </aside>
-      <SectionCard className="order-3 xl:col-start-2 xl:row-start-2" title="Histórico" description="Linha do tempo da nota." actions={<span className="badge badge-slate">{events.length}</span>} contentClassName="pt-4">
-        {historyError ? <ErrorState title="Histórico indisponível" description={historyError} onRetry={() => void loadData()} /> : events.length ? <div className="space-y-3 border-l-2 border-border pl-4">{events.map((event) => <article key={event.id} className="rounded-md border border-border bg-surface-container-low p-4"><p className="text-xs font-bold uppercase text-muted">{event.actionType}</p><p className="mt-1 text-sm font-semibold text-text">{event.actionDescription || "Interação registrada"}</p><p className="text-xs text-muted">{event.actorName || "Sistema"} • {formatDateTime(event.createdAt)}</p>{event.reason && <p className="mt-2 text-xs font-semibold text-rose-700">Motivo: {event.reason}</p>}{event.comment && <p className="mt-1 text-xs text-slate-700">{event.comment}</p>}</article>)}</div> : <EmptyState title="Nenhum histórico registrado" description="As próximas interações e alterações de status aparecerão aqui." />}
-      </SectionCard>
     </div>}
 
     {!loading && invoice && isApprovalModalOpen && <>
       <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => !isApproving && setIsApprovalModalOpen(false)} />
-      <section ref={approvalModalRef} role="dialog" aria-modal="true" aria-labelledby="detail-approval-modal-title" tabIndex={-1} className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6">
+      <section role="dialog" aria-modal="true" aria-labelledby="detail-approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6">
         <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor.nome}</p></div><span className="badge badge-blue">Aprovação</span></div>
         {invoice.statusProcessamento === "ERRO" && <div className="mt-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {invoice.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
         {approvalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approvalError}</div>}
         <div className="mt-5 space-y-4">
-          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} aria-pressed={evaluation.rating === rate} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><span className="sm:sr-only">{description}: </span>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
+          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
           <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label></div>
           <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
           <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label></div>
