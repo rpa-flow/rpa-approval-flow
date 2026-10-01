@@ -6,6 +6,7 @@ import { MainHeader } from "@/app/components/main-header";
 import { AppLayout, PaginationControls } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink } from "@/components/evaluation-guidance";
 import type { PaginationMetadata } from "@/lib/pagination";
+import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
@@ -172,13 +173,6 @@ function DateRangeFilter({ legend, from, to, onFromChange, onToChange }: DateRan
   );
 }
 
-function toLocalDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -312,9 +306,7 @@ export default function DashboardPage() {
   }
 
   function abrirModalAprovacao(invoice: Invoice) {
-    const nextDay = new Date();
-    nextDay.setDate(nextDay.getDate() + 1);
-    setPaymentDate(toLocalDateInputValue(nextDay));
+    setPaymentDate("");
     setPurchaseOrder(invoice.ordemCompra ?? "");
     setContractPurchaseOrder(invoice.ocContrato ?? "");
     setInstallmentCount(String(invoice.numeroParcelas ?? 1));
@@ -371,6 +363,18 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!paymentDate) {
+      setMessageType("error");
+      setMessage("Informe a data de pagamento para aprovar a nota.");
+      return;
+    }
+
+    if (paymentDate < minimumPaymentDate()) {
+      setMessageType("error");
+      setMessage(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
+
     if (!installmentCount || Number(installmentCount) < 1) {
       setMessageType("error");
       setMessage("Informe um número de parcelas maior ou igual a 1.");
@@ -380,7 +384,7 @@ export default function DashboardPage() {
     setIsApproving(true);
     const approved = await atualizarNota(approveModal.id, {
       status: "APROVADO",
-      dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
+      dataPagamento: paymentDateAtSaoPauloNoon(paymentDate).toISOString(),
       ordemCompra: purchaseOrder.trim() || null,
       ocContrato: contractPurchaseOrder.trim() || null,
       numeroParcelas: Number(installmentCount),
@@ -623,7 +627,7 @@ export default function DashboardPage() {
       {approveModal.statusProcessamento === "ERRO" && <div className="mb-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {approveModal.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
       <div className="space-y-4">
         <div role="group" aria-labelledby="dashboard-rating-label"><p id="dashboard-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
-        <div className="grid items-start gap-3 sm:grid-cols-3"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="approval-field"><span className="approval-field-label">Data de pagamento</span><input className="approval-field-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label></div>
+        <div className="grid items-start gap-3 sm:grid-cols-3"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="approval-field"><span className="approval-field-label">Data de pagamento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label></div>
         <div className="approval-field-row grid gap-3 sm:grid-cols-3">
           <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(obrigatória se não houver contrato)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Informe OC pontual ou contrato" required={!contractPurchaseOrder.trim()} /></label>
           <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(obrigatória se não houver pontual)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Informe OC contrato ou pontual" required={!purchaseOrder.trim()} /></label>

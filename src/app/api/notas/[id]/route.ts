@@ -5,6 +5,7 @@ import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 
 type Params = {
   params: {
@@ -132,6 +133,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const reapprovedFromError = existing.statusProcessamento === "ERRO" && payloadToSave.status === "APROVADO";
   const isChangingApprovedStatus = existing.status === "APROVADO" && payloadToSave.status !== undefined && payloadToSave.status !== "APROVADO";
   const serviceEvaluation = payloadToSave.serviceEvaluation;
+  let approvalValidatedAt: Date | null = null;
   delete (payloadToSave as Record<string, unknown>).serviceEvaluation;
   delete (payloadToSave as Record<string, unknown>).reason;
 
@@ -193,15 +195,34 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
 
+    if (!payloadToSave.dataPagamento) {
+      return NextResponse.json(
+        { error: "Informe a data de pagamento para aprovar a nota." },
+        { status: 400 }
+      );
+    }
+
+    const validationDate = new Date();
+    approvalValidatedAt = validationDate;
+    const paymentDate = new Date(payloadToSave.dataPagamento);
+
+    try {
+      const paymentDateKey = utcDateKey(paymentDate);
+      if (!isPaymentDateKeyAllowed(paymentDateKey, validationDate)) {
+        return NextResponse.json(
+          { error: `A data de pagamento deve ser a partir de ${minimumPaymentDate(validationDate).split("-").reverse().join("/")}.` },
+          { status: 400 }
+        );
+      }
+      payloadToSave.dataPagamento = paymentDateAtSaoPauloNoon(paymentDateKey).toISOString();
+    } catch {
+      return NextResponse.json({ error: "Data de pagamento inválida." }, { status: 400 });
+    }
+
     payloadToSave.processada = false;
     payloadToSave.statusProcessamento = "PROCESSANDO";
     payloadToSave.tentativasNotificacao = 0;
     payloadToSave.ultimoLembreteEm = null;
-    if (payloadToSave.dataPagamento === undefined) {
-      const nextDay = new Date();
-      nextDay.setDate(nextDay.getDate() + 1);
-      payloadToSave.dataPagamento = nextDay.toISOString();
-    }
   }
 
   if (payloadToSave.status === "RECUSADO") {
@@ -248,7 +269,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   if (payloadToSave.status === "APROVADO" || payloadToSave.status === "RECUSADO" || payloadToSave.status === "DADOS_INCONSISTENTES" || payloadToSave.status === "EXPIRADA") {
     dataToUpdate.responsavelValidacao = manager?.nome ?? "Integração Delphi";
-    dataToUpdate.dataValidacao = new Date();
+    dataToUpdate.dataValidacao = payloadToSave.status === "APROVADO" ? approvalValidatedAt : new Date();
   }
 
   if (isChangingApprovedStatus && payloadToSave.status === "AGUARDANDO_APROVACAO") {
