@@ -131,6 +131,8 @@ export default function NotaDetalhePage() {
   const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
   const [rejectionObservation, setRejectionObservation] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
@@ -232,31 +234,27 @@ export default function NotaDetalhePage() {
 
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
-      setMessageType("error");
-      setMessage("Preencha a pontuação, o campo Qualifica e a classificação de risco para aprovar a nota.");
+      setApprovalError("Preencha a pontuação, o campo Qualifica, a classificação de risco e a data de pagamento para aprovar a nota.");
       return;
     }
 
     if (!paymentDate) {
-      setMessageType("error");
-      setMessage("Informe a data de pagamento para aprovar a nota.");
+      setApprovalError("Informe a data de pagamento para aprovar a nota.");
       return;
     }
 
     if (paymentDate < minimumPaymentDate()) {
-      setMessageType("error");
-      setMessage(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      setApprovalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
       return;
     }
 
     if (!installmentCount || Number(installmentCount) < 1) {
-      setMessageType("error");
-      setMessage("Informe um número de parcelas maior ou igual a 1.");
+      setApprovalError("Informe um número de parcelas maior ou igual a 1.");
       return;
     }
 
     setIsApproving(true);
-    setMessage("");
+    setApprovalError("");
 
     try {
       const res = await fetch(`/api/notas/${invoice.id}`, {
@@ -279,24 +277,31 @@ export default function NotaDetalhePage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => null);
-        setMessageType("error");
-        setMessage(error?.error ?? "Não foi possível aprovar a nota. Confira a avaliação obrigatória e tente novamente.");
+        setApprovalError(error?.error ?? "Não foi possível aprovar a nota. Confira os campos obrigatórios e tente novamente.");
         return;
       }
 
       setMessageType("success");
       setMessage("Nota aprovada com sucesso.");
+      setIsApprovalModalOpen(false);
+      setApprovalError("");
       setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
       setPurchaseOrder("");
       setContractPurchaseOrder("");
       setInstallmentCount("1");
       await loadData();
     } catch {
-      setMessageType("error");
-      setMessage("Não foi possível comunicar com o servidor para aprovar a nota. Recarregue a página e tente novamente.");
+      setApprovalError("Não foi possível comunicar com o servidor para aprovar a nota. Recarregue a página e tente novamente.");
     } finally {
       setIsApproving(false);
     }
+  }
+
+  function abrirModalAprovacao() {
+    setApprovalError("");
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+    setPaymentDate("");
+    setIsApprovalModalOpen(true);
   }
 
   async function alterarStatusAprovado() {
@@ -439,17 +444,9 @@ export default function NotaDetalhePage() {
         {canApprove && <section className="card space-y-4">
           <div>
             <h3 className="section-title">Aprovar nota</h3>
-            <p className="section-description">Registre a avaliação obrigatória do serviço antes da aprovação.</p>
+            <p className="section-description">Abra a confirmação para registrar a avaliação e a data de pagamento obrigatórias.</p>
           </div>
-          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
-          <label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label>
-          <label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
-          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
-          <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
-          <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
-          <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
-          <QualificationProcedureLink />
-          <button type="button" className="btn-primary w-full" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Aprovar nota"}</button>
+          <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button>
         </section>}
 
         <section className="card">
@@ -461,6 +458,24 @@ export default function NotaDetalhePage() {
         </section>
       </aside>
     </div>}
+
+    {!loading && invoice && isApprovalModalOpen && <>
+      <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => !isApproving && setIsApprovalModalOpen(false)} />
+      <section role="dialog" aria-modal="true" aria-labelledby="detail-approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6">
+        <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor.nome}</p></div><span className="badge badge-blue">Aprovação</span></div>
+        {invoice.statusProcessamento === "ERRO" && <div className="mt-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {invoice.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
+        {approvalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approvalError}</div>}
+        <div className="mt-5 space-y-4">
+          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label></div>
+          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label></div>
+          <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
+          <QualificationProcedureLink />
+        </div>
+        <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setIsApprovalModalOpen(false)} disabled={isApproving}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
+      </section>
+    </>}
 
   </AppLayout>;
 }
