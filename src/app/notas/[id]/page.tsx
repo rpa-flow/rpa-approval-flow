@@ -205,10 +205,11 @@ export default function NotaDetalhePage() {
 
     const modal = approvalModalRef.current;
     if (!modal) return;
+    const dialog: HTMLElement = modal;
 
     const previousFocus = document.activeElement as HTMLElement | null;
     const focusableSelector = "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])";
-    const focusDialog = window.setTimeout(() => modal.focus(), 0);
+    const focusDialog = window.setTimeout(() => dialog.focus(), 0);
 
     function keepFocusInDialog(event: KeyboardEvent) {
       if (event.key === "Escape" && !isApprovingRef.current) {
@@ -218,13 +219,13 @@ export default function NotaDetalhePage() {
       }
 
       if (event.key !== "Tab") return;
-      const focusableElements = Array.from(modal.querySelectorAll<HTMLElement>(focusableSelector));
+      const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
       const firstElement = focusableElements[0];
       const lastElement = focusableElements.at(-1);
       if (!firstElement || !lastElement) {
         event.preventDefault();
-        modal.focus();
-      } else if (document.activeElement === modal) {
+        dialog.focus();
+      } else if (document.activeElement === dialog) {
         event.preventDefault();
         (event.shiftKey ? lastElement : firstElement).focus();
       } else if (event.shiftKey && document.activeElement === firstElement) {
