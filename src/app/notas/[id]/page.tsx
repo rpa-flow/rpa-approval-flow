@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink, RatingScaleHint } from "@/components/evaluation-guidance";
+import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
@@ -97,13 +98,6 @@ function formatDateTime(value?: string | null) {
   return value ? new Date(value).toLocaleString("pt-BR") : "-";
 }
 
-function toLocalDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
@@ -178,9 +172,7 @@ export default function NotaDetalhePage() {
     const loadedInvoice = await invoiceRes.json();
     setInvoice(loadedInvoice);
     if (historyRes.ok) setEvents(await historyRes.json());
-    const nextDay = new Date();
-    nextDay.setDate(nextDay.getDate() + 1);
-    setPaymentDate(loadedInvoice.dataPagamento ? toLocalDateInputValue(new Date(loadedInvoice.dataPagamento)) : toLocalDateInputValue(nextDay));
+    setPaymentDate("");
     setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
     setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
     setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
@@ -245,6 +237,18 @@ export default function NotaDetalhePage() {
       return;
     }
 
+    if (!paymentDate) {
+      setMessageType("error");
+      setMessage("Informe a data de pagamento para aprovar a nota.");
+      return;
+    }
+
+    if (paymentDate < minimumPaymentDate()) {
+      setMessageType("error");
+      setMessage(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
+
     if (!installmentCount || Number(installmentCount) < 1) {
       setMessageType("error");
       setMessage("Informe um número de parcelas maior ou igual a 1.");
@@ -260,7 +264,7 @@ export default function NotaDetalhePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "APROVADO",
-          dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
+          dataPagamento: paymentDateAtSaoPauloNoon(paymentDate).toISOString(),
           ordemCompra: purchaseOrder.trim() || null,
           ocContrato: contractPurchaseOrder.trim() || null,
           numeroParcelas: Number(installmentCount),
@@ -440,7 +444,7 @@ export default function NotaDetalhePage() {
           <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
           <label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label>
           <label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
-          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
           <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
           <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
           <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
