@@ -82,8 +82,18 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
+  let parsedTotalRetido: string | undefined;
+  if (invoice.valorTotalRetido === null && invoice.xmlOriginal) {
+    try {
+      parsedTotalRetido = parseNFSeXml(invoice.xmlOriginal).valorTotalRetido;
+    } catch {
+      // Mantém o dado persistido quando o XML legado não puder ser interpretado.
+    }
+  }
+
   return NextResponse.json({
     ...serializeInvoiceResponse(invoice, includeXml),
+    valorTotalRetido: invoice.valorTotalRetido ?? parsedTotalRetido ?? null,
     descricaoServico: getServiceDescriptionFromXml(invoice)
   });
 }

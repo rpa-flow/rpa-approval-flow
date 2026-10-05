@@ -78,6 +78,38 @@ function getByPath(obj: any, path: string[]): unknown {
   return path.reduce((acc: any, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 }
 
+function numberValue(value: unknown) {
+  const normalized = decimal(value);
+  if (!normalized) return undefined;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function firstNumberByPath(value: unknown, paths: string[][]) {
+  for (const path of paths) {
+    const parsed = numberValue(getByPath(value, path));
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
+}
+
+function totalFederalRetentions(dps: unknown) {
+  const tribFed = getByPath(dps, ["valores", "trib", "tribFed"]);
+  if (!tribFed) return undefined;
+
+  const values = [
+    firstNumberByPath(tribFed, [["vRetIRRF"]]),
+    firstNumberByPath(tribFed, [["vRetCSLL"]]),
+    firstNumberByPath(tribFed, [["vRetINSS"]]),
+    firstNumberByPath(tribFed, [["vRetCP"]]),
+    firstNumberByPath(tribFed, [["piscofins", "vPis"], ["vRetPIS"]]),
+    firstNumberByPath(tribFed, [["piscofins", "vCofins"], ["vRetCOFINS"]])
+  ].filter((value): value is number => value !== undefined);
+
+  return values.length ? values.reduce((total, value) => total + value, 0).toFixed(2) : undefined;
+}
+
 const EXTRAS_BLOCKED_PATH_PREFIXES = [
   "?xml",
   "NFSe.Signature",
@@ -230,7 +262,7 @@ function parseNacional(doc: any): NormalizedInvoiceDto {
     tomadorEmail: text(getByPath(dps, ["toma", "email"])),
     valorBaseCalculo: decimal(getByPath(infNfse, ["valores", "vBC"])),
     valorIssqn: decimal(getByPath(infNfse, ["valores", "vISSQN"])),
-    valorTotalRetido: decimal(getByPath(infNfse, ["valores", "vTotalRet"])),
+    valorTotalRetido: decimal(getByPath(infNfse, ["valores", "vTotalRet"])) ?? totalFederalRetentions(dps),
     valorLiquido: decimal(getByPath(infNfse, ["valores", "vLiq"])),
     valorServico: decimal(getByPath(dps, ["valores", "vServPrest", "vServ"])),
     aliquota: decimal(getByPath(infNfse, ["valores", "pAliqAplic"])),
