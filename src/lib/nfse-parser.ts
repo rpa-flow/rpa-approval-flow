@@ -98,13 +98,22 @@ function totalFederalRetentions(dps: unknown) {
   const tribFed = getByPath(dps, ["valores", "trib", "tribFed"]);
   if (!tribFed) return undefined;
 
+  const pisCofins = getByPath(tribFed, ["piscofins"]);
+  const pisCofinsIsWithheld = text(getByPath(pisCofins, ["tpRetPisCofins"])) !== "0";
+
   const values = [
     firstNumberByPath(tribFed, [["vRetIRRF"]]),
     firstNumberByPath(tribFed, [["vRetCSLL"]]),
     firstNumberByPath(tribFed, [["vRetINSS"]]),
     firstNumberByPath(tribFed, [["vRetCP"]]),
-    firstNumberByPath(tribFed, [["piscofins", "vPis"], ["vRetPIS"]]),
-    firstNumberByPath(tribFed, [["piscofins", "vCofins"], ["vRetCOFINS"]])
+    firstNumberByPath(tribFed, [["vRetPIS"]]),
+    firstNumberByPath(tribFed, [["vRetCOFINS"]]),
+    ...(pisCofinsIsWithheld
+      ? [
+          firstNumberByPath(pisCofins, [["vPis"]]),
+          firstNumberByPath(pisCofins, [["vCofins"]])
+        ]
+      : [])
   ].filter((value): value is number => value !== undefined);
 
   return values.length ? values.reduce((total, value) => total + value, 0).toFixed(2) : undefined;
