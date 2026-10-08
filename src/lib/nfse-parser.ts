@@ -94,12 +94,30 @@ function firstNumberByPath(value: unknown, paths: string[][]) {
   return undefined;
 }
 
+function cents(value: unknown) {
+  const parsed = typeof value === "string" ? Number(value.replace(",", ".")) : Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : undefined;
+}
+
+export function isRetentionConsistentWithInvoiceAmounts(
+  valorServico: unknown,
+  valorLiquido: unknown,
+  valorTotalRetido: unknown
+) {
+  const serviceCents = cents(valorServico);
+  const liquidCents = cents(valorLiquido);
+  const retainedCents = cents(valorTotalRetido);
+
+  if (serviceCents === undefined || liquidCents === undefined || retainedCents === undefined) return true;
+  return serviceCents - retainedCents === liquidCents;
+}
+
 function totalFederalRetentions(dps: unknown) {
   const tribFed = getByPath(dps, ["valores", "trib", "tribFed"]);
   if (!tribFed) return undefined;
 
   const pisCofins = getByPath(tribFed, ["piscofins"]);
-  const pisCofinsIsWithheld = text(getByPath(pisCofins, ["tpRetPisCofins"])) !== "0";
+  const pisCofinsIsWithheld = text(getByPath(pisCofins, ["tpRetPisCofins"])) === "1";
 
   const values = [
     firstNumberByPath(tribFed, [["vRetIRRF"]]),
@@ -248,6 +266,10 @@ function parseNacional(doc: any): NormalizedInvoiceDto {
     delete extras[knownPath];
   }
 
+  const valorLiquido = decimal(getByPath(infNfse, ["valores", "vLiq"]));
+  const valorServico = decimal(getByPath(dps, ["valores", "vServPrest", "vServ"]));
+  const valorTotalRetido = decimal(getByPath(infNfse, ["valores", "vTotalRet"])) ?? totalFederalRetentions(dps);
+
   return {
     codigoIdentificador,
     numeroNota: text(infNfse.nNFSe) ?? "SEM_NUMERO",
@@ -271,9 +293,11 @@ function parseNacional(doc: any): NormalizedInvoiceDto {
     tomadorEmail: text(getByPath(dps, ["toma", "email"])),
     valorBaseCalculo: decimal(getByPath(infNfse, ["valores", "vBC"])),
     valorIssqn: decimal(getByPath(infNfse, ["valores", "vISSQN"])),
-    valorTotalRetido: decimal(getByPath(infNfse, ["valores", "vTotalRet"])) ?? totalFederalRetentions(dps),
-    valorLiquido: decimal(getByPath(infNfse, ["valores", "vLiq"])),
-    valorServico: decimal(getByPath(dps, ["valores", "vServPrest", "vServ"])),
+    valorTotalRetido: isRetentionConsistentWithInvoiceAmounts(valorServico, valorLiquido, valorTotalRetido)
+      ? valorTotalRetido
+      : undefined,
+    valorLiquido,
+    valorServico,
     aliquota: decimal(getByPath(infNfse, ["valores", "pAliqAplic"])),
     extras,
     documentDetail: {

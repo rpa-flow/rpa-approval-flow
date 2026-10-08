@@ -4,7 +4,7 @@ import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
-import { parseNFSeXml } from "@/lib/nfse-parser";
+import { isRetentionConsistentWithInvoiceAmounts, parseNFSeXml } from "@/lib/nfse-parser";
 import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 
 type Params = {
@@ -85,7 +85,15 @@ export async function GET(request: NextRequest, { params }: Params) {
   let parsedTotalRetido: string | undefined;
   if (invoice.valorTotalRetido === null && invoice.xmlOriginal) {
     try {
-      parsedTotalRetido = parseNFSeXml(invoice.xmlOriginal).valorTotalRetido;
+      const parsedInvoice = parseNFSeXml(invoice.xmlOriginal);
+      const parsedRetention = parsedInvoice.valorTotalRetido;
+      parsedTotalRetido = isRetentionConsistentWithInvoiceAmounts(
+        invoice.valorServico,
+        invoice.valorLiquido,
+        parsedRetention
+      )
+        ? parsedRetention
+        : undefined;
     } catch {
       // Mantém o dado persistido quando o XML legado não puder ser interpretado.
     }

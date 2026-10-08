@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseNFSeXml, simplifyExtrasByFieldName } from "./nfse-parser.ts";
+import { isRetentionConsistentWithInvoiceAmounts, parseNFSeXml, simplifyExtrasByFieldName } from "./nfse-parser.ts";
 
 const baseId = "NFS12345678901234567890123456789012345678901234";
 
@@ -14,7 +14,7 @@ test("known fields are mapped", () => {
 });
 
 test("sums federal retentions from the national DPS when vTotalRet is absent", () => {
-  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><vRetIRRF>13.35</vRetIRRF><vRetCSLL>8.90</vRetCSLL><piscofins><vPis>5.79</vPis><vCofins>26.70</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><vRetIRRF>13.35</vRetIRRF><vRetCSLL>8.90</vRetCSLL><piscofins><tpRetPisCofins>1</tpRetPisCofins><vPis>5.79</vPis><vCofins>26.70</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
   const parsed = parseNFSeXml(xml);
 
   assert.equal(parsed.valorTotalRetido, "54.74");
@@ -25,6 +25,18 @@ test("does not treat PIS and COFINS as retentions when the DPS marks them as not
   const parsed = parseNFSeXml(xml);
 
   assert.equal(parsed.valorTotalRetido, undefined);
+});
+
+test("does not infer PIS and COFINS retentions when the DPS omits the withholding indicator", () => {
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><piscofins><vPis>1787.47</vPis><vCofins>8233.18</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+
+  assert.equal(parsed.valorTotalRetido, undefined);
+});
+
+test("only accepts a retained amount that reconciles service and net values", () => {
+  assert.equal(isRetentionConsistentWithInvoiceAmounts("108331.38", "108331.38", "10020.65"), false);
+  assert.equal(isRetentionConsistentWithInvoiceAmounts("108331.38", "98310.73", "10020.65"), true);
 });
 
 test("maps competence date from DPS dCompet without changing the day", () => {
