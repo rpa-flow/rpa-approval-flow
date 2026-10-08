@@ -109,6 +109,7 @@ async function sendMailWithGraph(params: {
   subject: string;
   text: string;
   html?: string;
+  inlineImages?: Array<{ name: string; contentType: string; contentBytes: string; contentId: string }>;
 }) {
   const { config, missingEnvVars } = graphConfig();
 
@@ -136,6 +137,14 @@ async function sendMailWithGraph(params: {
       },
       toRecipients: params.recipients.map((address) => ({
         emailAddress: { address }
+      })),
+      attachments: params.inlineImages?.map((image) => ({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: image.name,
+        contentType: image.contentType,
+        contentBytes: image.contentBytes,
+        contentId: image.contentId,
+        isInline: true
       }))
     },
     saveToSentItems: true
@@ -159,6 +168,56 @@ async function sendMailWithGraph(params: {
   }
 
   return { simulated: false, accepted: params.recipients, rejected: [] as string[] };
+}
+
+export async function sendInvoiceStatusEmail(params: {
+  recipients: string[];
+  invoiceId: string;
+  invoiceNumber: string;
+  codigoIdentificador: string;
+  supplierName: string;
+  supplierCnpj?: string | null;
+  invoiceValue?: string | null;
+  issueDate?: string | null;
+  previousStatus: string;
+  newStatus: string;
+  reason: string;
+  message?: string | null;
+  image?: { name: string; contentType: string; contentBytes: string };
+}): Promise<EmailSendResult> {
+  const invoiceUrl = `${appBaseUrl()}/notas/${params.invoiceId}`;
+  const statusLabel = (status: string) => status.replaceAll("_", " ");
+  const details = [
+    `Nota fiscal: ${params.invoiceNumber}`,
+    `Código identificador: ${params.codigoIdentificador}`,
+    `Fornecedor: ${params.supplierName}`,
+    params.supplierCnpj ? `CNPJ: ${params.supplierCnpj}` : "",
+    params.invoiceValue ? `Valor: ${params.invoiceValue}` : "",
+    params.issueDate ? `Emissão: ${params.issueDate}` : "",
+    `Status anterior: ${statusLabel(params.previousStatus)}`,
+    `Novo status: ${statusLabel(params.newStatus)}`,
+    `Motivo: ${params.reason}`,
+    params.message ? `Mensagem: ${params.message}` : ""
+  ].filter(Boolean);
+  const contentId = "status-image";
+
+  return sendMailWithGraph({
+    recipients: params.recipients,
+    subject: `Atualização da NF ${params.invoiceNumber}: ${statusLabel(params.newStatus)}`,
+    text: `${details.join("\n")}\n\nConsulte a nota: ${invoiceUrl}`,
+    html: [
+      `<p>O status da nota fiscal <strong>${escapeHtml(params.invoiceNumber)}</strong> foi atualizado.</p>`,
+      "<ul>",
+      ...details.slice(1).map((detail) => {
+        const separator = detail.indexOf(":");
+        return `<li><strong>${escapeHtml(detail.slice(0, separator))}:</strong>${escapeHtml(detail.slice(separator + 1))}</li>`;
+      }),
+      "</ul>",
+      params.image ? `<p><img src="cid:${contentId}" alt="Imagem anexada à comunicação" style="max-width:100%;height:auto" /></p>` : "",
+      `<p><a href="${invoiceUrl}">Abrir detalhes da nota</a></p>`
+    ].join(""),
+    inlineImages: params.image ? [{ ...params.image, contentId }] : undefined
+  });
 }
 
 export async function sendInvoiceCreatedEmail(params: {
