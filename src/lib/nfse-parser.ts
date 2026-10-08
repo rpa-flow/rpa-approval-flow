@@ -99,7 +99,7 @@ function totalFederalRetentions(dps: unknown) {
   if (!tribFed) return undefined;
 
   const pisCofins = getByPath(tribFed, ["piscofins"]);
-  const pisCofinsIsWithheld = text(getByPath(pisCofins, ["tpRetPisCofins"])) !== "0";
+  const pisCofinsIsWithheld = text(getByPath(pisCofins, ["tpRetPisCofins"])) === "1";
 
   const values = [
     firstNumberByPath(tribFed, [["vRetIRRF"]]),
