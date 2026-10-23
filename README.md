@@ -25,6 +25,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 
 ### Notas
 - `GET /api/notas` (integração geral)
+- `GET /api/notas/:id` (requer login e acesso à nota): resposta enxuta para a tela; `?full=true` retorna o registro completo com XML. `?includeXml=true` segue compatível. [Contrato e migração](docs/invoice-detail-response.md).
 - `POST /api/notas` (pode ser protegido por `x-api-key` via `INVOICE_INGEST_API_KEY`)
 - `POST /api/notas/recusadas` cria uma nota diretamente com status `RECUSADO`, marca o processamento como erro e não envia e-mail de notificação. Aceita o mesmo payload de criação de nota e os campos opcionais `reason` ou `observacaoValidacao`.
 - `PATCH /api/notas/:id` (requer login; valida acesso por fornecedor)
