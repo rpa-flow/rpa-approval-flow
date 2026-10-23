@@ -5,6 +5,8 @@ import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+import { getRetentionDetails } from "@/lib/retention-details";
+import { isFullInvoiceResponse, serializeInvoiceDetail } from "@/lib/invoice-detail-response";
 import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 
 type Params = {
@@ -46,7 +48,7 @@ async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: s
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
-  const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
+  const full = isFullInvoiceResponse(request.nextUrl.searchParams);
   const manager = await getSessionManager();
 
   if (!manager) {
@@ -82,19 +84,21 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
-  let parsedTotalRetido: string | undefined;
-  if (invoice.valorTotalRetido === null && invoice.xmlOriginal) {
+  let parsedXml: ReturnType<typeof parseNFSeXml> | undefined;
+  if (invoice.xmlOriginal) {
     try {
-      parsedTotalRetido = parseNFSeXml(invoice.xmlOriginal).valorTotalRetido;
+      parsedXml = parseNFSeXml(invoice.xmlOriginal);
     } catch {
-      // Mantém o dado persistido quando o XML legado não puder ser interpretado.
+      // Mantém os dados persistidos e sinaliza detalhamento indisponível.
     }
   }
+  const totalRetido = invoice.valorTotalRetido ?? parsedXml?.valorTotalRetido ?? null;
 
   return NextResponse.json({
-    ...serializeInvoiceResponse(invoice, includeXml),
-    valorTotalRetido: invoice.valorTotalRetido ?? parsedTotalRetido ?? null,
-    descricaoServico: getServiceDescriptionFromXml(invoice)
+    ...serializeInvoiceDetail(invoice, full),
+    valorTotalRetido: totalRetido,
+    retentionDetails: getRetentionDetails(parsedXml, totalRetido?.toString()),
+    descricaoServico: parsedXml?.descricaoServico ?? invoice.nbsDescricao ?? null
   });
 }
 

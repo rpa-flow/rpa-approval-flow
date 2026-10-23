@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { RetentionHint } from "@/components/retention-hint";
+import type { RetentionDetails } from "@/lib/retention-details";
 import { useParams, useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
@@ -18,7 +20,6 @@ type Invoice = {
   codigoIdentificador: string;
   status: InvoiceStatus;
   statusProcessamento: "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "ERRO";
-  dataAtualizacao: string;
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
   valorServico?: number | null;
@@ -26,13 +27,12 @@ type Invoice = {
   valorBaseCalculo?: number | null;
   valorIssqn?: number | null;
   valorTotalRetido?: number | null;
+  retentionDetails?: RetentionDetails;
   aliquota?: number | null;
   tomadorNome?: string | null;
   tomadorCnpj?: string | null;
   tomadorEmail?: string | null;
-  prestadorNome?: string | null;
   prestadorCnpj?: string | null;
-  prestadorEmail?: string | null;
   localEmissao?: string | null;
   localPrestacao?: string | null;
   municipioIncidencia?: string | null;
@@ -111,10 +111,11 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function DetailItem({ label, value }: { label: string; value?: string | number | null }) {
+function DetailItem({ label, value, hint }: { label: string; value?: string | number | null; hint?: ReactNode }) {
   return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
     <p className="text-xs font-bold uppercase text-muted">{label}</p>
     <p className="mt-1 text-sm font-semibold text-text">{value ?? "-"}</p>
+    {hint}
   </div>;
 }
 
@@ -425,7 +426,6 @@ export default function NotaDetalhePage() {
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
         <div className="grid gap-3 md:grid-cols-3">
-          <DetailItem label="Valor de serviço" value={formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
           <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
           <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />
@@ -447,11 +447,12 @@ export default function NotaDetalhePage() {
           <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <DetailItem label="Valor do serviço" value={invoice.valorServico == null ? "-" : formatCurrency(invoice.valorServico)} />
+          <DetailItem label="Valor retido" value={formatCurrency(invoice.valorTotalRetido)} hint={<RetentionHint details={invoice.retentionDetails} />} />
           <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
           <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
           <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
-          <DetailItem label="Total retido" value={formatCurrency(invoice.valorTotalRetido)} />
           <DetailItem label="Alíquota" value={invoice.aliquota === null || invoice.aliquota === undefined ? "-" : `${invoice.aliquota}%`} />
         </div>
 
