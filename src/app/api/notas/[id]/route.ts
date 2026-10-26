@@ -70,7 +70,8 @@ export async function GET(request: NextRequest, { params }: Params) {
             }
           }
         }
-      }
+      },
+      adminReview: true
     }
   });
 
@@ -80,6 +81,10 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   if (!(await canAccessInvoice(invoice, manager))) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
+  }
+
+  if (manager.role !== "ADMIN" && invoice.adminReview?.status === "PENDENTE") {
+    return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 404 });
   }
 
   return NextResponse.json({
@@ -118,11 +123,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
-  const existing = await prisma.invoice.findUnique({ where: { id: targetInvoiceId } });
+  const existing = await prisma.invoice.findUnique({ where: { id: targetInvoiceId }, include: { adminReview: true } });
 
   if (!existing) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
+  if (existing.adminReview?.status === "PENDENTE") {
+    return NextResponse.json({ error: "A nota está retida para validação administrativa." }, { status: 409 });
+  }
+
 
   if (manager && !(await canAccessInvoice(existing, manager))) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
