@@ -5,6 +5,8 @@ import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+import { getRetentionDetails } from "@/lib/retention-details";
+import { isFullInvoiceResponse, serializeInvoiceDetail } from "@/lib/invoice-detail-response";
 import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 
 type Params = {
@@ -46,7 +48,7 @@ async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: s
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
-  const includeXml = request.nextUrl.searchParams.get("includeXml") === "true";
+  const full = isFullInvoiceResponse(request.nextUrl.searchParams);
   const manager = await getSessionManager();
 
   if (!manager) {
@@ -87,9 +89,28 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 404 });
   }
 
+  let parsedXml: ReturnType<typeof parseNFSeXml> | undefined;
+  if (invoice.xmlOriginal) {
+    try {
+      parsedXml = parseNFSeXml(invoice.xmlOriginal);
+    } catch {
+      // Mantém os dados persistidos e sinaliza detalhamento indisponível.
+    }
+  }
+  const totalRetido = invoice.valorTotalRetido ?? parsedXml?.valorTotalRetido ?? null;
+
+  const { adminReview, ...invoiceWithoutReview } = invoice;
+  const valorConfirmado = adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
+    ? Number(adminReview.valorConfirmado)
+    : null;
+
   return NextResponse.json({
-    ...serializeInvoiceResponse(invoice, includeXml),
-    descricaoServico: getServiceDescriptionFromXml(invoice)
+    ...serializeInvoiceDetail(invoiceWithoutReview, full),
+    valorParaAprovacao: valorConfirmado ?? Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
+    origemValorParaAprovacao: valorConfirmado !== null ? "VALIDACAO_ADMINISTRATIVA" : "XML",
+    valorTotalRetido: totalRetido,
+    retentionDetails: getRetentionDetails(parsedXml, totalRetido?.toString()),
+    descricaoServico: parsedXml?.descricaoServico ?? invoice.nbsDescricao ?? null
   });
 }
 

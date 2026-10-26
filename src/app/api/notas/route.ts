@@ -64,8 +64,9 @@ export async function GET(request: NextRequest) {
       }
     },
     orderBy: [
-      { dataAtualizacao: "desc" },
-      { dataEmissao: "desc" }
+      { tomadorCnpj: "asc" },
+      { dataPagamento: "asc" },
+      { fornecedor: { codigoExterno: "asc" } }
     ],
     ...(pagination ? { skip: (pagination.page - 1) * pageSize, take: pageSize } : {})
   });

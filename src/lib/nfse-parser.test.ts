@@ -13,6 +13,27 @@ test("known fields are mapped", () => {
   assert.equal(parsed.valorServico, "100.50");
 });
 
+test("sums federal retentions from the national DPS when vTotalRet is absent", () => {
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><vRetIRRF>13.35</vRetIRRF><vRetCSLL>8.90</vRetCSLL><piscofins><vPis>5.79</vPis><vCofins>26.70</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+
+  assert.equal(parsed.valorTotalRetido, "54.74");
+});
+
+test("does not treat PIS and COFINS as retentions when the DPS marks them as not withheld", () => {
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><piscofins><tpRetPisCofins>0</tpRetPisCofins><vPis>4.16</vPis><vCofins>19.22</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+
+  assert.equal(parsed.valorTotalRetido, undefined);
+});
+
+test("does not infer PIS and COFINS retentions when the DPS omits the withholding indicator", () => {
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><piscofins><vPis>1787.47</vPis><vCofins>8233.18</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const parsed = parseNFSeXml(xml);
+
+  assert.equal(parsed.valorTotalRetido, undefined);
+});
+
 test("maps competence date from DPS dCompet without changing the day", () => {
   const xml = `<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infNFSe Id="${baseId}"><nNFSe>810</nNFSe><DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infDPS><dhEmi>2026-06-01T08:57:40-03:00</dhEmi><dCompet>2026-06-01</dCompet></infDPS></DPS></infNFSe></NFSe>`;
   const parsed = parseNFSeXml(xml);
