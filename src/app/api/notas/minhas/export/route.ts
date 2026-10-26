@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       valorTotalRetido: true,
       valorLiquido: true,
       valorServico: true,
+      adminReview: { select: { status: true, valorConfirmado: true } },
       aliquota: true,
       codigoDelphi: true,
       responsavelValidacao: true,
@@ -110,6 +111,9 @@ export async function GET(request: NextRequest) {
       valorTotalRetido: Number(invoice.valorTotalRetido ?? 0),
       valorLiquido: Number(invoice.valorLiquido ?? 0),
       valorServico: Number(invoice.valorServico ?? 0),
+      valorParaAprovacao: invoice.adminReview?.status === "LIBERADA" && invoice.adminReview.valorConfirmado !== null
+        ? Number(invoice.adminReview.valorConfirmado)
+        : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
       aliquota: Number(invoice.aliquota ?? 0),
       codigoDelphi: invoice.codigoDelphi ?? "",
       ocContrato: invoice.ocContrato ?? "",

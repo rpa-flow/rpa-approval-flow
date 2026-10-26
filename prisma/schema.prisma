@@ -53,6 +53,11 @@ enum NfseNsuStatus {
   IgnoredByRule
 }
 
+enum InvoiceAdminReviewStatus {
+  PENDENTE
+  LIBERADA
+}
+
 
 model Company {
   id          String   @id @default(cuid())
@@ -220,10 +225,50 @@ model Invoice {
   auditLogs           NoteAuditLog[]
   serviceEvaluation   ServiceEvaluation?
   documentDetail      InvoiceDocumentDetail?
+  adminReview         InvoiceAdminReview?
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
   @@index([criadoPorId])
+}
+
+model InvoiceAdminReviewConfig {
+  id        String   @id @default("default")
+  email     String?
+  ativo     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InvoiceAdminReview {
+  id                  String                   @id @default(cuid())
+  invoiceId           String                   @unique
+  status              InvoiceAdminReviewStatus @default(PENDENTE)
+  motivos             String[]                 @default([])
+  mesReferencia       String
+  valorSugerido       Decimal?                 @db.Decimal(14, 2)
+  origemValor         String?
+  evidenciaValor      String?
+  valorConfirmado     Decimal?                 @db.Decimal(14, 2)
+  emissaoConfirmada   Boolean                  @default(false)
+  responsavelId       String?
+  responsavelNome     String?
+  responsavelEmail    String?
+  justificativa       String?
+  observacao          String?
+  revisadoEm          DateTime?
+  emailDestinatario   String?
+  emailEnviadoEm      DateTime?
+  tentativasEmail     Int                      @default(0)
+  erroEmail           String?
+  versao              Int                      @default(1)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  invoice             Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([mesReferencia])
 }
 
 model InvoiceDocumentDetail {

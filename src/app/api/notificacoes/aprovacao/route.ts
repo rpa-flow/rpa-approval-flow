@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       ? { id: parsed.data.invoiceId }
       : { codigoIdentificador: parsed.data.codigoIdentificador! },
     include: {
+      adminReview: true,
       fornecedor: {
         include: {
           managerSuppliers: {
@@ -52,6 +53,10 @@ export async function POST(request: NextRequest) {
 
   if (!invoice) {
     return NextResponse.json({ error: "Nota fiscal não encontrada." }, { status: 404 });
+  }
+
+  if (invoice.adminReview?.status === "PENDENTE") {
+    return NextResponse.json({ error: "A nota aguarda validação administrativa." }, { status: 409 });
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);

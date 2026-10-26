@@ -13,6 +13,7 @@ const DEFAULT_HEADER_LINKS: Array<{ href: string; label: string; icon: Component
   { href: "/empresas", label: "Empresas", icon: Building2 },
   { href: "/gestores", label: "Gestores", icon: Users },
   { href: "/categorias-fornecedores", label: "Categorias", icon: Tags },
+  { href: "/notas/revisoes", label: "Revisões administrativas", icon: FileText },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
   { href: "/perfil", label: "Perfil", icon: UserCircle }
 ];
@@ -65,6 +66,8 @@ export function MainHeader(_: MainHeaderProps) {
       if (link.href === "/gestores" || link.href === "/categorias-fornecedores" || link.href === "/empresas") {
         return role === "ADMIN";
       }
+
+      if (link.href === "/notas/revisoes") return role === "ADMIN";
 
       return true;
     });

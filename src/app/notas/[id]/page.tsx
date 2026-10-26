@@ -23,6 +23,8 @@ type Invoice = {
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
   valorServico?: number | null;
+  valorParaAprovacao?: number | null;
+  origemValorParaAprovacao?: string;
   valorLiquido?: number | null;
   valorBaseCalculo?: number | null;
   valorIssqn?: number | null;
@@ -426,6 +428,7 @@ export default function NotaDetalhePage() {
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
         <div className="grid gap-3 md:grid-cols-3">
+          <DetailItem label={invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" ? "Valor para aprovação (validado pelo admin)" : "Valor de serviço"} value={formatCurrency(invoice.valorParaAprovacao ?? invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
           <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
           <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />

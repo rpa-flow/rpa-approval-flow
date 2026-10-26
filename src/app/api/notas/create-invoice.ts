@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { InvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validations";
-import { sendInvoiceCreatedEmail } from "@/lib/email";
+import { sendInvoiceAdminReviewEmail, sendInvoiceCreatedEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
+import { evaluateInvoiceAdminReview, extractDescriptionTotal, INVOICE_ADMIN_REVIEW_REASONS } from "@/lib/invoice-admin-review";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { createInvoiceAuditLog } from "@/lib/audit";
 import { uploadXmlToOneDrive } from "@/lib/onedrive";
@@ -18,6 +19,7 @@ type ManualInvoiceData = {
   itemTributacaoNac?: string;
   itemTributacaoMun?: string;
   nbsDescricao?: string;
+  descricaoServico?: string;
   dataProcessamento?: string;
   dataEmissao?: string;
   dataCompetencia?: string;
@@ -119,6 +121,7 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
           itemTributacaoNac: parsed.data.itemTributacaoNac,
           itemTributacaoMun: parsed.data.itemTributacaoMun,
           nbsDescricao: parsed.data.nbsDescricao,
+          descricaoServico: parsed.data.descricaoServico,
           dataProcessamento: parsed.data.dataProcessamento,
           dataEmissao: parsed.data.dataEmissao,
           dataCompetencia: parsed.data.dataCompetencia,
@@ -246,6 +249,21 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
     );
   }
 
+  const descricaoServico = "descricaoServico" in nfseData ? nfseData.descricaoServico : parsed.data.descricaoServico;
+  const reviewDecision = evaluateInvoiceAdminReview({
+    valorServico: "valorServico" in nfseData ? nfseData.valorServico : undefined,
+    valorLiquido: "valorLiquido" in nfseData ? nfseData.valorLiquido : undefined,
+    valorBaseCalculo: "valorBaseCalculo" in nfseData ? nfseData.valorBaseCalculo : undefined,
+    dataEmissao: "dataEmissao" in nfseData ? nfseData.dataEmissao : undefined
+  });
+  const valueSuggestion = reviewDecision.reasons.includes(INVOICE_ADMIN_REVIEW_REASONS.ZERO_VALUE)
+    ? extractDescriptionTotal(descricaoServico)
+    : { value: null, evidence: null, ambiguous: false };
+  const reviewConfig = reviewDecision.requiresAdminReview
+    ? await prisma.invoiceAdminReviewConfig.findUnique({ where: { id: "default" } })
+    : null;
+  const missingReviewEmail = reviewDecision.requiresAdminReview && (!reviewConfig?.ativo || !reviewConfig.email);
+
   const invoice = await prisma.invoice.create({
     data: {
       numeroNota: String(nfseData.numeroNota),
@@ -288,6 +306,19 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
       dataValidacao: isRejectedOnCreate ? new Date() : undefined,
       observacaoValidacao: isRejectedOnCreate ? validationReason : undefined,
       criadoPorId: manager?.id,
+      ...(reviewDecision.requiresAdminReview ? {
+        adminReview: {
+          create: {
+            motivos: reviewDecision.reasons,
+            mesReferencia: reviewDecision.referenceMonth,
+            valorSugerido: valueSuggestion.value,
+            origemValor: valueSuggestion.value ? "descricaoServico:Valor total" : null,
+            evidenciaValor: valueSuggestion.evidence,
+            emailDestinatario: reviewConfig?.email ?? null,
+            erroEmail: missingReviewEmail ? "Configure o e-mail administrativo para receber avisos de revisão." : null
+          }
+        }
+      } : {}),
       ...("documentDetail" in nfseData
         ? {
             documentDetail: {
@@ -304,7 +335,32 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
   await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status, reason: validationReason } });
   await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: options.auditDescription ?? "Nota criada e encaminhada para aprovação", newStatus: invoice.status, reason: validationReason, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: invoice as unknown as any });
 
-  if (options.sendCreatedEmail ?? true) {
+  if (reviewDecision.requiresAdminReview) {
+    const review = await prisma.invoiceAdminReview.findUnique({ where: { invoiceId: invoice.id } });
+    if (review && reviewConfig?.ativo && reviewConfig.email) {
+      try {
+        await sendInvoiceAdminReviewEmail({
+          recipient: reviewConfig.email,
+          invoiceNumber: invoice.numeroNota,
+          supplierName: supplier.nome,
+          invoiceId: invoice.id,
+          reasons: reviewDecision.reasons,
+          issueDate: invoice.dataEmissao?.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? null,
+          suggestedValue: valueSuggestion.value,
+          evidence: valueSuggestion.evidence
+        });
+        await prisma.invoiceAdminReview.update({
+          where: { id: review.id },
+          data: { tentativasEmail: { increment: 1 }, emailEnviadoEm: new Date(), erroEmail: null }
+        });
+      } catch (error) {
+        await prisma.invoiceAdminReview.update({
+          where: { id: review.id },
+          data: { tentativasEmail: { increment: 1 }, erroEmail: error instanceof Error ? error.message : String(error) }
+        });
+      }
+    }
+  } else if (options.sendCreatedEmail ?? true) {
     try {
       await sendInvoiceCreatedEmail({
         invoiceNumber: invoice.numeroNota,

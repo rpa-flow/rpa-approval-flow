@@ -248,6 +248,37 @@ Abra a nota para ver os detalhes, consultar o histórico e aprovar: ${invoiceUrl
   });
 }
 
+export async function sendInvoiceAdminReviewEmail(params: {
+  recipient: string;
+  invoiceNumber: string;
+  supplierName: string;
+  invoiceId: string;
+  reasons: string[];
+  issueDate?: string | null;
+  suggestedValue?: string | null;
+  evidence?: string | null;
+}) {
+  const invoiceUrl = `${appBaseUrl()}/notas/${params.invoiceId}`;
+  const reasonLabels = params.reasons.map((reason) =>
+    reason === "VALOR_ZERADO" ? "Valor fiscal zerado" : "Data de emissão anterior ao mês corrente"
+  );
+  const lines = [
+    `A nota ${params.invoiceNumber} do fornecedor ${params.supplierName} aguarda validação administrativa.`,
+    `Motivos: ${reasonLabels.join("; ")}.`,
+    params.issueDate ? `Data de emissão: ${params.issueDate}.` : "",
+    params.suggestedValue ? `Valor sugerido pela descrição: R$ ${params.suggestedValue}.` : "Valor sugerido: não identificado com segurança.",
+    params.evidence ? `Trecho usado como evidência: ${params.evidence}` : "",
+    `Abra o painel autenticado para revisar: ${invoiceUrl}`
+  ].filter(Boolean);
+
+  await sendMailWithGraph({
+    recipients: [params.recipient],
+    subject: `Validação administrativa necessária: NF ${params.invoiceNumber}`,
+    text: lines.join("\n\n"),
+    html: `<p>${escapeHtml(lines.join("\n\n")).replace(/\n/g, "<br>")}</p>`
+  });
+}
+
 export async function sendTestEmail(params: {
   recipient: string;
   subject?: string;

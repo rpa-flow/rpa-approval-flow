@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { createInvoiceAuditLog } from "@/lib/audit";
+import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
     where: {
+      AND: [invoicesAvailableForApproval],
       status: {
         in: ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"]
       }
