@@ -48,7 +48,6 @@ export async function POST(request: NextRequest, { params }: Params) {
       data: {
         status: newStatus,
         observacaoValidacao: reason,
-        responsavelValidacao: manager.nome,
         dataValidacao: new Date(),
         ...processing
       }
