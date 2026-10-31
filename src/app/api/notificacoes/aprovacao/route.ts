@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nota fiscal não encontrada." }, { status: 404 });
   }
 
-  if (invoice.adminReview?.status === "PENDENTE") {
-    return NextResponse.json({ error: "A nota aguarda validação administrativa." }, { status: 409 });
+  if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "A nota não está disponível para notificação no fluxo normal." }, { status: 409 });
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);

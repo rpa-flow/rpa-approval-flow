@@ -35,34 +35,40 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (review.status !== "PENDENTE" || review.versao !== parsed.data.versao) {
     return NextResponse.json({ error: "A revisão mudou desde que foi carregada. Atualize a fila." }, { status: 409 });
   }
-  if (["RECUSADO", "PROCESSADO", "EXPIRADA"].includes(review.invoice.status) || review.invoice.processada) {
+  const ignoring = parsed.data.ignorar === true;
+  if (ignoring && !parsed.data.justificativa?.trim()) {
+    return NextResponse.json({ error: "Informe a justificativa para ignorar esta nota." }, { status: 400 });
+  }
+  if (!ignoring && (["RECUSADO", "PROCESSADO", "EXPIRADA"].includes(review.invoice.status) || review.invoice.processada)) {
     return NextResponse.json({ error: "Esta nota não pode ser liberada para aprovação." }, { status: 409 });
   }
 
   const needsValue = review.motivos.includes("VALOR_ZERADO");
   const needsEmissionConfirmation = review.motivos.includes("EMISSAO_ANTERIOR");
   let confirmedValue = review.valorConfirmado?.toString() ?? null;
-  if (needsValue) {
+  if (!ignoring && needsValue) {
     if (!parsed.data.valorConfirmado) return NextResponse.json({ error: "Informe o valor para aprovação." }, { status: 400 });
     const normalized = parsed.data.valorConfirmado.replace(",", ".");
     if (Number(normalized) <= 0) return NextResponse.json({ error: "O valor confirmado deve ser maior que zero." }, { status: 400 });
     confirmedValue = Number(normalized).toFixed(2);
-  } else if (parsed.data.valorConfirmado) {
+  } else if (!ignoring && parsed.data.valorConfirmado) {
     return NextResponse.json({ error: "Esta revisão não permite alterar valor." }, { status: 400 });
   }
 
-  if (needsEmissionConfirmation && (!parsed.data.confirmarEmissaoAnterior || !parsed.data.justificativa?.trim())) {
+  if (!ignoring && needsEmissionConfirmation && (!parsed.data.confirmarEmissaoAnterior || !parsed.data.justificativa?.trim())) {
     return NextResponse.json({ error: "Confirme a emissão anterior e informe a justificativa." }, { status: 400 });
   }
-  if (needsValue && review.valorSugerido?.toString() !== confirmedValue && !parsed.data.justificativa?.trim()) {
+  if (!ignoring && needsValue && review.valorSugerido?.toString() !== confirmedValue && !parsed.data.justificativa?.trim()) {
     return NextResponse.json({ error: "Informe a justificativa para alterar o valor sugerido." }, { status: 400 });
   }
 
-  const emissionConfirmed = needsEmissionConfirmation
+  const emissionConfirmed = ignoring
+    ? review.emissaoConfirmada
+    : needsEmissionConfirmation
     ? parsed.data.confirmarEmissaoAnterior === true || review.emissaoConfirmada
     : review.emissaoConfirmada;
   const allReasonsResolved = (!needsValue || Boolean(confirmedValue)) && (!needsEmissionConfirmation || emissionConfirmed);
-  const nextStatus = allReasonsResolved ? "LIBERADA" : "PENDENTE";
+  const nextStatus = ignoring ? "IGNORADA" : allReasonsResolved ? "LIBERADA" : "PENDENTE";
   const changed = await prisma.$transaction(async (tx) => {
     const result = await tx.invoiceAdminReview.updateMany({
       where: { id: review.id, status: "PENDENTE", versao: parsed.data.versao },
@@ -86,8 +92,12 @@ export async function POST(request: NextRequest, { params }: Params) {
           actorId: manager.id,
           actorName: manager.nome,
           actorEmail: manager.email,
-          actionType: nextStatus === "LIBERADA" ? "ADMIN_REVIEW_RELEASED" : "ADMIN_REVIEW_UPDATED",
-          actionDescription: nextStatus === "LIBERADA" ? "Administrador validou a nota e liberou para aprovação do gestor" : "Administrador atualizou a revisão pendente",
+          actionType: nextStatus === "IGNORADA" ? "ADMIN_REVIEW_IGNORED" : nextStatus === "LIBERADA" ? "ADMIN_REVIEW_RELEASED" : "ADMIN_REVIEW_UPDATED",
+          actionDescription: nextStatus === "IGNORADA"
+            ? "Administrador ignorou a nota e impediu sua exibição no dashboard"
+            : nextStatus === "LIBERADA"
+              ? "Administrador validou a nota e liberou para aprovação do gestor"
+              : "Administrador atualizou a revisão pendente",
           reason: parsed.data.justificativa?.trim() || null,
           comment: parsed.data.observacao?.trim() || null,
           afterData: { reviewId: review.id, reasons: review.motivos, confirmedValue, status: nextStatus }

@@ -32,8 +32,8 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true, adminReview: true } });
   if (!existing) return NextResponse.json({ error: "Nota não encontrada." }, { status: 404 });
-  if (existing.adminReview?.status === "PENDENTE") {
-    return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 409 });
+  if (existing.adminReview && existing.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 409 });
   }
   if (existing.status === newStatus) return NextResponse.json({ error: "Escolha um status diferente do atual." }, { status: 400 });
 

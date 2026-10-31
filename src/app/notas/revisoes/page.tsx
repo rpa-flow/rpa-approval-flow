@@ -8,7 +8,7 @@ import { MainHeader } from "@/app/components/main-header";
 type Review = {
   id: string;
   invoiceId: string;
-  status: "PENDENTE" | "LIBERADA";
+  status: "PENDENTE" | "LIBERADA" | "IGNORADA";
   motivos: string[];
   mesReferencia: string;
   valorSugerido: string | null;
@@ -19,6 +19,9 @@ type Review = {
   erroEmail: string | null;
   justificativa: string | null;
   observacao: string | null;
+  responsavelNome: string | null;
+  responsavelEmail: string | null;
+  revisadoEm: string | null;
   emailEnviadoEm: string | null;
   tentativasEmail: number;
   invoice: {
@@ -55,7 +58,7 @@ function formatCnpj(value: string | null) {
 function ReviewCard({ review, onUpdated, onReviewed }: {
   review: Review;
   onUpdated: () => void;
-  onReviewed: (review: Review, status: "PENDENTE" | "LIBERADA") => void;
+  onReviewed: (review: Review, status: "PENDENTE" | "LIBERADA" | "IGNORADA") => void;
 }) {
   const [value, setValue] = useState(review.valorConfirmado ?? review.valorSugerido ?? "");
   const [confirmOldIssue, setConfirmOldIssue] = useState(review.emissaoConfirmada);
@@ -63,6 +66,7 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
   const [observation, setObservation] = useState(review.observacao ?? "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [confirmIgnore, setConfirmIgnore] = useState(false);
   const hasZeroReason = review.motivos.includes("VALOR_ZERADO");
   const hasOldIssueReason = review.motivos.includes("EMISSAO_ANTERIOR");
 
@@ -115,6 +119,32 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
     }
   }
 
+  async function ignoreReview() {
+    if (!justification.trim()) {
+      setMessage("Informe uma justificativa antes de ignorar a nota.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/notas/${review.invoiceId}/revisao`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versao: review.versao, ignorar: true, justificativa: justification, observacao: observation })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setMessage(result.error ?? "Não foi possível ignorar a nota.");
+        return;
+      }
+      onReviewed(review, "IGNORADA");
+    } catch {
+      setMessage("Falha de comunicação ao ignorar a nota.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <details className="group border-b border-border last:border-b-0">
       <summary className="cursor-pointer list-none px-4 py-4 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand sm:px-5">
@@ -122,14 +152,14 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-text">NF {review.invoice.numeroNota} · {review.invoice.fornecedor.nome}</h2>
-              <span className="badge badge-warning">Pendente de validação</span>
+              <span className={`badge ${review.status === "IGNORADA" ? "badge-danger" : "badge-warning"}`}>{review.status === "IGNORADA" ? "Ignorada do dashboard" : "Pendente de validação"}</span>
             </div>
             <p className="mt-1 text-xs text-muted">Tomador: {review.invoice.tomadorNome ?? "Não informado"} · CNPJ {formatCnpj(review.invoice.tomadorCnpj)} · Emissão {issueDate(review.invoice.dataEmissao)}</p>
             <div className="mt-2 flex flex-wrap gap-2" aria-label="Motivos da revisão">
               {review.motivos.map((reason) => <span className="badge badge-blue" key={reason}>{reason === "VALOR_ZERADO" ? "Valor zerado" : "Emissão anterior ao mês corrente"}</span>)}
             </div>
           </div>
-          <span className="text-sm font-semibold text-brand">Ver detalhes e validar <span className="inline-block transition-transform group-open:rotate-180" aria-hidden="true">⌄</span></span>
+          <span className="text-sm font-semibold text-brand">{review.status === "IGNORADA" ? "Ver decisão" : "Ver detalhes e validar"} <span className="inline-block transition-transform group-open:rotate-180" aria-hidden="true">⌄</span></span>
         </div>
       </summary>
 
@@ -149,17 +179,31 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
           <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-surface-container-low p-3 text-sm">{review.invoice.descricaoServico ?? "Descrição indisponível."}</pre>
         </details>
 
-        <form className="form-grid border-t border-border pt-4" onSubmit={submitDecision}>
+        {review.status === "IGNORADA" && <section className="rounded border border-rose-200 bg-rose-50 p-3" aria-label="Decisão de ignorar nota">
+          <h3 className="font-semibold text-danger">Nota ignorada e oculta do dashboard</h3>
+          <p className="mt-1 text-sm">{review.justificativa || "Nenhuma justificativa registrada."}</p>
+          <p className="muted small mt-2">Decisão registrada por {review.responsavelNome ?? "ADMIN"}{review.revisadoEm ? ` em ${new Date(review.revisadoEm).toLocaleString("pt-BR")}` : ""}.</p>
+        </section>}
+
+        {review.status === "PENDENTE" && <form className="form-grid border-t border-border pt-4" onSubmit={submitDecision}>
           <div className="sm:col-span-2"><h3 className="text-sm font-semibold text-text">Resolver pendências da nota</h3><p className="muted small mt-1">A nota só será liberada quando todos os motivos de revisão estiverem resolvidos.</p></div>
           {hasZeroReason && <label>Valor para aprovação (R$)<input required inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} placeholder="0,00" aria-describedby={`review-value-help-${review.id}`} /><span id={`review-value-help-${review.id}`} className="muted small">Informe ou ajuste o valor operacional. XML e valores fiscais originais serão preservados.</span></label>}
           {hasOldIssueReason && <label className="checkbox"><input type="checkbox" checked={confirmOldIssue} onChange={(event) => setConfirmOldIssue(event.target.checked)} />Confirmo que a emissão é anterior ao mês corrente e autorizo o prosseguimento para aprovação.</label>}
-          <label>Justificativa{(hasOldIssueReason || (hasZeroReason && value !== review.valorSugerido)) && " (obrigatória para esta decisão)"}<textarea maxLength={1000} value={justification} onChange={(event) => setJustification(event.target.value)} rows={2} /></label>
+          <label>Justificativa{(hasOldIssueReason || (hasZeroReason && value !== review.valorSugerido)) && " (obrigatória para esta decisão)"}<textarea maxLength={1000} value={justification} onChange={(event) => setJustification(event.target.value)} rows={2} aria-describedby={`review-justification-help-${review.id}`} /><span id={`review-justification-help-${review.id}`} className="muted small">Obrigatória se você escolher ignorar a nota.</span></label>
           <label>Observação interna<textarea maxLength={1000} value={observation} onChange={(event) => setObservation(event.target.value)} rows={2} /></label>
           <div className="form-actions sm:col-span-2">
             <button type="submit" disabled={busy}>{busy ? "Salvando..." : "Registrar validação"}</button>
             <button type="button" className="btn-secondary" disabled={busy} onClick={resendEmail}>{busy ? "Enviando..." : "Reenviar aviso"}</button>
+            <button type="button" className="btn-danger" disabled={busy} onClick={() => { setConfirmIgnore(true); setMessage(""); }}>Ignorar e ocultar do dashboard</button>
           </div>
-        </form>
+          {confirmIgnore && <div className="rounded border border-rose-200 bg-rose-50 p-3 sm:col-span-2" role="group" aria-label="Confirmar que deseja ignorar a nota">
+            <p className="text-sm font-semibold text-danger">A nota será removida da fila pendente e não aparecerá no dashboard nem seguirá para aprovação do gestor.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="btn-danger" disabled={busy} onClick={() => void ignoreReview()}>{busy ? "Ignorando..." : "Confirmar e ignorar nota"}</button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => setConfirmIgnore(false)}>Cancelar</button>
+            </div>
+          </div>}
+        </form>}
         {message && <p className="message" role="status">{message}</p>}
         <p className="muted small">A liberação administrativa remove a nota desta fila e a exibe no dashboard para o fluxo de aprovação do gestor. Ela não aprova a nota.</p>
       </div>
@@ -169,6 +213,7 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
 
 export default function InvoiceReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [queueStatus, setQueueStatus] = useState<"PENDENTE" | "IGNORADA">("PENDENTE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -178,7 +223,7 @@ export default function InvoiceReviewsPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/notas/revisoes");
+      const response = await fetch(`/api/notas/revisoes?status=${queueStatus}`);
       if (response.status === 401) { router.push("/login"); return; }
       if (response.status === 403) { router.push("/dashboard"); return; }
       if (!response.ok) throw new Error("Não foi possível carregar a fila de revisão.");
@@ -188,12 +233,17 @@ export default function InvoiceReviewsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [queueStatus, router]);
 
-  const handleReviewed = useCallback((review: Review, status: "PENDENTE" | "LIBERADA") => {
+  const handleReviewed = useCallback((review: Review, status: "PENDENTE" | "LIBERADA" | "IGNORADA") => {
     if (status === "LIBERADA") {
       setReviews((current) => current.filter((item) => item.id !== review.id));
       setNotice(`NF ${review.invoice.numeroNota} liberada. Ela saiu da fila de revisão e agora aparece no dashboard para aprovação do gestor.`);
+      return;
+    }
+    if (status === "IGNORADA") {
+      setReviews((current) => current.filter((item) => item.id !== review.id));
+      setNotice(`NF ${review.invoice.numeroNota} ignorada e removida da fila. Ela não aparecerá no dashboard nem seguirá para aprovação do gestor.`);
       return;
     }
     void loadReviews();
@@ -206,15 +256,19 @@ export default function InvoiceReviewsPage() {
       <MainHeader title="Revisões administrativas" subtitle="Valide notas retidas antes de disponibilizá-las para aprovação dos gestores." />
       <section className="card border-l-4 border-brand" aria-labelledby="review-queue-guidance">
         <h2 id="review-queue-guidance" className="section-title">Como funciona esta fila</h2>
-        <p className="section-description mt-2">Aqui aparecem somente notas pendentes de validação administrativa. Enquanto estiverem nesta fila, elas não aparecem no dashboard nem ficam disponíveis para o gestor. Ao resolver todos os motivos e liberar a nota, ela sai daqui e aparece no dashboard para aprovação normal do gestor.</p>
+        <p className="section-description mt-2">Notas pendentes ficam fora do dashboard e da aprovação do gestor. Ao resolver todos os motivos e liberar, elas aparecem no dashboard para aprovação normal. Se uma nota não deve seguir no fluxo, use “Ignorar e ocultar do dashboard”; ela ficará registrada na aba Ignoradas.</p>
       </section>
       {notice && <p className="message" role="status">{notice}</p>}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Estado das revisões administrativas">
+        <button type="button" aria-pressed={queueStatus === "PENDENTE"} className={queueStatus === "PENDENTE" ? "btn-primary" : "btn-secondary"} onClick={() => { setQueueStatus("PENDENTE"); setNotice(""); setReviews([]); }}>Pendentes</button>
+        <button type="button" aria-pressed={queueStatus === "IGNORADA"} className={queueStatus === "IGNORADA" ? "btn-primary" : "btn-secondary"} onClick={() => { setQueueStatus("IGNORADA"); setNotice(""); setReviews([]); }}>Ignoradas</button>
+      </div>
       {loading && <section className="card"><p className="state-loading">Carregando revisões...</p></section>}
       {error && <section className="card"><p className="state-error" role="alert">{error}</p><button type="button" onClick={() => void loadReviews()}>Tentar novamente</button></section>}
-      {!loading && !error && reviews.length === 0 && <section className="card"><h2>Nenhuma nota pendente de revisão</h2><p className="muted small">Notas liberadas saem desta fila e passam a aparecer no dashboard para aprovação do gestor.</p></section>}
-      {!error && reviews.length > 0 && <section className="card overflow-hidden !p-0" aria-label="Notas pendentes de validação">
+      {!loading && !error && reviews.length === 0 && <section className="card"><h2>{queueStatus === "PENDENTE" ? "Nenhuma nota pendente de revisão" : "Nenhuma nota ignorada"}</h2><p className="muted small">{queueStatus === "PENDENTE" ? "Notas liberadas saem desta fila e passam a aparecer no dashboard para aprovação do gestor." : "Notas ignoradas ficam registradas aqui e permanecem fora do dashboard."}</p></section>}
+      {!error && reviews.length > 0 && <section className="card overflow-hidden !p-0" aria-label={queueStatus === "PENDENTE" ? "Notas pendentes de validação" : "Notas ignoradas"}>
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
-          <h2 className="font-semibold text-text">Pendências para validar</h2>
+          <h2 className="font-semibold text-text">{queueStatus === "PENDENTE" ? "Pendências para validar" : "Notas ignoradas"}</h2>
           <span className="badge badge-slate">{reviews.length} nota(s)</span>
         </div>
         {reviews.map((review) => <ReviewCard key={review.id} review={review} onUpdated={() => void loadReviews()} onReviewed={handleReviewed} />)}
