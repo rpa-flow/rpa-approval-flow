@@ -85,8 +85,8 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
-  if (invoice.adminReview?.status === "PENDENTE") {
-    return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 404 });
+  if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 404 });
   }
 
   let parsedXml: ReturnType<typeof parseNFSeXml> | undefined;
@@ -149,8 +149,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (!existing) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
-  if (existing.adminReview?.status === "PENDENTE") {
-    return NextResponse.json({ error: "A nota está retida para validação administrativa." }, { status: 409 });
+  if (existing.adminReview && existing.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "A nota está retida no fluxo de revisão administrativa." }, { status: 409 });
   }
 
 

@@ -181,6 +181,7 @@ export const invoiceAdminReviewConfigSchema = z.object({
 export const invoiceAdminReviewDecisionSchema = z.object({
   valorConfirmado: z.string().trim().regex(/^\d+(?:[.,]\d{1,2})?$/).optional(),
   confirmarEmissaoAnterior: z.boolean().optional(),
+  ignorar: z.boolean().optional(),
   justificativa: z.string().trim().max(1000).optional(),
   observacao: z.string().trim().max(1000).optional(),
   versao: z.number().int().positive()

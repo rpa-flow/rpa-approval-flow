@@ -10,8 +10,8 @@ export async function GET(_: Request, { params }: Params) {
 
   const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, include: { adminReview: true } });
   if (!invoice) return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
-  if (invoice.adminReview?.status === "PENDENTE") {
-    return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 404 });
+  if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 404 });
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
