@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/ui-kit";
 import { MainHeader } from "@/app/components/main-header";
@@ -67,8 +67,16 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmIgnore, setConfirmIgnore] = useState(false);
+  const ignoreConfirmationRef = useRef<HTMLDivElement>(null);
   const hasZeroReason = review.motivos.includes("VALOR_ZERADO");
   const hasOldIssueReason = review.motivos.includes("EMISSAO_ANTERIOR");
+
+  useEffect(() => {
+    if (confirmIgnore) {
+      ignoreConfirmationRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      ignoreConfirmationRef.current?.focus({ preventScroll: true });
+    }
+  }, [confirmIgnore]);
 
   async function submitDecision(event: React.FormEvent) {
     event.preventDefault();
@@ -196,15 +204,19 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
             <button type="button" className="btn-secondary" disabled={busy} onClick={resendEmail}>{busy ? "Enviando..." : "Reenviar aviso"}</button>
             <button type="button" className="btn-danger" disabled={busy} onClick={() => { setConfirmIgnore(true); setMessage(""); }}>Ignorar e ocultar do dashboard</button>
           </div>
-          {confirmIgnore && <div className="rounded border border-rose-200 bg-rose-50 p-3 sm:col-span-2" role="group" aria-label="Confirmar que deseja ignorar a nota">
+          {confirmIgnore && <div ref={ignoreConfirmationRef} tabIndex={-1} className="rounded border border-rose-200 bg-rose-50 p-3 sm:col-span-2" role="group" aria-label="Confirmar que deseja ignorar a nota">
             <p className="text-sm font-semibold text-danger">A nota será removida da fila pendente e não aparecerá no dashboard nem seguirá para aprovação do gestor.</p>
+            <label className="mt-2 block">Justificativa para ignorar (obrigatória)
+              <textarea maxLength={1000} value={justification} onChange={(event) => setJustification(event.target.value)} rows={2} />
+            </label>
+            {message && <p className="message mt-2" role="status">{message}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" className="btn-danger" disabled={busy} onClick={() => void ignoreReview()}>{busy ? "Ignorando..." : "Confirmar e ignorar nota"}</button>
               <button type="button" className="btn-secondary" disabled={busy} onClick={() => setConfirmIgnore(false)}>Cancelar</button>
             </div>
           </div>}
         </form>}
-        {message && <p className="message" role="status">{message}</p>}
+        {message && !confirmIgnore && <p className="message" role="status">{message}</p>}
         <p className="muted small">A liberação administrativa remove a nota desta fila e a exibe no dashboard para o fluxo de aprovação do gestor. Ela não aprova a nota.</p>
       </div>
     </details>
