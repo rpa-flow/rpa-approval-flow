@@ -9,8 +9,14 @@ export async function GET(request: NextRequest) {
   if (manager.role !== "ADMIN") return NextResponse.json({ error: "Somente ADMIN pode acessar a fila de revisão." }, { status: 403 });
 
   const status = request.nextUrl.searchParams.get("status") === "IGNORADA" ? "IGNORADA" : "PENDENTE";
+  const fornecedor = (request.nextUrl.searchParams.get("fornecedor") ?? "").trim().slice(0, 100);
+  const cnpj = fornecedor.replace(/\D/g, "");
   const reviews = await prisma.invoiceAdminReview.findMany({
-    where: { status },
+    where: { status, ...(fornecedor ? { invoice: { fornecedor: { OR: [
+      { nome: { contains: fornecedor, mode: "insensitive" } },
+      { cnpj: { contains: fornecedor, mode: "insensitive" } },
+      ...(cnpj ? [{ cnpj: { contains: cnpj } }] : [])
+    ] } } } : {}) },
     include: {
       invoice: {
         include: { fornecedor: { select: { id: true, nome: true, cnpj: true } } }
