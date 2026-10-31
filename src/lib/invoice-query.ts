@@ -54,6 +54,6 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
   if (issueFrom || issueTo) filters.push({ dataEmissao: { ...(issueFrom ? { gte: issueFrom } : {}), ...(issueTo ? { lte: issueTo } : {}) } });
   if (competenceFrom || competenceTo) filters.push({ dataCompetencia: { ...(competenceFrom ? { gte: competenceFrom } : {}), ...(competenceTo ? { lte: competenceTo } : {}) } });
 
-  if (manager.role !== "ADMIN") filters.push(invoicesAvailableForApproval);
+  filters.push(invoicesAvailableForApproval());
   return { AND: filters };
 }

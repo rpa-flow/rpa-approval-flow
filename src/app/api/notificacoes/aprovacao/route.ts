@@ -83,7 +83,11 @@ export async function POST(request: NextRequest) {
     supplierName: invoice.fornecedor.nome,
     recipients,
     invoiceId: invoice.id,
-    invoiceValue: formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo),
+    invoiceValue: formatCurrency(
+      invoice.adminReview?.status === "LIBERADA" && invoice.adminReview.valorConfirmado !== null
+        ? invoice.adminReview.valorConfirmado
+        : invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo
+    ),
     issueDate: formatDate(invoice.dataEmissao),
     competenceDate: formatDate(invoice.dataCompetencia),
     prestadorCnpj: invoice.prestadorCnpj ?? undefined,
