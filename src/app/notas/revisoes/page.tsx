@@ -52,7 +52,11 @@ function formatCnpj(value: string | null) {
   return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 }
 
-function ReviewCard({ review, onUpdated }: { review: Review; onUpdated: () => void }) {
+function ReviewCard({ review, onUpdated, onReviewed }: {
+  review: Review;
+  onUpdated: () => void;
+  onReviewed: (review: Review, status: "PENDENTE" | "LIBERADA") => void;
+}) {
   const [value, setValue] = useState(review.valorConfirmado ?? review.valorSugerido ?? "");
   const [confirmOldIssue, setConfirmOldIssue] = useState(review.emissaoConfirmada);
   const [justification, setJustification] = useState(review.justificativa ?? "");
@@ -83,8 +87,12 @@ function ReviewCard({ review, onUpdated }: { review: Review; onUpdated: () => vo
         setMessage(result.error ?? "Não foi possível salvar a revisão.");
         return;
       }
-      setMessage(result.status === "LIBERADA" ? "Revisão concluída. A nota foi liberada para o gestor." : "Decisão registrada; ainda há motivos pendentes.");
-      onUpdated();
+      if (result.status === "LIBERADA") {
+        onReviewed(review, "LIBERADA");
+      } else {
+        setMessage("Validação registrada, mas ainda há motivos pendentes. A nota continua retida nesta fila.");
+        onReviewed(review, "PENDENTE");
+      }
     } catch {
       setMessage("Falha de comunicação ao salvar a revisão.");
     } finally {
@@ -108,47 +116,54 @@ function ReviewCard({ review, onUpdated }: { review: Review; onUpdated: () => vo
   }
 
   return (
-    <article className="card">
-      <div className="section-header">
-        <div>
-          <h2>Nota {review.invoice.numeroNota} · {review.invoice.fornecedor.nome}</h2>
-          <p className="muted small">CNPJ: {review.invoice.fornecedor.cnpj ?? "Não informado"} · Emitida em {issueDate(review.invoice.dataEmissao)} · Mês de referência {review.mesReferencia}</p>
+    <details className="group border-b border-border last:border-b-0">
+      <summary className="cursor-pointer list-none px-4 py-4 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand sm:px-5">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold text-text">NF {review.invoice.numeroNota} · {review.invoice.fornecedor.nome}</h2>
+              <span className="badge badge-warning">Pendente de validação</span>
+            </div>
+            <p className="mt-1 text-xs text-muted">Tomador: {review.invoice.tomadorNome ?? "Não informado"} · CNPJ {formatCnpj(review.invoice.tomadorCnpj)} · Emissão {issueDate(review.invoice.dataEmissao)}</p>
+            <div className="mt-2 flex flex-wrap gap-2" aria-label="Motivos da revisão">
+              {review.motivos.map((reason) => <span className="badge badge-blue" key={reason}>{reason === "VALOR_ZERADO" ? "Valor zerado" : "Emissão anterior ao mês corrente"}</span>)}
+            </div>
+          </div>
+          <span className="text-sm font-semibold text-brand">Ver detalhes e validar <span className="inline-block transition-transform group-open:rotate-180" aria-hidden="true">⌄</span></span>
         </div>
-        <span className="badge badge-warning">Aguardando revisão</span>
+      </summary>
+
+      <div className="space-y-4 border-t border-border bg-surface-container-lowest px-4 py-4 sm:px-5">
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div><dt className="muted small">CNPJ do fornecedor</dt><dd className="font-mono">{formatCnpj(review.invoice.fornecedor.cnpj)}</dd></div>
+          <div><dt className="muted small">Mês de referência</dt><dd>{review.mesReferencia}</dd></div>
+          <div><dt className="muted small">Valor do serviço no XML</dt><dd>{currency(review.invoice.valorServico)}</dd></div>
+          <div><dt className="muted small">Valor líquido no XML</dt><dd>{currency(review.invoice.valorLiquido)}</dd></div>
+          <div><dt className="muted small">Sugestão identificada na descrição</dt><dd>{currency(review.valorSugerido)}</dd></div>
+          <div><dt className="muted small">Aviso administrativo</dt><dd>{review.erroEmail ? <span className="feedback-error">{review.erroEmail}</span> : review.emailEnviadoEm ? `Enviado em ${new Date(review.emailEnviadoEm).toLocaleString("pt-BR")}` : "Ainda não enviado"}</dd></div>
+        </dl>
+
+        {review.evidenciaValor && <p className="text-sm"><strong>Trecho identificado:</strong> {review.evidenciaValor}</p>}
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-brand">Ver descrição completa da nota</summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-surface-container-low p-3 text-sm">{review.invoice.descricaoServico ?? "Descrição indisponível."}</pre>
+        </details>
+
+        <form className="form-grid border-t border-border pt-4" onSubmit={submitDecision}>
+          <div className="sm:col-span-2"><h3 className="text-sm font-semibold text-text">Resolver pendências da nota</h3><p className="muted small mt-1">A nota só será liberada quando todos os motivos de revisão estiverem resolvidos.</p></div>
+          {hasZeroReason && <label>Valor para aprovação (R$)<input required inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} placeholder="0,00" aria-describedby={`review-value-help-${review.id}`} /><span id={`review-value-help-${review.id}`} className="muted small">Informe ou ajuste o valor operacional. XML e valores fiscais originais serão preservados.</span></label>}
+          {hasOldIssueReason && <label className="checkbox"><input type="checkbox" checked={confirmOldIssue} onChange={(event) => setConfirmOldIssue(event.target.checked)} />Confirmo que a emissão é anterior ao mês corrente e autorizo o prosseguimento para aprovação.</label>}
+          <label>Justificativa{(hasOldIssueReason || (hasZeroReason && value !== review.valorSugerido)) && " (obrigatória para esta decisão)"}<textarea maxLength={1000} value={justification} onChange={(event) => setJustification(event.target.value)} rows={2} /></label>
+          <label>Observação interna<textarea maxLength={1000} value={observation} onChange={(event) => setObservation(event.target.value)} rows={2} /></label>
+          <div className="form-actions sm:col-span-2">
+            <button type="submit" disabled={busy}>{busy ? "Salvando..." : "Registrar validação"}</button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={resendEmail}>{busy ? "Enviando..." : "Reenviar aviso"}</button>
+          </div>
+        </form>
+        {message && <p className="message" role="status">{message}</p>}
+        <p className="muted small">A liberação administrativa remove a nota desta fila e a exibe no dashboard para o fluxo de aprovação do gestor. Ela não aprova a nota.</p>
       </div>
-
-      <div className="flex flex-wrap gap-2" aria-label="Motivos da revisão">
-        {review.motivos.map((reason) => <span className="badge badge-blue" key={reason}>{reason === "VALOR_ZERADO" ? "Valor zerado" : "Emissão anterior ao mês corrente"}</span>)}
-      </div>
-
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div><dt className="muted small">Tomador</dt><dd>{review.invoice.tomadorNome ?? "Não informado"}</dd></div>
-        <div><dt className="muted small">CNPJ do tomador</dt><dd className="font-mono">{formatCnpj(review.invoice.tomadorCnpj)}</dd></div>
-        <div><dt className="muted small">Valor do serviço no XML</dt><dd>{currency(review.invoice.valorServico)}</dd></div>
-        <div><dt className="muted small">Valor líquido no XML</dt><dd>{currency(review.invoice.valorLiquido)}</dd></div>
-        <div><dt className="muted small">Sugestão da descrição</dt><dd>{currency(review.valorSugerido)}</dd></div>
-        <div><dt className="muted small">Aviso administrativo</dt><dd>{review.erroEmail ? <span className="feedback-error">{review.erroEmail}</span> : review.emailEnviadoEm ? `Enviado em ${new Date(review.emailEnviadoEm).toLocaleString("pt-BR")}` : "Ainda não enviado"}</dd></div>
-      </dl>
-
-      {review.evidenciaValor && <p className="mt-3"><strong>Trecho identificado:</strong> {review.evidenciaValor}</p>}
-      <details className="mt-3">
-        <summary className="cursor-pointer font-semibold">Ver descrição da nota</summary>
-        <pre className="mt-2 whitespace-pre-wrap break-words rounded border p-3 text-sm">{review.invoice.descricaoServico ?? "Descrição indisponível."}</pre>
-      </details>
-
-      <form className="form-grid mt-4" onSubmit={submitDecision}>
-        {hasZeroReason && <label>Valor para aprovação (R$)<input required inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} placeholder="0,00" aria-describedby={`review-value-help-${review.id}`} /><span id={`review-value-help-${review.id}`} className="muted small">Informe ou ajuste o valor operacional para o gestor. O XML e os valores fiscais originais serão preservados.</span></label>}
-        {hasOldIssueReason && <label className="checkbox"><input type="checkbox" checked={confirmOldIssue} onChange={(event) => setConfirmOldIssue(event.target.checked)} />Confirmo que a emissão é anterior ao mês corrente e autorizo o prosseguimento para aprovação.</label>}
-        <label>Justificativa{(hasOldIssueReason || (hasZeroReason && value !== review.valorSugerido)) && " (obrigatória para esta decisão)"}<textarea maxLength={1000} value={justification} onChange={(event) => setJustification(event.target.value)} rows={2} /></label>
-        <label>Observação interna<textarea maxLength={1000} value={observation} onChange={(event) => setObservation(event.target.value)} rows={2} /></label>
-        <div className="form-actions">
-          <button type="submit" disabled={busy}>{busy ? "Salvando..." : "Registrar validação"}</button>
-          <button type="button" className="btn-secondary" disabled={busy} onClick={resendEmail}>Reenviar aviso</button>
-        </div>
-      </form>
-      {message && <p className="message" role="status">{message}</p>}
-      <p className="muted small">A liberação administrativa não aprova a nota. Depois da liberação, o gestor ainda precisa aprová-la.</p>
-    </article>
+    </details>
   );
 }
 
@@ -156,6 +171,7 @@ export default function InvoiceReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const router = useRouter();
 
   const loadReviews = useCallback(async () => {
@@ -174,15 +190,35 @@ export default function InvoiceReviewsPage() {
     }
   }, [router]);
 
+  const handleReviewed = useCallback((review: Review, status: "PENDENTE" | "LIBERADA") => {
+    if (status === "LIBERADA") {
+      setReviews((current) => current.filter((item) => item.id !== review.id));
+      setNotice(`NF ${review.invoice.numeroNota} liberada. Ela saiu da fila de revisão e agora aparece no dashboard para aprovação do gestor.`);
+      return;
+    }
+    void loadReviews();
+  }, [loadReviews]);
+
   useEffect(() => { void loadReviews(); }, [loadReviews]);
 
   return (
     <AppLayout>
       <MainHeader title="Revisões administrativas" subtitle="Valide notas retidas antes de disponibilizá-las para aprovação dos gestores." />
+      <section className="card border-l-4 border-brand" aria-labelledby="review-queue-guidance">
+        <h2 id="review-queue-guidance" className="section-title">Como funciona esta fila</h2>
+        <p className="section-description mt-2">Aqui aparecem somente notas pendentes de validação administrativa. Enquanto estiverem nesta fila, elas não aparecem no dashboard nem ficam disponíveis para o gestor. Ao resolver todos os motivos e liberar a nota, ela sai daqui e aparece no dashboard para aprovação normal do gestor.</p>
+      </section>
+      {notice && <p className="message" role="status">{notice}</p>}
       {loading && <section className="card"><p className="state-loading">Carregando revisões...</p></section>}
       {error && <section className="card"><p className="state-error" role="alert">{error}</p><button type="button" onClick={() => void loadReviews()}>Tentar novamente</button></section>}
-      {!loading && !error && reviews.length === 0 && <section className="card"><h2>Nenhuma nota aguardando revisão</h2><p className="muted small">Notas com valor zerado ou emissão anterior ao mês corrente aparecerão aqui.</p></section>}
-      {!error && reviews.length > 0 && <div className="grid gap-4">{reviews.map((review) => <ReviewCard key={review.id} review={review} onUpdated={() => void loadReviews()} />)}</div>}
+      {!loading && !error && reviews.length === 0 && <section className="card"><h2>Nenhuma nota pendente de revisão</h2><p className="muted small">Notas liberadas saem desta fila e passam a aparecer no dashboard para aprovação do gestor.</p></section>}
+      {!error && reviews.length > 0 && <section className="card overflow-hidden !p-0" aria-label="Notas pendentes de validação">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+          <h2 className="font-semibold text-text">Pendências para validar</h2>
+          <span className="badge badge-slate">{reviews.length} nota(s)</span>
+        </div>
+        {reviews.map((review) => <ReviewCard key={review.id} review={review} onUpdated={() => void loadReviews()} onReviewed={handleReviewed} />)}
+      </section>}
     </AppLayout>
   );
 }
