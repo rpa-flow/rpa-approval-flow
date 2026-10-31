@@ -36,6 +36,7 @@ export const createInvoiceSchema = z
     itemTributacaoNac: z.string().optional(),
     itemTributacaoMun: z.string().optional(),
     nbsDescricao: z.string().optional(),
+    descricaoServico: z.string().max(20000).optional(),
     dataProcessamento: z.string().datetime().optional(),
     dataEmissao: z.string().datetime().optional(),
     dataCompetencia: z.string().datetime().optional(),
@@ -171,6 +172,19 @@ export const notificationRuleSchema = z.object({
   diasLembrete: z.number().int().min(0).max(60),
   ativo: z.boolean(),
   destinatarioAdicional: z.string().email().nullable().optional()
+});
+
+export const invoiceAdminReviewConfigSchema = z.object({
+  email: z.string().trim().email("Informe um e-mail válido.")
+});
+
+export const invoiceAdminReviewDecisionSchema = z.object({
+  valorConfirmado: z.string().trim().regex(/^\d+(?:[.,]\d{1,2})?$/).optional(),
+  confirmarEmissaoAnterior: z.boolean().optional(),
+  ignorar: z.boolean().optional(),
+  justificativa: z.string().trim().max(1000).optional(),
+  observacao: z.string().trim().max(1000).optional(),
+  versao: z.number().int().positive()
 });
 
 export const changePasswordSchema = z.object({

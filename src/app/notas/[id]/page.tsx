@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { RetentionHint } from "@/components/retention-hint";
+import type { RetentionDetails } from "@/lib/retention-details";
 import { useParams, useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink, RatingScaleHint } from "@/components/evaluation-guidance";
+import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
@@ -17,21 +20,21 @@ type Invoice = {
   codigoIdentificador: string;
   status: InvoiceStatus;
   statusProcessamento: "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "ERRO";
-  dataAtualizacao: string;
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
   valorServico?: number | null;
+  valorParaAprovacao?: number | null;
+  origemValorParaAprovacao?: string;
   valorLiquido?: number | null;
   valorBaseCalculo?: number | null;
   valorIssqn?: number | null;
   valorTotalRetido?: number | null;
+  retentionDetails?: RetentionDetails;
   aliquota?: number | null;
   tomadorNome?: string | null;
   tomadorCnpj?: string | null;
   tomadorEmail?: string | null;
-  prestadorNome?: string | null;
   prestadorCnpj?: string | null;
-  prestadorEmail?: string | null;
   localEmissao?: string | null;
   localPrestacao?: string | null;
   municipioIncidencia?: string | null;
@@ -68,6 +71,15 @@ const APPROVED_STATUS_CHANGE_OPTIONS: Array<{ value: Exclude<InvoiceStatus, "APR
   { value: "EXPIRADA", label: "Expirada", description: "Indica que a aprovação não deve mais seguir o fluxo atual." }
 ];
 
+const STATUS_OPTIONS: Array<{ value: InvoiceStatus; label: string }> = [
+  { value: "AGUARDANDO_APROVACAO", label: "Aguardando aprovação" },
+  { value: "APROVADO", label: "Aprovado" },
+  { value: "RECUSADO", label: "Recusado" },
+  { value: "PROCESSADO", label: "Processado" },
+  { value: "EXPIRADA", label: "Expirada" },
+  { value: "DADOS_INCONSISTENTES", label: "Dados inconsistentes" }
+];
+
 function getManagerNames(invoice: Invoice) {
   return invoice.fornecedor.managerSuppliers
     ?.map((link) => link.manager?.nome)
@@ -97,21 +109,15 @@ function formatDateTime(value?: string | null) {
   return value ? new Date(value).toLocaleString("pt-BR") : "-";
 }
 
-function toLocalDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
-function DetailItem({ label, value }: { label: string; value?: string | number | null }) {
+function DetailItem({ label, value, hint }: { label: string; value?: string | number | null; hint?: ReactNode }) {
   return <div className="rounded-md border border-border bg-surface-container-lowest p-4">
     <p className="text-xs font-bold uppercase text-muted">{label}</p>
     <p className="mt-1 text-sm font-semibold text-text">{value ?? "-"}</p>
+    {hint}
   </div>;
 }
 
@@ -137,10 +143,15 @@ export default function NotaDetalhePage() {
   const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [isApproving, setIsApproving] = useState(false);
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
   const [rejectionObservation, setRejectionObservation] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, recipients: "", reason: "", message: "" });
+  const [communicationImage, setCommunicationImage] = useState<File | null>(null);
+  const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -178,12 +189,14 @@ export default function NotaDetalhePage() {
     const loadedInvoice = await invoiceRes.json();
     setInvoice(loadedInvoice);
     if (historyRes.ok) setEvents(await historyRes.json());
-    const nextDay = new Date();
-    nextDay.setDate(nextDay.getDate() + 1);
-    setPaymentDate(loadedInvoice.dataPagamento ? toLocalDateInputValue(new Date(loadedInvoice.dataPagamento)) : toLocalDateInputValue(nextDay));
+    setPaymentDate("");
     setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
     setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
     setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+    setCommunication((current) => ({
+      ...current,
+      status: STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
+    }));
     setLoading(false);
   }, [params.id, router]);
 
@@ -240,19 +253,27 @@ export default function NotaDetalhePage() {
 
   async function aprovarComAvaliacao() {
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
-      setMessageType("error");
-      setMessage("Preencha a pontuação, o campo Qualifica e a classificação de risco para aprovar a nota.");
+      setApprovalError("Preencha a pontuação, o campo Qualifica, a classificação de risco e a data de pagamento para aprovar a nota.");
+      return;
+    }
+
+    if (!paymentDate) {
+      setApprovalError("Informe a data de pagamento para aprovar a nota.");
+      return;
+    }
+
+    if (paymentDate < minimumPaymentDate()) {
+      setApprovalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
       return;
     }
 
     if (!installmentCount || Number(installmentCount) < 1) {
-      setMessageType("error");
-      setMessage("Informe um número de parcelas maior ou igual a 1.");
+      setApprovalError("Informe um número de parcelas maior ou igual a 1.");
       return;
     }
 
     setIsApproving(true);
-    setMessage("");
+    setApprovalError("");
 
     try {
       const res = await fetch(`/api/notas/${invoice.id}`, {
@@ -260,7 +281,7 @@ export default function NotaDetalhePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "APROVADO",
-          dataPagamento: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : null,
+          dataPagamento: paymentDateAtSaoPauloNoon(paymentDate).toISOString(),
           ordemCompra: purchaseOrder.trim() || null,
           ocContrato: contractPurchaseOrder.trim() || null,
           numeroParcelas: Number(installmentCount),
@@ -275,24 +296,31 @@ export default function NotaDetalhePage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => null);
-        setMessageType("error");
-        setMessage(error?.error ?? "Não foi possível aprovar a nota. Confira a avaliação obrigatória e tente novamente.");
+        setApprovalError(error?.error ?? "Não foi possível aprovar a nota. Confira os campos obrigatórios e tente novamente.");
         return;
       }
 
       setMessageType("success");
       setMessage("Nota aprovada com sucesso.");
+      setIsApprovalModalOpen(false);
+      setApprovalError("");
       setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
       setPurchaseOrder("");
       setContractPurchaseOrder("");
       setInstallmentCount("1");
       await loadData();
     } catch {
-      setMessageType("error");
-      setMessage("Não foi possível comunicar com o servidor para aprovar a nota. Recarregue a página e tente novamente.");
+      setApprovalError("Não foi possível comunicar com o servidor para aprovar a nota. Recarregue a página e tente novamente.");
     } finally {
       setIsApproving(false);
     }
+  }
+
+  function abrirModalAprovacao() {
+    setApprovalError("");
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+    setPaymentDate("");
+    setIsApprovalModalOpen(true);
   }
 
   async function alterarStatusAprovado() {
@@ -337,6 +365,41 @@ export default function NotaDetalhePage() {
     }
   }
 
+  async function sendStatusCommunication() {
+    if (!invoice) return;
+    setIsSendingCommunication(true);
+    setMessage("");
+
+    const formData = new FormData();
+    formData.set("status", communication.status);
+    formData.set("recipients", communication.recipients);
+    formData.set("reason", communication.reason);
+    formData.set("message", communication.message);
+    if (communicationImage) formData.set("image", communicationImage);
+
+    try {
+      const res = await fetch(`/api/notas/${invoice.id}/comunicacao`, { method: "POST", body: formData });
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessageType("error");
+        setMessage(result?.error ?? "Não foi possível alterar o status e enviar o e-mail.");
+        if (result?.statusChanged) await loadData();
+        return;
+      }
+
+      setMessageType("success");
+      setMessage(result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
+      setCommunication((current) => ({ ...current, recipients: "", reason: "", message: "" }));
+      setCommunicationImage(null);
+      await loadData();
+    } catch {
+      setMessageType("error");
+      setMessage("Não foi possível comunicar com o servidor. Recarregue a página e tente novamente.");
+    } finally {
+      setIsSendingCommunication(false);
+    }
+  }
+
   const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
@@ -365,7 +428,7 @@ export default function NotaDetalhePage() {
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
         <div className="grid gap-3 md:grid-cols-3">
-          <DetailItem label="Valor de serviço" value={formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
+          <DetailItem label={invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" ? "Valor para aprovação (validado pelo admin)" : "Valor de serviço"} value={formatCurrency(invoice.valorParaAprovacao ?? invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
           <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
           <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
           <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />
@@ -387,11 +450,12 @@ export default function NotaDetalhePage() {
           <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <DetailItem label="Valor do serviço" value={invoice.valorServico == null ? "-" : formatCurrency(invoice.valorServico)} />
+          <DetailItem label="Valor retido" value={formatCurrency(invoice.valorTotalRetido)} hint={<RetentionHint details={invoice.retentionDetails} />} />
           <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
           <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
           <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
-          <DetailItem label="Total retido" value={formatCurrency(invoice.valorTotalRetido)} />
           <DetailItem label="Alíquota" value={invoice.aliquota === null || invoice.aliquota === undefined ? "-" : `${invoice.aliquota}%`} />
         </div>
 
@@ -410,6 +474,21 @@ export default function NotaDetalhePage() {
       </section>
 
       <aside className="space-y-4">
+
+        {me?.manager.role === "ADMIN" && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Somente administradores</p>
+            <h3 className="section-title">Alterar status e comunicar</h3>
+            <p className="section-description">Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos.</p>
+          </div>
+          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => option.value !== invoice.status).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="approval-field"><span className="approval-field-label">Destinatários</span><textarea className="approval-field-control" value={communication.recipients} onChange={(event) => setCommunication((current) => ({ ...current, recipients: event.target.value }))} rows={3} placeholder="nome@empresa.com; outro@empresa.com" required /><span className="text-xs text-slate-500">Separe vários e-mails por vírgula, ponto e vírgula ou linha.</span></label>
+          <label className="approval-field"><span className="approval-field-label">Motivo da alteração</span><textarea className="approval-field-control" value={communication.reason} onChange={(event) => setCommunication((current) => ({ ...current, reason: event.target.value }))} rows={3} maxLength={500} placeholder="Explique por que o status está sendo alterado" required /></label>
+          <label className="approval-field"><span className="approval-field-label">Mensagem adicional <span className="text-xs font-normal text-slate-500">(opcional)</span></span><textarea className="approval-field-control" value={communication.message} onChange={(event) => setCommunication((current) => ({ ...current, message: event.target.value }))} rows={3} maxLength={2000} placeholder="Inclua orientações para os destinatários" /></label>
+          <label className="approval-field"><span className="approval-field-label">Imagem no corpo do e-mail <span className="text-xs font-normal text-slate-500">(opcional, até 5 MB)</span></span><input className="approval-field-control" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => setCommunicationImage(event.target.files?.[0] ?? null)} />{communicationImage && <span className="text-xs font-semibold text-blue-700">Selecionada: {communicationImage.name}</span>}</label>
+          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || !communication.recipients.trim() || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : "Alterar status e enviar e-mail"}</button>
+          <p className="text-xs text-slate-500">O e-mail incluirá número, código, fornecedor, valor, emissão, status anterior, novo status e motivo.</p>
+        </section>}
 
 
         {canReject && <section className="card space-y-4 border-rose-200 bg-rose-50/50 ring-1 ring-rose-100">
@@ -435,17 +514,9 @@ export default function NotaDetalhePage() {
         {canApprove && <section className="card space-y-4">
           <div>
             <h3 className="section-title">Aprovar nota</h3>
-            <p className="section-description">Registre a avaliação obrigatória do serviço antes da aprovação.</p>
+            <p className="section-description">Abra a confirmação para registrar a avaliação e a data de pagamento obrigatórias.</p>
           </div>
-          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
-          <label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label>
-          <label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label>
-          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
-          <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
-          <label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label>
-          <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
-          <QualificationProcedureLink />
-          <button type="button" className="btn-primary w-full" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Aprovar nota"}</button>
+          <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button>
         </section>}
 
         <section className="card">
@@ -457,6 +528,24 @@ export default function NotaDetalhePage() {
         </section>
       </aside>
     </div>}
+
+    {!loading && invoice && isApprovalModalOpen && <>
+      <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => !isApproving && setIsApprovalModalOpen(false)} />
+      <section role="dialog" aria-modal="true" aria-labelledby="detail-approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6">
+        <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor.nome}</p></div><span className="badge badge-blue">Aprovação</span></div>
+        {invoice.statusProcessamento === "ERRO" && <div className="mt-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {invoice.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
+        {approvalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approvalError}</div>}
+        <div className="mt-5 space-y-4">
+          <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label></div>
+          <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label></div>
+          <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
+          <QualificationProcedureLink />
+        </div>
+        <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setIsApprovalModalOpen(false)} disabled={isApproving}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
+      </section>
+    </>}
 
   </AppLayout>;
 }

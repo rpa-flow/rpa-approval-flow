@@ -65,6 +65,8 @@ export default function GestoresPage() {
   const [editingManagerId, setEditingManagerId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ManagerForm>(EMPTY_FORM);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<"ALL" | "LINKED" | "UNLINKED">("ALL");
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [activatingManagerId, setActivatingManagerId] = useState<string | null>(null);
@@ -130,6 +132,8 @@ export default function GestoresPage() {
 
   function startCreate() {
     setEditingManagerId(null);
+    setSupplierSearch("");
+    setSupplierFilter("ALL");
     setForm(EMPTY_FORM);
     setShowForm(true);
     setMessage("");
@@ -137,6 +141,8 @@ export default function GestoresPage() {
 
   function startEdit(manager: ManagerListItem) {
     setEditingManagerId(manager.id);
+    setSupplierSearch("");
+    setSupplierFilter("ALL");
     setForm({
       nome: manager.nome,
       email: manager.email,
@@ -159,6 +165,26 @@ export default function GestoresPage() {
     }));
   }
 
+  const normalizedSupplierSearch = supplierSearch.trim().toLocaleLowerCase("pt-BR");
+  const visibleSuppliers = suppliers.filter((supplier) => {
+    const isLinked = form.supplierIds.includes(supplier.id);
+    const matchesFilter = supplierFilter === "ALL" || (supplierFilter === "LINKED" ? isLinked : !isLinked);
+    const searchableText = [supplier.nome, supplier.cnpj, supplier.codigoExterno].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
+    return matchesFilter && (!normalizedSupplierSearch || searchableText.includes(normalizedSupplierSearch));
+  });
+  const visibleSupplierIds = visibleSuppliers.map((supplier) => supplier.id);
+  const allVisibleSelected = visibleSupplierIds.length > 0 && visibleSupplierIds.every((id) => form.supplierIds.includes(id));
+  const selectedSuppliers = suppliers.filter((supplier) => form.supplierIds.includes(supplier.id));
+
+  function toggleVisibleSuppliers() {
+    const visibleIds = new Set(visibleSupplierIds);
+    setForm((current) => ({
+      ...current,
+      supplierIds: allVisibleSelected
+        ? current.supplierIds.filter((id) => !visibleIds.has(id))
+        : Array.from(new Set([...current.supplierIds, ...visibleSupplierIds]))
+    }));
+  }
   async function sendBulkActivation() {
     setIsSendingBulkActivation(true);
     setMessage("");
@@ -484,32 +510,51 @@ export default function GestoresPage() {
               </label>
             </div>
 
-            <div className="form-section">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="form-section-title">Fornecedores vinculados</p>
-                <span className="badge badge-slate">{form.supplierIds.length} selecionado(s)</span>
+            <section className="form-section" aria-labelledby="supplier-links-title">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p id="supplier-links-title" className="form-section-title">Fornecedores vinculados</p>
+                  <p className="muted small mt-1">Busque por nome, CNPJ ou código externo e selecione os resultados.</p>
+                </div>
+                <span className="badge badge-slate" aria-live="polite">{form.supplierIds.length} de {suppliers.length} vinculado(s)</span>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {suppliers.map((supplier) => (
-                  <label key={supplier.id} className="checkbox rounded-md border border-border bg-surface-container-low p-3">
-                    <input
-                      type="checkbox"
-                      checked={form.supplierIds.includes(supplier.id)}
-                      onChange={() => toggleSupplier(supplier.id)}
-                    />
-                    <span>
-                      <strong className="block text-slate-800">{supplier.nome}</strong>
-                      <span className="text-xs text-slate-500">
-                        {supplier.cnpj ?? "Sem CNPJ"}{supplier.codigoExterno ? ` · ${supplier.codigoExterno}` : ""}
-                      </span>
-                    </span>
-                  </label>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <label htmlFor="supplier-link-search" className="grid gap-1 text-sm font-medium text-text">
+                  Buscar fornecedor
+                  <input id="supplier-link-search" type="search" autoComplete="off" placeholder="Nome, CNPJ ou código externo" value={supplierSearch} onChange={(event) => setSupplierSearch(event.target.value)} />
+                </label>
+                <button type="button" className="btn-secondary" onClick={toggleVisibleSuppliers} disabled={!visibleSuppliers.length}>
+                  {allVisibleSelected ? "Desmarcar resultados" : "Selecionar resultados"}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar fornecedores">
+                {([
+                  ["ALL", `Todos (${suppliers.length})`],
+                  ["LINKED", `Vinculados (${form.supplierIds.length})`],
+                  ["UNLINKED", `Não vinculados (${suppliers.length - form.supplierIds.length})`]
+                ] as const).map(([filter, label]) => (
+                  <button key={filter} type="button" className={supplierFilter === filter ? "btn-primary min-h-0 px-3 py-1.5 text-sm" : "btn-secondary min-h-0 px-3 py-1.5 text-sm"} aria-pressed={supplierFilter === filter} onClick={() => setSupplierFilter(filter)}>{label}</button>
                 ))}
-                {!suppliers.length && <p className="muted small">Cadastre fornecedores antes de vinculá-los a gestores.</p>}
               </div>
-            </div>
+              {selectedSuppliers.length > 0 && <div className="grid gap-2">
+                <p className="text-sm font-medium text-text">Selecionados ({selectedSuppliers.length})</p>
+                <ul className="flex max-h-32 flex-wrap gap-2 overflow-y-auto" aria-label="Fornecedores selecionados">
+                  {selectedSuppliers.map((supplier) => <li key={supplier.id}>
+                    <button type="button" className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-container-low px-3 py-1.5 text-sm text-text hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-label={`Remover vínculo com ${supplier.nome}`} onClick={() => toggleSupplier(supplier.id)}>{supplier.nome}<span aria-hidden="true">×</span></button>
+                  </li>)}
+                </ul>
+              </div>}
+              <div className="grid max-h-80 gap-2 overflow-y-auto pr-1 md:grid-cols-2" aria-live="polite">
+                {visibleSuppliers.map((supplier) => <label key={supplier.id} className="checkbox rounded-md border border-border bg-surface-container-low p-3 hover:border-brand">
+                  <input type="checkbox" checked={form.supplierIds.includes(supplier.id)} onChange={() => toggleSupplier(supplier.id)} />
+                  <span className="min-w-0"><strong className="block break-words text-slate-800">{supplier.nome}</strong><span className="text-xs text-slate-500">{supplier.cnpj ?? "Sem CNPJ"}{supplier.codigoExterno ? ` · ${supplier.codigoExterno}` : ""}</span></span>
+                </label>)}
+                {!suppliers.length && <p className="muted small">Cadastre fornecedores antes de vinculá-los a gestores.</p>}
+                {suppliers.length > 0 && !visibleSuppliers.length && <p className="muted small" role="status">Nenhum fornecedor corresponde à busca e ao filtro selecionados.</p>}
+              </div>
+            </section>
 
-            <div className="form-actions">
+            <div className="form-actions sticky bottom-0 z-10 -mx-4 border-t border-border bg-surface-container-lowest/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
                 Cancelar
               </button>

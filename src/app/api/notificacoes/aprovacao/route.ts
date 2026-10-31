@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       ? { id: parsed.data.invoiceId }
       : { codigoIdentificador: parsed.data.codigoIdentificador! },
     include: {
+      adminReview: true,
       fornecedor: {
         include: {
           managerSuppliers: {
@@ -52,6 +53,10 @@ export async function POST(request: NextRequest) {
 
   if (!invoice) {
     return NextResponse.json({ error: "Nota fiscal não encontrada." }, { status: 404 });
+  }
+
+  if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
+    return NextResponse.json({ error: "A nota não está disponível para notificação no fluxo normal." }, { status: 409 });
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
@@ -78,7 +83,11 @@ export async function POST(request: NextRequest) {
     supplierName: invoice.fornecedor.nome,
     recipients,
     invoiceId: invoice.id,
-    invoiceValue: formatCurrency(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo),
+    invoiceValue: formatCurrency(
+      invoice.adminReview?.status === "LIBERADA" && invoice.adminReview.valorConfirmado !== null
+        ? invoice.adminReview.valorConfirmado
+        : invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo
+    ),
     issueDate: formatDate(invoice.dataEmissao),
     competenceDate: formatDate(invoice.dataCompetencia),
     prestadorCnpj: invoice.prestadorCnpj ?? undefined,

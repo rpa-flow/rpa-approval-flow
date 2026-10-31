@@ -2,17 +2,18 @@ import { InvoiceStatus, Prisma, SupplierRiskLevel, UserRole } from "@prisma/clie
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAllowedSupplierIds } from "@/lib/auth";
+import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 
 export const APPROVAL_SLA_HOURS = 48;
 
-export type ReportsScope = { hasGlobalAccess: boolean; allowedSupplierIds?: string[] };
+export type ReportsScope = { hasGlobalAccess: boolean; isAdmin?: boolean; allowedSupplierIds?: string[] };
 
 export function canViewReports(manager: { role: UserRole; acessoRelatorios: boolean }) {
   return manager.role === "ADMIN" || manager.acessoRelatorios;
 }
 
 export function getReportsScope(manager: { role: UserRole; acessoRelatorios: boolean; managerSuppliers: { supplierId: string }[] }): ReportsScope {
-  if (canViewReports(manager)) return { hasGlobalAccess: true };
+  if (canViewReports(manager)) return { hasGlobalAccess: true, isAdmin: manager.role === "ADMIN" };
 
   return {
     hasGlobalAccess: false,
@@ -36,6 +37,7 @@ export function parseFilters(request: NextRequest) {
 
 export function invoiceWhere(scope: ReportsScope, filters: ReturnType<typeof parseFilters>): Prisma.InvoiceWhereInput {
   return {
+    ...invoicesAvailableForApproval(),
     ...(!scope.hasGlobalAccess ? { fornecedorId: { in: scope.allowedSupplierIds ?? [] } } : {}),
     ...(filters.supplierId ? { fornecedorId: filters.supplierId } : {}),
     ...(filters.managerId ? { criadoPorId: filters.managerId } : {}),

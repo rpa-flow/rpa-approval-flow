@@ -1,5 +1,6 @@
 import { InvoiceStatus, Prisma } from "@prisma/client";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
+import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 
 type SessionManager = NonNullable<Awaited<ReturnType<typeof getSessionManager>>>;
 
@@ -53,5 +54,6 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
   if (issueFrom || issueTo) filters.push({ dataEmissao: { ...(issueFrom ? { gte: issueFrom } : {}), ...(issueTo ? { lte: issueTo } : {}) } });
   if (competenceFrom || competenceTo) filters.push({ dataCompetencia: { ...(competenceFrom ? { gte: competenceFrom } : {}), ...(competenceTo ? { lte: competenceTo } : {}) } });
 
+  filters.push(invoicesAvailableForApproval());
   return { AND: filters };
 }

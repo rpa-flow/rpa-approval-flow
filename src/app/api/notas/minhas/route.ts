@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
   const invoices = await prisma.invoice.findMany({
     where,
     include: {
+      adminReview: { select: { status: true, valorConfirmado: true } },
       fornecedor: {
         select: {
           id: true,
@@ -89,8 +90,15 @@ export async function GET(request: NextRequest) {
     {
       items: invoices.map((invoice) => {
         const company = invoice.tomadorCnpj ? companiesByCnpj.get(invoice.tomadorCnpj) : undefined;
+        const { adminReview, ...invoiceFields } = invoice;
         const invoiceWithCompany = {
-          ...invoice,
+          ...invoiceFields,
+          valorParaAprovacao: adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
+            ? Number(adminReview.valorConfirmado)
+            : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
+          origemValorParaAprovacao: adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
+            ? "VALIDACAO_ADMINISTRATIVA"
+            : "XML",
           empresa: {
             cnpj: invoice.tomadorCnpj,
             nomeExibicao: company?.displayName ?? null

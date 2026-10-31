@@ -21,6 +21,7 @@ export default function ConfiguracoesPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [rule, setRule] = useState({ diasLembrete: 2, ativo: true, destinatarioAdicional: "" });
   const [supplierConfig, setSupplierConfig] = useState({ ativo: true, recorrenciaDias: 2, emailsExtras: "" });
+  const [reviewEmail, setReviewEmail] = useState("");
   const [message, setMessage] = useState("");
   const router = useRouter();
 
@@ -49,6 +50,14 @@ export default function ConfiguracoesPage() {
 
     const meData = await meRes.json();
     setMe(meData);
+
+    if (meData.manager.role === "ADMIN") {
+      const reviewConfigRes = await fetch("/api/configuracoes/revisao-notas");
+      if (reviewConfigRes.ok) {
+        const reviewConfig = await reviewConfigRes.json();
+        setReviewEmail(reviewConfig.email ?? "");
+      }
+    }
 
     const firstSupplierId = meData.manager.suppliers?.[0]?.supplierId ?? "";
     setSelectedSupplierId(firstSupplierId);
@@ -95,6 +104,16 @@ export default function ConfiguracoesPage() {
     );
   }
 
+  async function salvarEmailRevisao(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/configuracoes/revisao-notas", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: reviewEmail.trim() })
+    });
+    setMessage(res.ok ? "E-mail de revisão administrativa salvo." : "Não foi possível salvar o e-mail de revisão.");
+  }
+
   return (
     <AppLayout>
       <MainHeader
@@ -103,6 +122,7 @@ export default function ConfiguracoesPage() {
       />
 
       {me?.manager.role === "ADMIN" && (
+        <>
         <section className="card">
           <h2>Cadastros administrativos</h2>
           <p className="muted small">Para melhorar a experiência, o cadastro de fornecedores e gestores fica em uma tela separada.</p>
@@ -110,6 +130,28 @@ export default function ConfiguracoesPage() {
             Ir para tela de cadastros
           </Link>
         </section>
+        <section className="card">
+          <h2>Validação administrativa de notas</h2>
+          <p className="muted small">Notas com valor zerado ou emitidas antes do mês corrente ficam retidas até a validação de um administrador. O e-mail abaixo recebe o aviso de revisão.</p>
+          <form onSubmit={salvarEmailRevisao} className="form-grid">
+            <label>
+              E-mail para avisos de revisão
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="fiscal@empresa.com"
+                value={reviewEmail}
+                onChange={(event) => setReviewEmail(event.target.value)}
+              />
+            </label>
+            <div className="form-actions">
+              <button type="submit">Salvar e-mail de revisão</button>
+              <Link className="btn-secondary" href="/notas/revisoes">Abrir fila de revisão</Link>
+            </div>
+          </form>
+        </section>
+        </>
       )}
 
       <section className="card info-banner">
