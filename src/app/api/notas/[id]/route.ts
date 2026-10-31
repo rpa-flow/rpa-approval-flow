@@ -85,7 +85,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
-  if (manager.role !== "ADMIN" && invoice.adminReview?.status === "PENDENTE") {
+  if (invoice.adminReview?.status === "PENDENTE") {
     return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 404 });
   }
 

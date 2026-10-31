@@ -37,7 +37,7 @@ export function parseFilters(request: NextRequest) {
 
 export function invoiceWhere(scope: ReportsScope, filters: ReturnType<typeof parseFilters>): Prisma.InvoiceWhereInput {
   return {
-    ...(!scope.isAdmin ? invoicesAvailableForApproval : {}),
+    ...invoicesAvailableForApproval(),
     ...(!scope.hasGlobalAccess ? { fornecedorId: { in: scope.allowedSupplierIds ?? [] } } : {}),
     ...(filters.supplierId ? { fornecedorId: filters.supplierId } : {}),
     ...(filters.managerId ? { criadoPorId: filters.managerId } : {}),

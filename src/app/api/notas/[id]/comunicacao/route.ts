@@ -30,8 +30,11 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (message.length > 2000) return NextResponse.json({ error: "A mensagem deve ter no máximo 2.000 caracteres." }, { status: 400 });
   if (image && (!ALLOWED_IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_SIZE)) return NextResponse.json({ error: "A imagem deve ser JPG, PNG, GIF ou WebP e ter no máximo 5 MB." }, { status: 400 });
 
-  const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true } });
+  const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true, adminReview: true } });
   if (!existing) return NextResponse.json({ error: "Nota não encontrada." }, { status: 404 });
+  if (existing.adminReview?.status === "PENDENTE") {
+    return NextResponse.json({ error: "Nota indisponível até a validação administrativa." }, { status: 409 });
+  }
   if (existing.status === newStatus) return NextResponse.json({ error: "Escolha um status diferente do atual." }, { status: 400 });
 
   const processing = newStatus === "PROCESSADO"
@@ -48,7 +51,6 @@ export async function POST(request: NextRequest, { params }: Params) {
       data: {
         status: newStatus,
         observacaoValidacao: reason,
-        responsavelValidacao: manager.nome,
         dataValidacao: new Date(),
         ...processing
       }
