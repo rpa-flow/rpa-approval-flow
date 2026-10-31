@@ -155,15 +155,15 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
 
   return (
     <details className="group border-b border-border last:border-b-0">
-      <summary className="cursor-pointer list-none px-4 py-4 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand sm:px-5">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <summary className="cursor-pointer list-none px-4 py-2 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand sm:px-5">
+        <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-text">NF {review.invoice.numeroNota} · {review.invoice.fornecedor.nome}</h2>
               <span className={`badge ${review.status === "IGNORADA" ? "badge-danger" : "badge-warning"}`}>{review.status === "IGNORADA" ? "Ignorada do dashboard" : "Pendente de validação"}</span>
             </div>
             <p className="mt-1 text-xs text-muted">Tomador: {review.invoice.tomadorNome ?? "Não informado"} · CNPJ {formatCnpj(review.invoice.tomadorCnpj)} · Emissão {issueDate(review.invoice.dataEmissao)}</p>
-            <div className="mt-2 flex flex-wrap gap-2" aria-label="Motivos da revisão">
+            <div className="mt-1 flex flex-wrap gap-1" aria-label="Motivos da revisão">
               {review.motivos.map((reason) => <span className="badge badge-blue" key={reason}>{reason === "VALOR_ZERADO" ? "Valor zerado" : "Emissão anterior ao mês corrente"}</span>)}
             </div>
           </div>
@@ -226,6 +226,8 @@ function ReviewCard({ review, onUpdated, onReviewed }: {
 export default function InvoiceReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [queueStatus, setQueueStatus] = useState<"PENDENTE" | "IGNORADA">("PENDENTE");
+  const [supplierInput, setSupplierInput] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -235,7 +237,8 @@ export default function InvoiceReviewsPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/notas/revisoes?status=${queueStatus}`);
+      const params = new URLSearchParams({ status: queueStatus, fornecedor: supplierFilter });
+      const response = await fetch(`/api/notas/revisoes?${params}`);
       if (response.status === 401) { router.push("/login"); return; }
       if (response.status === 403) { router.push("/dashboard"); return; }
       if (!response.ok) throw new Error("Não foi possível carregar a fila de revisão.");
@@ -245,7 +248,7 @@ export default function InvoiceReviewsPage() {
     } finally {
       setLoading(false);
     }
-  }, [queueStatus, router]);
+  }, [queueStatus, supplierFilter, router]);
 
   const handleReviewed = useCallback((review: Review, status: "PENDENTE" | "LIBERADA" | "IGNORADA") => {
     if (status === "LIBERADA") {
@@ -275,13 +278,20 @@ export default function InvoiceReviewsPage() {
         <button type="button" aria-pressed={queueStatus === "PENDENTE"} className={queueStatus === "PENDENTE" ? "btn-primary" : "btn-secondary"} onClick={() => { setQueueStatus("PENDENTE"); setNotice(""); setReviews([]); }}>Pendentes</button>
         <button type="button" aria-pressed={queueStatus === "IGNORADA"} className={queueStatus === "IGNORADA" ? "btn-primary" : "btn-secondary"} onClick={() => { setQueueStatus("IGNORADA"); setNotice(""); setReviews([]); }}>Ignoradas</button>
       </div>
+      <form className="card flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); setSupplierFilter(supplierInput.trim()); }}>
+        <label className="min-w-0 flex-1">Fornecedor
+          <input value={supplierInput} onChange={(event) => setSupplierInput(event.target.value)} placeholder="Nome ou CNPJ" maxLength={100} />
+        </label>
+        <button type="submit">Filtrar</button>
+        <button type="button" className="btn-secondary" onClick={() => { setSupplierInput(""); setSupplierFilter(""); }}>Limpar</button>
+      </form>
       {loading && <section className="card"><p className="state-loading">Carregando revisões...</p></section>}
       {error && <section className="card"><p className="state-error" role="alert">{error}</p><button type="button" onClick={() => void loadReviews()}>Tentar novamente</button></section>}
-      {!loading && !error && reviews.length === 0 && <section className="card"><h2>{queueStatus === "PENDENTE" ? "Nenhuma nota pendente de revisão" : "Nenhuma nota ignorada"}</h2><p className="muted small">{queueStatus === "PENDENTE" ? "Notas liberadas saem desta fila e passam a aparecer no dashboard para aprovação do gestor." : "Notas ignoradas ficam registradas aqui e permanecem fora do dashboard."}</p></section>}
+      {!loading && !error && reviews.length === 0 && <section className="card"><h2>{supplierFilter ? "Nenhuma nota encontrada para este fornecedor" : queueStatus === "PENDENTE" ? "Nenhuma nota pendente de revisão" : "Nenhuma nota ignorada"}</h2><p className="muted small">{supplierFilter ? "Ajuste ou limpe o filtro para consultar outros fornecedores." : queueStatus === "PENDENTE" ? "Notas liberadas saem desta fila e passam a aparecer no dashboard para aprovação do gestor." : "Notas ignoradas ficam registradas aqui e permanecem fora do dashboard."}</p></section>}
       {!error && reviews.length > 0 && <section className="card overflow-hidden !p-0" aria-label={queueStatus === "PENDENTE" ? "Notas pendentes de validação" : "Notas ignoradas"}>
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
           <h2 className="font-semibold text-text">{queueStatus === "PENDENTE" ? "Pendências para validar" : "Notas ignoradas"}</h2>
-          <span className="badge badge-slate">{reviews.length} nota(s)</span>
+          <span className="badge badge-slate">{reviews.length === 100 ? "100 notas (limite da listagem)" : `${reviews.length} nota(s)`}</span>
         </div>
         {reviews.map((review) => <ReviewCard key={review.id} review={review} onUpdated={() => void loadReviews()} onReviewed={handleReviewed} />)}
       </section>}
