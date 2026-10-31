@@ -24,6 +24,8 @@ type Review = {
   invoice: {
     numeroNota: string;
     dataEmissao: string | null;
+    tomadorNome: string | null;
+    tomadorCnpj: string | null;
     valorServico: string | null;
     valorLiquido: string | null;
     xmlOriginal?: string | null;
@@ -41,6 +43,13 @@ function issueDate(value: string | null) {
   if (!value) return "Não informada";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Data inválida" : date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
+function formatCnpj(value: string | null) {
+  if (!value) return "Não informado";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 14) return value;
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 }
 
 function ReviewCard({ review, onUpdated }: { review: Review; onUpdated: () => void }) {
@@ -113,6 +122,8 @@ function ReviewCard({ review, onUpdated }: { review: Review; onUpdated: () => vo
       </div>
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div><dt className="muted small">Tomador</dt><dd>{review.invoice.tomadorNome ?? "Não informado"}</dd></div>
+        <div><dt className="muted small">CNPJ do tomador</dt><dd className="font-mono">{formatCnpj(review.invoice.tomadorCnpj)}</dd></div>
         <div><dt className="muted small">Valor do serviço no XML</dt><dd>{currency(review.invoice.valorServico)}</dd></div>
         <div><dt className="muted small">Valor líquido no XML</dt><dd>{currency(review.invoice.valorLiquido)}</dd></div>
         <div><dt className="muted small">Sugestão da descrição</dt><dd>{currency(review.valorSugerido)}</dd></div>
