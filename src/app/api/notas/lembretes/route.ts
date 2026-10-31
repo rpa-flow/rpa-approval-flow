@@ -7,7 +7,7 @@ import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access"
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
     where: {
-      AND: [invoicesAvailableForApproval],
+      AND: [invoicesAvailableForApproval()],
       status: {
         in: ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"]
       }

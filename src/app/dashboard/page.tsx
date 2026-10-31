@@ -23,6 +23,7 @@ type Invoice = {
   dataEmissao?: string | null;
   dataCompetencia?: string | null;
   valorServico?: number | null;
+  valorParaAprovacao?: number | null;
   tomadorNome?: string | null;
   tomadorCnpj?: string | null;
   fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
@@ -600,7 +601,7 @@ export default function DashboardPage() {
             <tr>
               <th scope="col" className="px-2 py-2 text-left">Fornecedor / NF</th>
               <th scope="col" className="px-2 py-2 text-left">Empresa</th>
-              <th scope="col" className="px-2 py-2 text-right" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th>
+              <th scope="col" className="px-2 py-2 text-right" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor para aprovação</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
@@ -614,7 +615,7 @@ export default function DashboardPage() {
               <tr className="cursor-pointer focus-within:bg-surface-container-low" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
                 <td className="px-2 py-2 text-left"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="flex items-center gap-2"><span className="text-xs text-slate-500">NF {invoice.numeroNota}</span><button type="button" className="text-xs font-semibold text-brand underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-expanded={expandedId === invoice.id} aria-controls={`invoice-summary-${invoice.id}`} onClick={(event) => { event.stopPropagation(); setExpandedId(expandedId === invoice.id ? null : invoice.id); }}>{expandedId === invoice.id ? "Ocultar resumo" : "Ver resumo"}</button></div></td>
                 <td className="px-2 py-2 text-left text-slate-700"><div className="font-medium text-slate-800">{invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada"}</div><div className="whitespace-nowrap text-xs text-slate-500">{formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj)}</div></td>
-                <td className="px-2 py-2 text-right font-medium tabular-nums text-slate-800" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorServico || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
+                <td className="px-2 py-2 text-right font-medium tabular-nums text-slate-800" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{Number(invoice.valorParaAprovacao ?? invoice.valorServico ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatCompetence(invoice.dataCompetencia)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="flex flex-col items-center gap-1"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>{invoice.statusProcessamento === "ERRO" && <span className="badge bg-rose-700 text-white ring-2 ring-rose-200">⚠ Erro no processamento</span>}</div></td>
