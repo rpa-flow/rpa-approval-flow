@@ -88,6 +88,15 @@ export async function GET(request: NextRequest) {
   const unauthorized = await validateAdmin();
   if (unauthorized) return unauthorized;
 
+  if (request.nextUrl.searchParams.get("forStatusEmail") === "1") {
+    const managers = await prisma.manager.findMany({
+      where: { ativo: true, role: "GESTOR" },
+      select: { id: true, nome: true, email: true },
+      orderBy: { nome: "asc" }
+    });
+    return NextResponse.json(managers);
+  }
+
   const where = buildManagerWhere(request.nextUrl.searchParams);
   const paginated = shouldUsePaginatedResponse(request.nextUrl.searchParams);
   const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
