@@ -36,6 +36,7 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
   - use `&enviarEmail=false` se quiser contabilizar sem enviar e-mail.
 - `POST /api/notas/lembretes` (processa lembretes recorrentes e envia e-mails enquanto a regra estiver ativa)
   - notas sem nenhum envio anterior (`tentativasNotificacao = 0`) entram como lembrete devido imediatamente.
+- `POST /api/notas/sincronizar-gestores` (requer `ADMIN`; processa notas pendentes em lotes e notifica somente quando os gestores vinculados mudaram)
 
 ### Configurações
 - Global:
@@ -73,6 +74,7 @@ Payload opcional para teste de e-mail:
 - `/perfil`: tela de perfil com alteração de senha do usuário logado.
 - `/fornecedores`: entrada da gestão de fornecedores.
   - para `ADMIN`, mostra tabela com fornecedores, ação de editar e botão "Adicionar novo fornecedor";
+  - também permite sincronizar gestores em todas as notas pendentes e acompanha o progresso e os resultados;
   - para `GESTOR`, mostra os fornecedores vinculados ao usuário em modo consulta.
 - `/cadastros`: tela separada (somente `ADMIN`) para cadastro de fornecedores e gestores.
 - Header com menu rápido (Dashboard, Fornecedores, Configurações e Perfil) para navegação diária.
