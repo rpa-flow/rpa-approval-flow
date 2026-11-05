@@ -12,6 +12,31 @@ type CategoryItem = { id: string; nome: string; ativo: boolean };
 type SupplierListItem = { id: string; nome: string; cnpj: string | null; codigoExterno: string | null; categories?: CategoryItem[]; managers: Array<{ id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR"; ativo: boolean }> };
 type ManagerItem = { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR"; ativo: boolean };
 type SuppliersResponse = { items: SupplierListItem[]; pagination: PaginationMetadata };
+type SupplierSyncSummary = {
+  supplierId: string;
+  supplierName: string;
+  notesFound: number;
+  changed: number;
+  emailsSent: number;
+  failures: number;
+  skippedNoRecipients: number;
+  unchanged: number;
+};
+type SyncBatchResponse = {
+  count: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  changed: number;
+  unchanged: number;
+  emailsSent: number;
+  failures: number;
+  skippedNoRecipients: number;
+  suppliers: SupplierSyncSummary[];
+};
+type SyncSummary = Omit<SyncBatchResponse, "count" | "hasMore" | "nextCursor" | "suppliers"> & {
+  notesChecked: number;
+  suppliers: SupplierSyncSummary[];
+};
 
 const EMPTY_CREATE_FORM = { nome: "", cnpj: "", codigoExterno: "", managerNome: "", managerEmail: "", managerSenha: "", categoryIds: [] as string[] };
 
@@ -33,6 +58,10 @@ export default function FornecedoresPage() {
   const [editForm, setEditForm] = useState({ nome: "", cnpj: "", codigoExterno: "", selectedManagerId: "", createNewManager: false, addManagerNome: "", addManagerEmail: "", addManagerSenha: "", categoryIds: [] as string[], managerIds: [] as string[] });
   const [managerSearch, setManagerSearch] = useState("");
   const [message, setMessage] = useState("");
+  const [isSyncingManagers, setIsSyncingManagers] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ batch: number; notesChecked: number } | null>(null);
+  const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
+  const [syncError, setSyncError] = useState("");
   const router = useRouter();
 
   const loadData = useCallback(async () => {
@@ -128,12 +157,98 @@ export default function FornecedoresPage() {
     if (!res.ok) return setMessage("Erro ao salvar edição do fornecedor.");
     setEditingSupplierId(null); setMessage("Fornecedor atualizado com sucesso."); await loadData(); await loadSuppliers(); }
 
+  async function sincronizarGestoresPendentes() {
+    const confirmed = window.confirm(
+      "A sincronização vai percorrer todos os fornecedores. Notas sem sincronização anterior serão notificadas se tiverem gestores vinculados; depois, só haverá novo e-mail quando a lista de gestores mudar. Deseja continuar?"
+    );
+    if (!confirmed) return;
+
+    setIsSyncingManagers(true);
+    setSyncSummary(null);
+    setSyncError("");
+    setSyncProgress({ batch: 0, notesChecked: 0 });
+
+    const totals = { notesChecked: 0, changed: 0, unchanged: 0, emailsSent: 0, failures: 0, skippedNoRecipients: 0 };
+    const suppliers = new Map<string, SupplierSyncSummary>();
+    let cursor: string | undefined;
+    let hasMore = true;
+    let batch = 0;
+
+    try {
+      while (hasMore) {
+        const response = await fetch("/api/notas/sincronizar-gestores", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cursor ? { cursor } : {})
+        });
+
+        if (response.status === 401) {
+          router.push("/login");
+          return;
+        }
+        if (response.status === 403) {
+          router.push("/dashboard");
+          return;
+        }
+
+        const result = await response.json().catch(() => null) as SyncBatchResponse | { error?: string } | null;
+        if (!response.ok || !result || !("hasMore" in result)) {
+          throw new Error(result && "error" in result ? result.error ?? "Não foi possível sincronizar as notas." : "Não foi possível sincronizar as notas.");
+        }
+
+        batch += 1;
+        totals.notesChecked += result.count;
+        totals.changed += result.changed;
+        totals.unchanged += result.unchanged;
+        totals.emailsSent += result.emailsSent;
+        totals.failures += result.failures;
+        totals.skippedNoRecipients += result.skippedNoRecipients;
+        for (const supplier of result.suppliers) {
+          const current = suppliers.get(supplier.supplierId);
+          suppliers.set(supplier.supplierId, current ? {
+            ...current,
+            notesFound: current.notesFound + supplier.notesFound,
+            changed: current.changed + supplier.changed,
+            emailsSent: current.emailsSent + supplier.emailsSent,
+            failures: current.failures + supplier.failures,
+            skippedNoRecipients: current.skippedNoRecipients + supplier.skippedNoRecipients,
+            unchanged: current.unchanged + supplier.unchanged
+          } : supplier);
+        }
+        setSyncProgress({ batch, notesChecked: totals.notesChecked });
+        cursor = result.nextCursor ?? undefined;
+        hasMore = result.hasMore;
+      }
+
+      setSyncSummary({ ...totals, suppliers: Array.from(suppliers.values()).sort((a, b) => b.changed - a.changed) });
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Não foi possível concluir a sincronização.");
+    } finally {
+      setIsSyncingManagers(false);
+      setSyncProgress(null);
+    }
+  }
+
   return <AppLayout>
     <MainHeader title="Fornecedores" subtitle="Gestão central de fornecedores, categorias e responsáveis." />
 
     {me.manager.role === "ADMIN" ? <>
       <section className="card mt-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Base de fornecedores</h2><p className="muted small">O vínculo em massa de responsáveis agora fica na tela de gestores.</p></div><div className="flex flex-wrap items-center gap-2"><span className="badge badge-slate">{isLoadingSuppliers ? "Carregando..." : `${pagination.total} fornecedor(es)`}</span><Link href="/gestores" className="btn-secondary">Gerenciar gestores</Link><button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? "Cancelar" : "Adicionar fornecedor"}</button></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Base de fornecedores</h2><p className="muted small">O vínculo em massa de responsáveis agora fica na tela de gestores.</p></div><div className="flex flex-wrap items-center gap-2"><span className="badge badge-slate">{isLoadingSuppliers ? "Carregando..." : `${pagination.total} fornecedor(es)`}</span><Link href="/gestores" className="btn-secondary">Gerenciar gestores</Link><button type="button" className="btn-secondary" onClick={sincronizarGestoresPendentes} disabled={isSyncingManagers} aria-describedby="supplier-manager-sync-help">{isSyncingManagers ? "Sincronizando..." : "Sincronizar notas pendentes"}</button><button type="button" className="btn-primary" onClick={() => setShowCreateForm((v) => !v)}>{showCreateForm ? "Cancelar" : "Adicionar fornecedor"}</button></div></div>
+        <p id="supplier-manager-sync-help" className="text-xs text-slate-500">Percorre todos os fornecedores e só notifica notas sem sincronização ou com mudança nos gestores vinculados.</p>
+        {isSyncingManagers && syncProgress && <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700" role="status" aria-live="polite">Sincronizando o lote {syncProgress.batch} · {syncProgress.notesChecked} nota(s) avaliadas</div>}
+        {syncError && <p className="message" role="alert">{syncError} Você pode executar a sincronização novamente; notas já sincronizadas serão ignoradas.</p>}
+        {syncSummary && <section className="rounded border border-slate-200 bg-slate-50 p-4" aria-labelledby="supplier-sync-summary-title" role="status">
+          <h3 id="supplier-sync-summary-title" className="text-sm font-semibold text-slate-800">Sincronização concluída</h3>
+          <p className="mt-1 text-sm text-slate-600">{syncSummary.notesChecked} nota(s) avaliadas · {syncSummary.changed} com gestores alterados · {syncSummary.unchanged} sem alteração · {syncSummary.emailsSent} e-mail(s) enviados · {syncSummary.failures} falha(s) · {syncSummary.skippedNoRecipients} sem destinatários</p>
+          {syncSummary.failures > 0 && <p className="mt-2 text-sm text-rose-700">As notas com falha permanecem disponíveis para nova tentativa.</p>}
+          {syncSummary.suppliers.length > 0 && <details className="mt-3 text-sm">
+            <summary className="cursor-pointer font-medium text-slate-700">Ver resultado por fornecedor ({syncSummary.suppliers.length})</summary>
+            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-2">
+              {syncSummary.suppliers.map((supplier) => <li key={supplier.supplierId} className="flex flex-wrap justify-between gap-x-4 text-slate-600"><span>{supplier.supplierName}</span><span>{supplier.changed} alterada(s), {supplier.emailsSent} enviada(s), {supplier.failures} falha(s)</span></li>)}
+            </ul>
+          </details>}
+        </section>}
         <div className="grid gap-2 md:grid-cols-3">
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por fornecedor, CNPJ, código externo ou gestor" />
           <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}><option value="TODAS">Todas as categorias</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select>
