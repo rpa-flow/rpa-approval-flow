@@ -4,6 +4,15 @@ Data: 31/10/2026. Estado: planejamento para revisão. Código da aplicação nã
 
 Fonte de requisitos: [spec.md](spec.md). Contexto compartilhado: [task-brief.md](task-brief.md).
 
+## Atualização de escopo após respostas do usuário
+
+- Prever acesso do gestor à nota atribuída mesmo sem vínculo com fornecedor e configuração do alcance de consulta no workflow. Definir os modos concretos de acesso sem presumir que consulta autorize aprovação.
+- Incluir interface e operação exclusivas de ADMIN para selecionar notas existentes e enviá-las ao workflow, com resultado por nota, auditoria e proteção contra duplicidade. Os critérios de elegibilidade ainda precisam ser definidos.
+- A avaliação do serviço é preenchida pelo gestor na etapa configurada para sua aprovação, preservando autoria.
+- F0, F1, F2, F4, F5, F6 e F7 são afetadas: revisar contratos, autorização, entrada em lote, configuração da etapa, interface, testes e ativação. Uma etapa deve solicitar obrigatoriamente OC ou contrato e data de pagamento; validar a configuração na publicação e o preenchimento na conclusão dessa etapa (AC-17).
+
+Esta atualização prevalece sobre propostas anteriores de migração apenas por data de corte e sobre qualquer exigência de avaliação especificamente na última etapa.
+
 ## Resultado esperado
 
 ADMIN publica um fluxo NFS-e com etapas ordenadas, um gestor fixo por etapa e políticas dos campos existentes. Cada nota executa uma versão; cada etapa autorizada avança uma vez; a última libera o processamento. Atribuições geram e-mails persistidos, e ações/configurações ficam auditáveis. A modelagem contém o tipo do documento para extensões futuras, mas CT-e/produto não recebem parser, telas ou execução nesta entrega.

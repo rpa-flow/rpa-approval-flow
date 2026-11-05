@@ -170,6 +170,20 @@ export default function NotaDetalhePage() {
       if (managersRes.ok) setEmailManagers(await managersRes.json() as EmailManager[]);
     }
 
+    const workflowRes = await fetch(`/api/notas/${params.id}/workflow`);
+    if (workflowRes.ok) {
+      const workflow = await workflowRes.json();
+      if (workflow.execution?.status === "ACTIVE" || workflow.execution?.status === "BLOCKED") {
+        router.replace(`/notas/${params.id}/workflow`);
+        return;
+      }
+    } else if (workflowRes.status !== 404 && workflowRes.status !== 403) {
+      setMessageType("error");
+      setMessage("Não foi possível verificar o workflow da nota.");
+      setLoading(false);
+      return;
+    }
+
     const [invoiceRes, historyRes] = await Promise.all([
       fetch(`/api/notas/${params.id}`),
       fetch(`/api/notas/${params.id}/historico`)

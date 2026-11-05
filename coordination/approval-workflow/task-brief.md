@@ -31,6 +31,7 @@ Produzir uma especificação e um plano executável para aprovação sequencial 
 
 - Coordenador: descoberta, especificação e plano, responsável exclusivo pelos documentos.
 - Arquiteto: revisão estática delimitada das fronteiras de autorização, transação, auditoria e integração; sem edição de arquivos.
+- QA: revisão independente das alterações de autorização, concorrência, e-mails e critérios de aceite; sem edição de arquivos.
 - Schema, contratos e arquivos da aplicação: nenhuma alteração nesta entrega.
 
 ## Verificação e riscos

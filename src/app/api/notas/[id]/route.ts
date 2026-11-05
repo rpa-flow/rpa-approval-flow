@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validations";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
-import { createInvoiceAuditLog } from "@/lib/audit";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { parseNFSeXml } from "@/lib/nfse-parser";
 import { getRetentionDetails } from "@/lib/retention-details";
 import { isFullInvoiceResponse, serializeInvoiceDetail } from "@/lib/invoice-detail-response";
 import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
+import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
 
 type Params = {
   params: {
@@ -42,9 +42,12 @@ function hasPurchaseOrderOrContract(values: { ordemCompra?: string | null; ocCon
   return Boolean(values.ordemCompra?.trim() || values.ocContrato?.trim());
 }
 
-async function canAccessInvoice(invoice: { fornecedorId: string; criadoPorId?: string | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
+async function canAccessInvoice(invoice: { id: string; fornecedorId: string; criadoPorId?: string | null; documentType: "NFSE" | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>, forUpdate = false) {
   const allowedSupplierIds = getAllowedSupplierIds(manager);
-  return manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id;
+  if (manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id) return true;
+  if (manager.role !== "GESTOR" || forUpdate) return false;
+  if ((!invoice.documentType || invoice.documentType === "NFSE") && await hasGlobalNfseWorkflowAccess(manager.id)) return true;
+  return Boolean(await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } }] }, select: { id: true } }));
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     origemValorParaAprovacao: valorConfirmado !== null ? "VALIDACAO_ADMINISTRATIVA" : "XML",
     valorTotalRetido: totalRetido,
     retentionDetails: getRetentionDetails(parsedXml, totalRetido?.toString()),
-    descricaoServico: parsedXml?.descricaoServico ?? invoice.nbsDescricao ?? null
+    descricaoServico: parsedXml?.descricaoServico ?? invoice.descricaoServico ?? invoice.nbsDescricao ?? null
   });
 }
 
@@ -154,7 +157,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
 
-  if (manager && !(await canAccessInvoice(existing, manager))) {
+  if (manager && !(await canAccessInvoice(existing, manager, true))) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
@@ -307,6 +310,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     dataToUpdate.dataValidacao = null;
   }
   const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${targetInvoiceId} FOR UPDATE`;
+    const current = await tx.invoice.findUnique({ where: { id: targetInvoiceId }, include: { workflowExecution: true } });
+    if (!current || (current.workflowExecution && current.workflowExecution.status !== "COMPLETED") || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime()) return null;
+    if (current.workflowExecution?.status === "COMPLETED" && payloadToSave.status && payloadToSave.status !== current.status && payloadToSave.status !== "PROCESSADO") return null;
     const invoice = await tx.invoice.update({ where: { id: targetInvoiceId }, data: dataToUpdate });
 
     if (invoice.status === "APROVADO" && serviceEvaluation) {
@@ -335,26 +342,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", previousStatus: existing.status, newStatus: invoice.status, reason } });
+    const actorName = manager?.nome ?? "Integração Delphi";
+    const actionType = existing.status !== invoice.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
+    const actionDescription = isChangingApprovedStatus && invoice.status === "AGUARDANDO_APROVACAO" ? `${actorName} cancelou a aprovação da nota`
+      : isChangingApprovedStatus ? `${actorName} alterou uma nota aprovada para ${invoice.status.replaceAll("_", " ")}`
+      : invoice.status === "APROVADO" ? `${actorName} aprovou a nota e registrou a avaliação do serviço`
+      : invoice.status === "RECUSADO" ? `${actorName} recusou a nota`
+      : existing.status !== invoice.status ? `${actorName} alterou o status da nota` : `${actorName} atualizou os dados da nota`;
+    await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName, actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: invoice.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
     return invoice;
   });
 
-  const actionType = existing.status !== updated.status ? "STATUS_CHANGED" : "NOTE_UPDATED";
-  const actorName = manager?.nome ?? "Integração Delphi";
-  const actionDescription =
-    isChangingApprovedStatus && updated.status === "AGUARDANDO_APROVACAO"
-      ? `${actorName} cancelou a aprovação da nota`
-      : isChangingApprovedStatus
-        ? `${actorName} alterou uma nota aprovada para ${updated.status.replaceAll("_", " ")}`
-        : updated.status === "APROVADO"
-          ? `${actorName} aprovou a nota e registrou a avaliação do serviço`
-          : updated.status === "RECUSADO"
-            ? `${actorName} recusou a nota`
-            : existing.status !== updated.status
-              ? `${actorName} alterou o status da nota`
-              : `${actorName} atualizou os dados da nota`;
-
-  await createInvoiceAuditLog({ invoiceId: updated.id, actorId: manager?.id, actorName: manager?.nome ?? "Integração Delphi", actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: updated.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: existing as unknown as any, afterData: updated as unknown as any });
-
+  if (!updated) return NextResponse.json({ error: "A nota mudou ou está em um workflow. Atualize a página." }, { status: 409 });
 
   if (reapprovedFromError) {
     const invoiceWithContacts = await prisma.invoice.findUnique({

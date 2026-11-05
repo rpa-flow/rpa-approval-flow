@@ -4,6 +4,7 @@ import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { buildInvoiceWhere } from "@/lib/invoice-query";
 import { getPaginationMetadata, getPaginationParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
+import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
 
 function shouldIncludeXml(request: NextRequest) {
   return request.nextUrl.searchParams.get("includeXml") === "true";
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest) {
 
   const includeXml = shouldIncludeXml(request);
   const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
-  const where = buildInvoiceWhere(manager, request.nextUrl.searchParams);
+  const globalAccess = manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id);
+  const where = buildInvoiceWhere(manager, request.nextUrl.searchParams, globalAccess);
   const supplierWhere: Prisma.SupplierWhereInput =
     manager.role === "ADMIN"
       ? {}
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       adminReview: { select: { status: true, valorConfirmado: true } },
+      workflowExecution: { select: { status: true, tasks: { where: { completedAt: null }, select: { managerId: true, managerName: true, step: { select: { name: true, fields: { select: { fieldKey: true, mode: true } } } } }, take: 1 } } },
       fornecedor: {
         select: {
           id: true,

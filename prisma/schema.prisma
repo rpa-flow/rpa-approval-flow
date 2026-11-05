@@ -59,6 +59,41 @@ enum InvoiceAdminReviewStatus {
   IGNORADA
 }
 
+enum WorkflowDocumentType {
+  NFSE
+}
+
+enum WorkflowVersionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum WorkflowFieldMode {
+  HIDDEN
+  READ_ONLY
+  EDITABLE
+}
+
+enum WorkflowConsultationScope {
+  ASSIGNED
+  ALL
+}
+
+enum WorkflowExecutionStatus {
+  ACTIVE
+  COMPLETED
+  BLOCKED
+}
+
+enum WorkflowNotificationStatus {
+  PENDING
+  PROCESSING
+  ACCEPTED
+  FAILED
+  UNCERTAIN
+  SIMULATED
+}
+
 
 model Company {
   id          String   @id @default(cuid())
@@ -126,6 +161,8 @@ model Manager {
   invoicesCriadas  Invoice[]         @relation("InvoiceCreatedBy")
   activationTokens AccountActivationToken[]
   passwordResetTokens PasswordResetToken[]
+  workflowSteps ApprovalWorkflowStep[]
+  workflowTasks InvoiceWorkflowTask[]
 }
 
 model PasswordResetToken {
@@ -171,6 +208,7 @@ model ManagerSupplier {
 model Invoice {
   id                  String           @id @default(cuid())
   codigoIdentificador String           @unique
+  documentType        WorkflowDocumentType?
   numeroNota          String
   nDfse               String?
   fornecedorId        String
@@ -189,6 +227,7 @@ model Invoice {
   itemTributacaoNac   String?
   itemTributacaoMun   String?
   nbsDescricao        String?
+  descricaoServico    String?
   dataProcessamento   DateTime?
   dataEmissao         DateTime?
   dataCompetencia     DateTime?
@@ -227,6 +266,7 @@ model Invoice {
   serviceEvaluation   ServiceEvaluation?
   documentDetail      InvoiceDocumentDetail?
   adminReview         InvoiceAdminReview?
+  workflowExecution   InvoiceWorkflow?
 
   @@index([fornecedorId])
   @@index([codigoIdentificador])
@@ -452,4 +492,142 @@ model NfseNsuAttempt {
 
   @@index([nsuControlId, attemptedAt])
   @@index([resultStatus, attemptedAt])
+}
+
+model ApprovalWorkflow {
+  id            String @id @default(cuid())
+  documentType  WorkflowDocumentType @unique
+  activeVersionId String? @unique
+  activatedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  versions      ApprovalWorkflowVersion[] @relation("WorkflowVersions")
+  activeVersion ApprovalWorkflowVersion? @relation("ActiveWorkflowVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
+}
+
+model ApprovalWorkflowVersion {
+  id          String @id @default(cuid())
+  workflowId  String
+  number      Int
+  status      WorkflowVersionStatus @default(DRAFT)
+  revision    Int @default(1)
+  createdById String
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workflow    ApprovalWorkflow @relation("WorkflowVersions", fields: [workflowId], references: [id], onDelete: Restrict)
+  activeFor   ApprovalWorkflow? @relation("ActiveWorkflowVersion")
+  steps       ApprovalWorkflowStep[]
+  executions  InvoiceWorkflow[]
+  @@unique([workflowId, number])
+}
+
+model ApprovalWorkflowStep {
+  id                    String @id @default(cuid())
+  versionId             String
+  name                  String
+  position              Int
+  managerId             String
+  consultationScope     WorkflowConsultationScope @default(ASSIGNED)
+  requiresPurchaseOrder Boolean @default(false)
+  version               ApprovalWorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  manager               Manager @relation(fields: [managerId], references: [id], onDelete: Restrict)
+  fields                ApprovalStepFieldPolicy[]
+  tasks                 InvoiceWorkflowTask[]
+  @@unique([versionId, position])
+  @@index([managerId])
+}
+
+model ApprovalStepFieldPolicy {
+  id       String @id @default(cuid())
+  stepId   String
+  fieldKey String
+  mode     WorkflowFieldMode
+  required Boolean @default(false)
+  step     ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
+  @@unique([stepId, fieldKey])
+}
+
+model InvoiceWorkflow {
+  id          String @id @default(cuid())
+  invoiceId   String @unique
+  versionId   String
+  status      WorkflowExecutionStatus @default(ACTIVE)
+  revision    Int @default(1)
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  version     ApprovalWorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  tasks       InvoiceWorkflowTask[]
+  commands    WorkflowCommand[]
+  @@index([status, createdAt])
+}
+
+model InvoiceWorkflowTask {
+  id             String @id @default(cuid())
+  executionId    String
+  stepId         String
+  managerId      String
+  managerName    String
+  managerEmail   String
+  assignedAt     DateTime @default(now())
+  completedAt    DateTime?
+  execution      InvoiceWorkflow @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  step           ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
+  manager        Manager @relation(fields: [managerId], references: [id], onDelete: Restrict)
+  notifications  WorkflowNotification[]
+  @@unique([executionId, stepId])
+  @@index([managerId, completedAt])
+}
+
+model WorkflowCommand {
+  id             String @id @default(cuid())
+  executionId    String
+  idempotencyKey String
+  actorId        String
+  action         String
+  payloadHash    String
+  result         Json
+  createdAt      DateTime @default(now())
+  execution      InvoiceWorkflow @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  @@unique([executionId, idempotencyKey])
+}
+
+model WorkflowConfigurationAudit {
+  id          String @id @default(cuid())
+  workflowId  String
+  versionId   String?
+  actorId     String
+  actorName   String
+  action      String
+  beforeData  Json?
+  afterData   Json?
+  createdAt   DateTime @default(now())
+  @@index([workflowId, createdAt])
+}
+
+model WorkflowNotification {
+  id              String @id @default(cuid())
+  taskId          String
+  deduplicationKey String @unique
+  recipient       String
+  payload         Json
+  status          WorkflowNotificationStatus @default(PENDING)
+  availableAt     DateTime @default(now())
+  leaseUntil      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  task            InvoiceWorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  attempts        WorkflowNotificationAttempt[]
+  @@index([status, availableAt])
+}
+
+model WorkflowNotificationAttempt {
+  id             String @id @default(cuid())
+  notificationId String
+  status         WorkflowNotificationStatus
+  error          String?
+  createdAt      DateTime @default(now())
+  notification   WorkflowNotification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+  @@index([notificationId, createdAt])
 }

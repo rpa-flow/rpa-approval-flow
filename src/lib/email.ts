@@ -344,12 +344,12 @@ export async function sendApprovalRequestEmail(params: {
     "</ul>",
     params.validationObservation ? `<p><strong>Observação da validação:</strong> ${escapeHtml(params.validationObservation)}</p>` : "",
     params.extraMessage ? `<p><strong>Mensagem adicional:</strong> ${escapeHtml(params.extraMessage)}</p>` : "",
-    `<p><a href=\"${approvalUrl}\">Abrir a nota e aprovar</a></p>`
+    `<p><a href="${escapeHtml(approvalUrl)}">Abrir a nota e aprovar</a></p>`
   ]
     .filter(Boolean)
     .join("");
 
-  await sendMailWithGraph({
+  return sendMailWithGraph({
     recipients: params.recipients,
     subject,
     text: `${text}\n\nAbra a nota para ver os detalhes, consultar o histórico e aprovar: ${approvalUrl}`,

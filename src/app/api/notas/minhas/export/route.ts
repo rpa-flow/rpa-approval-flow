@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { getSessionManager } from "@/lib/auth";
 import { buildInvoiceWhere } from "@/lib/invoice-query";
 import { prisma } from "@/lib/prisma";
+import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
   const invoices = await prisma.invoice.findMany({
-    where: buildInvoiceWhere(manager, request.nextUrl.searchParams),
+    where: buildInvoiceWhere(manager, request.nextUrl.searchParams, manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id)),
     select: {
       codigoIdentificador: true,
       numeroNota: true,

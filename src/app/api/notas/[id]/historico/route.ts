@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
 
 type Params = { params: { id: string } };
 
@@ -16,7 +17,8 @@ export async function GET(_: Request, { params }: Params) {
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
   if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(invoice.fornecedorId) && invoice.criadoPorId !== manager.id) {
-    return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    const assigned = manager.role === "GESTOR" && ((await hasGlobalNfseWorkflowAccess(manager.id)) || await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } }] }, select: { id: true } }));
+    if (!assigned) return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
 
   const [logs, evaluation] = await Promise.all([

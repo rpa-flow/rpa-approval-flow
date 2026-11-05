@@ -124,6 +124,11 @@ export default function ConfiguracoesPage() {
       {me?.manager.role === "ADMIN" && (
         <>
         <section className="card">
+          <h2>Workflow de aprovação</h2>
+          <p className="muted small">Configure etapas, responsáveis e campos para notas de serviço.</p>
+          <Link href="/configuracoes/workflows" className="btn-secondary">Configurar workflow</Link>
+        </section>
+        <section className="card">
           <h2>Cadastros administrativos</h2>
           <p className="muted small">Para melhorar a experiência, o cadastro de fornecedores e gestores fica em uma tela separada.</p>
           <Link href="/fornecedores" className="btn-secondary">
