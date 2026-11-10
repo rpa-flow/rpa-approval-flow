@@ -38,6 +38,10 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
           ] };
   const filters: Prisma.InvoiceWhereInput[] = [scopeWhere];
 
+  if (searchParams.get("myApprovals") === "true") {
+    filters.push({ workflowExecution: { is: { status: "ACTIVE", tasks: { some: { managerId: manager.id, completedAt: null } } } } });
+  }
+
   if (statusParam === "LANCADAS") {
     filters.push({ OR: [{ status: InvoiceStatus.PROCESSADO }, { dataLancamentoDelphi: { not: null } }] });
   } else if (statusParam && Object.values(InvoiceStatus).includes(statusParam as InvoiceStatus)) {
