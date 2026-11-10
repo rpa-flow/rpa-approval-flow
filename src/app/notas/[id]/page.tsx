@@ -165,9 +165,11 @@ export default function NotaDetalhePage() {
   const [isResumingApproval, setIsResumingApproval] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
-  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, recipients: "", reason: "", message: "" });
+  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, reason: "", message: "" });
   const [emailManagers, setEmailManagers] = useState<EmailManager[]>([]);
-  const [selectedManagerEmails, setSelectedManagerEmails] = useState<string[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<EmailManager[]>([]);
+  const [recipientDraft, setRecipientDraft] = useState("");
+  const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
   const [communicationImage, setCommunicationImage] = useState<File | null>(null);
   const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
@@ -499,7 +501,12 @@ export default function NotaDetalhePage() {
 
     const formData = new FormData();
     formData.set("status", communication.status);
-    formData.set("recipients", [...selectedManagerEmails, communication.recipients].filter(Boolean).join(";"));
+    const pendingRecipient = recipientDraft.trim();
+    const recipientEmails = [
+      ...selectedRecipients.map((recipient) => recipient.email),
+      ...(pendingRecipient ? [pendingRecipient] : [])
+    ];
+    formData.set("recipients", recipientEmails.join(";"));
     formData.set("reason", communication.reason);
     formData.set("message", communication.message);
     if (communicationImage) formData.set("image", communicationImage);
@@ -516,8 +523,9 @@ export default function NotaDetalhePage() {
 
       setMessageType("success");
       setMessage(result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
-      setCommunication((current) => ({ ...current, recipients: "", reason: "", message: "" }));
-      setSelectedManagerEmails([]);
+      setCommunication((current) => ({ ...current, reason: "", message: "" }));
+      setSelectedRecipients([]);
+      setRecipientDraft("");
       setCommunicationImage(null);
       await loadData();
     } catch {
@@ -557,6 +565,24 @@ export default function NotaDetalhePage() {
   const canReject = Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
   const isCompletedWorkflow = approvalInfo?.execution.status === "COMPLETED";
+  const recipientSuggestions = emailManagers
+    .filter((manager) => !selectedRecipients.some((recipient) => recipient.email.toLowerCase() === manager.email.toLowerCase()))
+    .filter((manager) => `${manager.nome} ${manager.email}`.toLowerCase().includes(recipientDraft.trim().toLowerCase()))
+    .slice(0, 6);
+  const recipientDraftIsValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientDraft.trim());
+
+  function addRecipient(recipient: EmailManager) {
+    setSelectedRecipients((current) => current.some((item) => item.email.toLowerCase() === recipient.email.toLowerCase()) ? current : [...current, recipient]);
+    setRecipientDraft("");
+    setIsRecipientPickerOpen(false);
+  }
+
+  function addTypedRecipient() {
+    const email = recipientDraft.trim().replace(/[;,]+$/, "");
+    if (!email) return;
+    const manager = emailManagers.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    addRecipient(manager ?? { id: email.toLowerCase(), nome: email, email });
+  }
 
   return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
@@ -640,18 +666,33 @@ export default function NotaDetalhePage() {
           </div>
           <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => option.value !== invoice.status && (!isCompletedWorkflow || option.value === "PROCESSADO")).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <div className="approval-field space-y-2">
-            <label className="approval-field-label" htmlFor="status-email-managers">Selecionar gestores</label>
-            <select id="status-email-managers" className="approval-field-control min-h-28" multiple value={selectedManagerEmails} onChange={(event) => setSelectedManagerEmails(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} aria-describedby="status-email-managers-help">
-              {emailManagers.map((manager) => <option key={manager.id} value={manager.email}>{manager.nome} — {manager.email}</option>)}
-            </select>
-            <span id="status-email-managers-help" className="text-xs text-slate-500">Use Ctrl (Windows) ou Command (Mac) para selecionar mais de um gestor.</span>
-            <label className="approval-field-label" htmlFor="status-email-manual">Adicionar outros e-mails</label>
-            <textarea id="status-email-manual" className="approval-field-control" value={communication.recipients} onChange={(event) => setCommunication((current) => ({ ...current, recipients: event.target.value }))} rows={3} placeholder="nome@empresa.com; outro@empresa.com" /><span className="text-xs text-slate-500">Separe vários e-mails por vírgula, ponto e vírgula ou linha.</span>
+            <label className="approval-field-label" htmlFor="status-email-recipients">Para</label>
+            <div className="relative">
+              <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
+                {selectedRecipients.map((recipient) => <span key={recipient.email} className="inline-flex max-w-full items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs text-slate-800">
+                  <span className="truncate" title={`${recipient.nome} <${recipient.email}>`}>{recipient.nome === recipient.email ? recipient.email : `${recipient.nome} <${recipient.email}>`}</span>
+                  <button type="button" aria-label={`Remover ${recipient.email}`} className="rounded px-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900" onClick={() => setSelectedRecipients((current) => current.filter((item) => item.email.toLowerCase() !== recipient.email.toLowerCase()))}>×</button>
+                </span>)}
+                <input id="status-email-recipients" className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400 focus:ring-0" value={recipientDraft} onFocus={() => setIsRecipientPickerOpen(true)} onBlur={() => window.setTimeout(() => setIsRecipientPickerOpen(false), 120)} onChange={(event) => { setRecipientDraft(event.target.value); setIsRecipientPickerOpen(true); }} onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "," || event.key === ";") { event.preventDefault(); if (recipientSuggestions.length && recipientDraft.trim()) addRecipient(recipientSuggestions[0]); else addTypedRecipient(); }
+                  if (event.key === "Backspace" && !recipientDraft && selectedRecipients.length) setSelectedRecipients((current) => current.slice(0, -1));
+                  if (event.key === "Escape") setIsRecipientPickerOpen(false);
+                }} placeholder={selectedRecipients.length ? "Adicionar destinatário..." : "Digite um nome ou e-mail"} aria-autocomplete="list" aria-expanded={isRecipientPickerOpen && recipientSuggestions.length > 0} aria-controls="status-email-suggestions" />
+              </div>
+              {isRecipientPickerOpen && recipientDraft.trim() && <div id="status-email-suggestions" role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
+                {recipientSuggestions.map((manager) => <button type="button" role="option" aria-selected="false" key={manager.id} className="flex w-full items-start gap-3 px-3 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onMouseDown={(event) => event.preventDefault()} onClick={() => addRecipient(manager)}>
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-brand">{manager.nome.trim().charAt(0).toLocaleUpperCase()}</span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{manager.nome}</span><span className="block truncate text-xs text-slate-500">{manager.email}</span></span>
+                </button>)}
+                {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientDraft.trim()) && !recipientSuggestions.some((manager) => manager.email.toLowerCase() === recipientDraft.trim().toLowerCase()) && <button type="button" role="option" aria-selected="false" className="w-full border-t border-slate-100 px-3 py-2 text-left text-sm text-brand hover:bg-slate-50" onMouseDown={(event) => event.preventDefault()} onClick={addTypedRecipient}>Adicionar <strong>{recipientDraft.trim()}</strong></button>}
+              </div>}
+            </div>
+            <span className="text-xs text-slate-500">Digite para buscar uma pessoa ou informe um endereço externo. Pressione Enter ou vírgula para adicionar.</span>
           </div>
           <label className="approval-field"><span className="approval-field-label">Motivo da alteração</span><textarea className="approval-field-control" value={communication.reason} onChange={(event) => setCommunication((current) => ({ ...current, reason: event.target.value }))} rows={3} maxLength={500} placeholder="Explique por que o status está sendo alterado" required /></label>
           <label className="approval-field"><span className="approval-field-label">Mensagem adicional <span className="text-xs font-normal text-slate-500">(opcional)</span></span><textarea className="approval-field-control" value={communication.message} onChange={(event) => setCommunication((current) => ({ ...current, message: event.target.value }))} rows={3} maxLength={2000} placeholder="Inclua orientações para os destinatários" /></label>
           <label className="approval-field"><span className="approval-field-label">Imagem no corpo do e-mail <span className="text-xs font-normal text-slate-500">(opcional, até 5 MB)</span></span><input className="approval-field-control" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => setCommunicationImage(event.target.files?.[0] ?? null)} />{communicationImage && <span className="text-xs font-semibold text-blue-700">Selecionada: {communicationImage.name}</span>}</label>
-          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || (!communication.recipients.trim() && !selectedManagerEmails.length) || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : isCompletedWorkflow ? "Marcar processada e enviar e-mail" : "Alterar status e enviar e-mail"}</button>
+          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || (!selectedRecipients.length && !recipientDraftIsValidEmail) || (Boolean(recipientDraft.trim()) && !recipientDraftIsValidEmail) || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : isCompletedWorkflow ? "Marcar processada e enviar e-mail" : "Alterar status e enviar e-mail"}</button>
           <p className="text-xs text-slate-500">O e-mail incluirá número, código, fornecedor, valor, emissão, status anterior, novo status e motivo.</p>
         </section>}
 
