@@ -46,6 +46,10 @@ export async function POST(request: NextRequest, { params }: Params) {
         : { processada: true, statusProcessamento: "ERRO" as const };
 
   const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${existing.id} FOR UPDATE`;
+    const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { workflowExecution: true } });
+    if (!current || (current.workflowExecution && current.workflowExecution.status !== "COMPLETED") || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime()) return null;
+    if (current.workflowExecution?.status === "COMPLETED" && newStatus !== "PROCESSADO") return null;
     const invoice = await tx.invoice.update({
       where: { id: existing.id },
       data: {
@@ -56,8 +60,11 @@ export async function POST(request: NextRequest, { params }: Params) {
       }
     });
     await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus, reason } });
+    await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "STATUS_CHANGED", actionDescription: `${manager.nome} alterou o status da nota`, previousStatus: existing.status, newStatus, reason, beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
     return invoice;
   });
+
+  if (!updated) return NextResponse.json({ error: "A nota mudou ou está em um workflow. Atualize a página." }, { status: 409 });
 
   let emailResult;
   try {

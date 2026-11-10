@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       : { codigoIdentificador: parsed.data.codigoIdentificador! },
     include: {
       adminReview: true,
+      workflowExecution: { select: { status: true } },
       fornecedor: {
         include: {
           managerSuppliers: {
@@ -63,6 +64,9 @@ export async function POST(request: NextRequest) {
   if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(invoice.fornecedorId)) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
+  if (invoice.workflowExecution && invoice.workflowExecution.status !== "COMPLETED") {
+    return NextResponse.json({ error: "Use os avisos do workflow para esta nota." }, { status: 409 });
+  }
 
   const managerEmails = invoice.fornecedor.managerSuppliers.map((m) => m.manager.email);
   const extraEmails = invoice.fornecedor.notificationConfig?.emailsExtras ?? [];
@@ -76,6 +80,9 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { invoiceId: invoice.id }, select: { status: true } });
+  if (currentWorkflow && currentWorkflow.status !== "COMPLETED") return NextResponse.json({ error: "Use os avisos do workflow para esta nota." }, { status: 409 });
 
   await sendApprovalRequestEmail({
     invoiceNumber: invoice.numeroNota,

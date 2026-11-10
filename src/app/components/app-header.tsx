@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ComponentType, FocusEvent, MouseEvent, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, X } from "lucide-react";
 import { MinasLogoIcon } from "@/components/brand/minas-logo-icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ type HeaderLink = {
   href: string;
   label: string;
   icon?: ComponentType<{ size?: number | string; className?: string }>;
+  adminOnly?: boolean;
+  children?: HeaderLink[];
 };
 
 type AppHeaderProps = {
@@ -33,6 +35,7 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [sidebarTooltip, setSidebarTooltip] = useState<SidebarTooltip>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
 
   const collapsed = sidebarCollapsed && !hoverExpanded;
@@ -56,21 +59,26 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
 
   const renderNavItem = (link: HeaderLink, mode: "desktop" | "mobile") => {
     const Icon = link.icon;
-    const isActive = pathname === link.href;
+    const isCurrentPage = pathname === link.href;
+    const hasActiveChild = Boolean(link.children?.some((child) => pathname === child.href || pathname.startsWith(`${child.href}/`)));
+    const isActive = isCurrentPage || hasActiveChild;
     const desktopCollapsed = mode === "desktop" && collapsed;
+    const isExpanded = hasActiveChild || Boolean(expandedGroups[link.href]);
+    const subnavId = `subnav-${mode}-${link.href.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
-    return (
+    const item = (
       <Link
         key={`${mode}-${link.href}`}
         href={link.href}
         title={desktopCollapsed ? link.label : undefined}
         className={cn(
           "group relative flex min-w-0 items-center gap-3 rounded-md text-sm font-semibold transition",
+          Boolean(link.children?.length) && "flex-1",
           mode === "desktop" ? "px-3 py-2.5" : "px-3 py-2",
           desktopCollapsed && "justify-center px-2",
           isActive ? "bg-brand text-white shadow-sm" : "text-muted hover:bg-surface-container-lowest hover:text-text hover:shadow-sm"
         )}
-        aria-current={isActive ? "page" : undefined}
+        aria-current={isCurrentPage ? "page" : undefined}
         aria-label={desktopCollapsed ? link.label : undefined}
         onMouseEnter={(event: MouseEvent<HTMLAnchorElement>) => {
           if (desktopCollapsed) {
@@ -92,6 +100,18 @@ export function AppHeader({ links, onLogout }: AppHeaderProps) {
         {Icon && <Icon size={18} className={cn("shrink-0", isActive ? "text-white" : "text-outline group-hover:text-secondary")} />}
         <span className={cn("min-w-0 truncate", desktopCollapsed && "sr-only")}>{link.label}</span>
       </Link>
+    );
+
+    if (!link.children?.length) return item;
+
+    return (
+      <div key={`${mode}-${link.href}`} className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1">
+          {item}
+          {!desktopCollapsed && <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-container-lowest hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-label={`${isExpanded ? "Recolher" : "Expandir"} ${link.label}`} aria-expanded={isExpanded} aria-controls={subnavId} onClick={() => setExpandedGroups((current) => ({ ...current, [link.href]: !isExpanded }))}><ChevronDown size={16} className={cn("transition-transform", isExpanded && "rotate-180")} /></button>}
+        </div>
+        {isExpanded && <div id={subnavId} className={cn("ml-3 border-l border-outline-variant pl-2", mode === "desktop" ? "mt-1 space-y-1" : "mt-1 grid gap-1")}>{link.children.map((child) => renderNavItem(child, mode))}</div>}
+      </div>
     );
   };
 

@@ -7,7 +7,7 @@ import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access"
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
     where: {
-      AND: [invoicesAvailableForApproval()],
+      AND: [invoicesAvailableForApproval(), { OR: [{ workflowExecution: { is: null } }, { workflowExecution: { is: { status: "COMPLETED" } } }] }],
       status: {
         in: ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"]
       }
@@ -79,6 +79,8 @@ async function processDueReminders(
   const sendEmails = options?.sendEmails ?? false;
 
   for (const reminder of reminders) {
+    const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { invoiceId: reminder.invoiceId }, select: { status: true } });
+    if (currentWorkflow && currentWorkflow.status !== "COMPLETED") continue;
     const nextTentativa = reminder.tentativasAtuais + 1;
 
     const recipients = Array.from(new Set([...reminder.emailsGestores, ...reminder.emailsExtras].filter(Boolean)));

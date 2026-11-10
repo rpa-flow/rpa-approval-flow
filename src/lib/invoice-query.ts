@@ -12,7 +12,7 @@ function parseDay(value: string | null, endOfDay = false) {
 }
 
 /** Builds the invoice scope and filters shared by the notes list and its export. */
-export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSearchParams): Prisma.InvoiceWhereInput {
+export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSearchParams, globalNfseAccess = false): Prisma.InvoiceWhereInput {
   const allowedSupplierIds = getAllowedSupplierIds(manager);
   const statusParam = searchParams.get("status");
   const supplierId = searchParams.get("supplierId");
@@ -30,8 +30,17 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
       ? {}
       : manager.role === "FORNECEDOR"
         ? { criadoPorId: manager.id }
-        : { fornecedorId: { in: allowedSupplierIds } };
+        : { OR: [
+            { fornecedorId: { in: allowedSupplierIds } },
+            { workflowExecution: { is: { tasks: { some: { managerId: manager.id, completedAt: null } } } } },
+            { workflowExecution: { is: { version: { is: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } } } } },
+            ...(globalNfseAccess ? [{ OR: [{ documentType: "NFSE" as const }, { documentType: null }] }] : [])
+          ] };
   const filters: Prisma.InvoiceWhereInput[] = [scopeWhere];
+
+  if (searchParams.get("myApprovals") === "true") {
+    filters.push({ workflowExecution: { is: { status: "ACTIVE", tasks: { some: { managerId: manager.id, completedAt: null } } } } });
+  }
 
   if (statusParam === "LANCADAS") {
     filters.push({ OR: [{ status: InvoiceStatus.PROCESSADO }, { dataLancamentoDelphi: { not: null } }] });
