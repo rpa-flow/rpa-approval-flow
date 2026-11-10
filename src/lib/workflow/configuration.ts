@@ -50,14 +50,18 @@ export const nfseWorkflowPublishSchema = nfseWorkflowDraftSchema.superRefine((dr
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps"], message: "Adicione ao menos uma etapa." });
   }
 
-  const hasPaymentAndPurchaseStep = draft.steps.some((step) => {
-    const isEditable = (key: string) => step.fields.some((field) => field.key === key && field.mode === "EDITABLE");
-    const paymentRequired = step.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE" && field.required);
-    // OC e contrato formam uma alternativa obrigatória, não duas obrigações individuais.
-    return step.requiresPurchaseOrder && paymentRequired && (isEditable("ordemCompra") || isEditable("ocContrato"));
+  const hasRequiredPaymentDate = draft.steps.some((step) =>
+    step.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE" && field.required)
+  );
+  // OC e contrato formam uma alternativa obrigatória, não duas obrigações individuais.
+  const hasRequiredPurchaseInformation = draft.steps.some((step) => {
+    const hasEditablePurchaseField = step.fields.some((field) =>
+      (field.key === "ordemCompra" || field.key === "ocContrato") && field.mode === "EDITABLE"
+    );
+    return step.requiresPurchaseOrder && hasEditablePurchaseField;
   });
-  if (!hasPaymentAndPurchaseStep) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps"], message: "Configure uma etapa com data de pagamento obrigatória e ordem de compra ou contrato editável." });
+  if (!hasRequiredPaymentDate || !hasRequiredPurchaseInformation) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps"], message: "Configure uma data de pagamento obrigatória em uma etapa e, em uma etapa com exigência de OC ou contrato, deixe um desses campos editável." });
   }
   const finalStep = draft.steps[draft.steps.length - 1];
   if (finalStep && !finalStep.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE")) {

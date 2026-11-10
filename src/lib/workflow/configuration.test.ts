@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nfseWorkflowDraftSchema, nfseWorkflowPublishSchema } from "./configuration.ts";
+import { nfseWorkflowDraftSchema, nfseWorkflowPublishSchema, type NfseWorkflowDraft } from "./configuration.ts";
 
 const policy = (key: string, required = false) => ({ key, mode: "EDITABLE" as const, required });
-const valid = () => ({
+const valid = (): NfseWorkflowDraft => ({
   documentType: "NFSE" as const,
   steps: [
     { name: "Gestor", managerId: "gestor", consultationScope: "ASSIGNED" as const, requiresPurchaseOrder: false, fields: [policy("serviceEvaluation", true)] },
@@ -15,6 +15,15 @@ test("publica fluxo com avaliação e dados de pagamento em etapas diferentes", 
   assert.equal(nfseWorkflowPublishSchema.safeParse(valid()).success, true);
 });
 
+test("publica quando data obrigatória e OC ou contrato editável estão em etapas diferentes", () => {
+  const draft = valid();
+  draft.steps[0].fields.push(policy("dataPagamento", true));
+  draft.steps[1].fields = draft.steps[1].fields.map((field) =>
+    field.key === "dataPagamento" ? { ...field, required: false } : field
+  );
+  assert.equal(nfseWorkflowPublishSchema.safeParse(draft).success, true);
+});
+
 test("não publica sem etapa de avaliação ou sem os dados de pagamento", () => {
   const noEvaluation = valid();
   noEvaluation.steps[0].fields = [];
@@ -22,6 +31,11 @@ test("não publica sem etapa de avaliação ou sem os dados de pagamento", () =>
   const noPurchase = valid();
   noPurchase.steps[1].requiresPurchaseOrder = false;
   assert.equal(nfseWorkflowPublishSchema.safeParse(noPurchase).success, false);
+  const noEditablePurchaseField = valid();
+  noEditablePurchaseField.steps[1].fields = noEditablePurchaseField.steps[1].fields.map((field) =>
+    field.key === "ordemCompra" || field.key === "ocContrato" ? { ...field, mode: "READ_ONLY" as const } : field
+  );
+  assert.equal(nfseWorkflowPublishSchema.safeParse(noEditablePurchaseField).success, false);
   const noDate = valid();
   noDate.steps[1].fields[2].required = false;
   assert.equal(nfseWorkflowPublishSchema.safeParse(noDate).success, false);

@@ -5,12 +5,20 @@ import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout, EmptyState, ErrorState, LoadingState, PageHeader, PaginationControls } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink } from "@/components/evaluation-guidance";
+import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPolicy } from "@/app/components/workflow-approval-fields";
 import type { PaginationMetadata } from "@/lib/pagination";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
+import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
 
-type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
+type Me = { manager: { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
+type StepApprovalContext = {
+  invoice: Record<string, unknown> & { serviceEvaluation?: { rating: number; qualifica: boolean | null; riskLevel: RiskLevel; comment?: string | null } | null };
+  execution: { revision: number };
+  currentStep: { id: string; name: string; managerId: string; fields: ApprovalFieldPolicy[]; requiresPurchaseOrder: boolean };
+  canComplete: boolean;
+};
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
 
 type Invoice = {
@@ -215,10 +223,14 @@ export default function DashboardPage() {
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
+  const [stepApproval, setStepApproval] = useState<StepApprovalContext | null>(null);
+  const [stepApprovalLoading, setStepApprovalLoading] = useState(false);
+  const [stepApprovalValues, setStepApprovalValues] = useState<Record<string, string>>({});
+  const [stepOperationKey, setStepOperationKey] = useState("");
   const [rejectModal, setRejectModal] = useState<Invoice | null>(null);
   const [rejectionObservation, setRejectionObservation] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
-  const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
+  const [evaluation, setEvaluation] = useState<ApprovalEvaluation>({ rating: null, qualifica: "", riskLevel: "", comment: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
@@ -319,13 +331,61 @@ export default function DashboardPage() {
     }
   }
 
-  function abrirModalAprovacao(invoice: Invoice) {
+  async function abrirModalAprovacao(invoice: Invoice) {
+    setMenuState(null);
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
     setPaymentDate("");
     setPurchaseOrder(invoice.ordemCompra ?? "");
     setContractPurchaseOrder(invoice.ocContrato ?? "");
     setInstallmentCount(String(invoice.numeroParcelas ?? 1));
+    setStepApproval(null);
+    setStepApprovalValues({});
+    setStepOperationKey("");
+    const hasActiveStep = invoice.workflowExecution?.status === "ACTIVE";
+    setStepApprovalLoading(hasActiveStep);
     setApproveModal(invoice);
-    setMenuState(null);
+
+    if (hasActiveStep) {
+      try {
+        const response = await fetch(`/api/notas/${invoice.id}/workflow`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(String(data.error || "Não foi possível carregar esta aprovação.").replace(/workflow/gi, "aprovação"));
+        if (!data.canComplete || !data.currentStep) throw new Error("Esta aprovação está atribuída a outro responsável ou não está mais disponível.");
+        const context = data as StepApprovalContext;
+        const initialValues: Record<string, string> = {};
+        for (const policy of context.currentStep.fields) {
+          if (policy.fieldKey === "serviceEvaluation") continue;
+          const value = context.invoice[policy.fieldKey];
+          initialValues[policy.fieldKey] = policy.fieldKey === "dataPagamento" && value
+            ? String(value).slice(0, 10)
+            : value === null || value === undefined ? "" : String(value);
+        }
+        const savedEvaluation = context.invoice.serviceEvaluation;
+        if (savedEvaluation) {
+          setEvaluation({ rating: savedEvaluation.rating as ApprovalEvaluation["rating"], qualifica: savedEvaluation.qualifica === null ? "" : savedEvaluation.qualifica ? "SIM" : "NAO", riskLevel: savedEvaluation.riskLevel, comment: savedEvaluation.comment ?? "" });
+        }
+        setStepApproval(context);
+        setStepApprovalValues(initialValues);
+        setStepOperationKey(window.crypto.randomUUID());
+      } catch (error) {
+        setApproveModal(null);
+        setMessageType("error");
+        setMessage((error instanceof Error ? error.message : "Não foi possível abrir esta aprovação.").replace(/workflow/gi, "aprovação"));
+      } finally {
+        setStepApprovalLoading(false);
+      }
+      return;
+    }
+
+    setStepApprovalLoading(false);
+  }
+
+  function fecharModalAprovacao() {
+    setApproveModal(null);
+    setStepApproval(null);
+    setStepApprovalValues({});
+    setStepOperationKey("");
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
   }
 
   function abrirModalRecusa(invoice: Invoice) {
@@ -365,6 +425,10 @@ export default function DashboardPage() {
   }
 
   async function aprovarComAvaliacao() {
+    if (stepApproval) {
+      await concluirAprovacaoDaEtapa();
+      return;
+    }
     if (!approveModal || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setMessageType("error");
       setMessage("Preencha a pontuação, o campo Qualifica, a classificação de risco e a data de pagamento para aprovar a nota.");
@@ -414,11 +478,70 @@ export default function DashboardPage() {
     if (!approved) return;
 
     setApproveModal(null);
-    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
     setPaymentDate("");
     setPurchaseOrder("");
     setContractPurchaseOrder("");
     setInstallmentCount("1");
+  }
+
+  async function concluirAprovacaoDaEtapa() {
+    if (!approveModal || !stepApproval?.currentStep || !stepOperationKey) return;
+    const policies = stepApproval.currentStep.fields.filter((policy) => policy.mode === "EDITABLE");
+    const getValue = (key: string) => stepApprovalValues[key] ?? (stepApproval.invoice[key] == null ? "" : String(stepApproval.invoice[key]));
+    for (const policy of policies) {
+      if (policy.fieldKey === "serviceEvaluation") continue;
+      if (policy.required && !getValue(policy.fieldKey).trim()) {
+        const label = NFSE_WORKFLOW_FIELDS.find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
+        setMessageType("error");
+        setMessage(`Preencha o campo obrigatório: ${label}.`);
+        return;
+      }
+    }
+
+    const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
+    const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
+    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel && evaluation.comment.trim().length >= 5);
+    if (evaluationPolicy?.required && !evaluationComplete || hasEvaluationInput && !evaluationComplete) {
+      setMessageType("error");
+      setMessage("Complete a avaliação do serviço com pontuação, risco e comentário.");
+      return;
+    }
+    if (stepApproval.currentStep.requiresPurchaseOrder && !getValue("ordemCompra").trim() && !getValue("ocContrato").trim()) {
+      setMessageType("error");
+      setMessage("Informe a ordem de compra ou o contrato para continuar.");
+      return;
+    }
+
+    const fields: Record<string, unknown> = {};
+    for (const policy of policies) {
+      const key = policy.fieldKey;
+      if (key === "serviceEvaluation") {
+        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim(), riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
+        continue;
+      }
+      const value = getValue(key).trim();
+      if (key === "dataPagamento") fields[key] = value ? paymentDateAtSaoPauloNoon(value).toISOString() : null;
+      else if (key === "numeroParcelas") { if (value) fields[key] = Number(value); }
+      else fields[key] = value || null;
+    }
+
+    setIsApproving(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/notas/${approveModal.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: stepApproval.execution.revision, idempotencyKey: stepOperationKey, fields }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(String(result.error || "Não foi possível concluir esta aprovação.").replace(/workflow/gi, "aprovação"));
+      setMessageType("success");
+      setMessage(result.completed ? "Aprovação concluída." : "Aprovação registrada. A nota seguirá para a próxima etapa.");
+      await loadData();
+      fecharModalAprovacao();
+    } catch (error) {
+      setMessageType("error");
+      setMessage((error instanceof Error ? error.message : "Não foi possível comunicar com o servidor para aprovar a nota.").replace(/workflow/gi, "aprovação"));
+    } finally {
+      setIsApproving(false);
+    }
   }
 
   async function verHistorico(invoice: Invoice) {
@@ -646,11 +769,11 @@ export default function DashboardPage() {
 
     {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
     {menuState && <div className="fixed z-50 w-[calc(100vw-1rem)] max-w-60 rounded-md border border-border bg-surface-container-lowest p-2 shadow-elevated" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-      {(menuState.invoice.workflowExecution && menuState.invoice.workflowExecution.status !== 'COMPLETED') && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}/workflow`); setMenuState(null); })}>Abrir etapa do workflow</button>}
+      {menuState.invoice.workflowExecution?.status === "ACTIVE" && menuState.invoice.workflowExecution.tasks[0]?.managerId === me?.manager.id && me?.manager.role !== "FORNECEDOR" && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { void abrirModalAprovacao(menuState.invoice); })}>✅ Aprovar</button>}
       {(!menuState.invoice.workflowExecution || menuState.invoice.workflowExecution.status === 'COMPLETED') && ['AGUARDANDO_APROVACAO', 'RECUSADO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-emerald-700 hover:!bg-emerald-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalAprovacao(menuState.invoice))}>{menuState.invoice.status === "AGUARDANDO_APROVACAO" ? "✅ Aprovar" : "🔁 Reaprovar"}</button>}
       {(!menuState.invoice.workflowExecution || menuState.invoice.workflowExecution.status === 'COMPLETED') && ['AGUARDANDO_APROVACAO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalRecusa(menuState.invoice))}>⛔ Reprovar</button>}
       {menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); })}>↩️ Revogar aprovação</button>}
-      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}${(menuState.invoice.workflowExecution && menuState.invoice.workflowExecution.status !== 'COMPLETED') ? '/workflow' : ''}`); setMenuState(null); })}>🔎 Ver detalhes</button>
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); })}>🔎 Ver detalhes</button>
       <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { setExpandedId(menuState.invoice.id); setMenuState(null); })}>▾ Expandir resumo</button>
       <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => void verHistorico(menuState.invoice))}>🕒 Ver histórico</button>
     </div>}
@@ -663,11 +786,11 @@ export default function DashboardPage() {
       <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setRejectModal(null)}>Cancelar</button><button type="button" className="btn-primary !bg-rose-700 hover:!bg-rose-800" onClick={recusarNota} disabled={isRejecting || !rejectionObservation.trim()}>{isRejecting ? "Registrando..." : "Confirmar reprovação"}</button></div>
     </section>}
 
-    {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setApproveModal(null)} />}
+    {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={fecharModalAprovacao} />}
     {approveModal && <section role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6" onClick={(e) => e.stopPropagation()}>
-      <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">Avaliação obrigatória do serviço</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p><p className="section-description">Código externo: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p></div><span className="badge badge-blue">Aprovação</span></div>
+      <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">{approveModal.workflowExecution?.status === "ACTIVE" ? "Aprovar nota" : "Avaliação obrigatória do serviço"}</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p><p className="section-description">Código externo: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p>{stepApproval && <p className="section-description">Etapa: {stepApproval.currentStep.name}</p>}</div><span className="badge badge-blue">Aprovação</span></div>
       {approveModal.statusProcessamento === "ERRO" && <div className="mb-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {approveModal.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
-      <div className="space-y-4">
+      {stepApprovalLoading ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : stepApproval ? <div className="mt-4 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields policies={stepApproval.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{stepApproval.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="space-y-4">
         <div role="group" aria-labelledby="dashboard-rating-label"><p id="dashboard-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
         <div className="grid items-start gap-3 sm:grid-cols-3"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="approval-field"><span className="approval-field-label">Data de pagamento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label></div>
         <div className="approval-field-row grid gap-3 sm:grid-cols-3">
@@ -676,8 +799,8 @@ export default function DashboardPage() {
           <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
         </div>
         <QualificationProcedureLink />
-      </div>
-      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setApproveModal(null)}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
+      </div>}
+      <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={fecharModalAprovacao} disabled={isApproving}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving || stepApprovalLoading}>{stepApprovalLoading ? "Carregando…" : isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
     </section>}
 
     {historyModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => setHistoryModal(null)} />}
