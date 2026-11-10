@@ -634,12 +634,8 @@ export default function DashboardPage() {
 
     {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role={messageType === "error" ? "alert" : "status"}>{message}</p>}
 
-    <section className="card mt-0 space-y-5" aria-labelledby="notes-heading" onClick={(e) => e.stopPropagation()}>
+    <section className="card mt-0 space-y-5" aria-label="Lista de notas fiscais" onClick={(e) => e.stopPropagation()}>
       <div className="section-header">
-        <div>
-          <h2 id="notes-heading" className="section-title">Notas em acompanhamento</h2>
-          <p className="section-description">Filtre, analise detalhes e execute aprovações sem sair da central operacional.</p>
-        </div>
         <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
           <button type="button" className="btn-secondary whitespace-nowrap" onClick={() => void exportarNotas()} disabled={isExporting || hasInvalidDateRange} title={hasInvalidDateRange ? "Corrija os intervalos de data antes de exportar." : undefined}>{isExporting ? "Gerando XLSX..." : "Baixar XLSX"}</button>
           <span className="badge badge-slate">{isLoadingNotes ? "Carregando..." : `${pagination.total} nota(s)`}</span>
