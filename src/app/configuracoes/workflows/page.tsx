@@ -9,9 +9,9 @@ type Field = { key: string; label: string; editable: boolean };
 type Policy = { key: string; mode: "HIDDEN" | "READ_ONLY" | "EDITABLE"; required: boolean };
 type Step = { name: string; managerId: string; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Policy[] };
 type Manager = { id: string; nome: string; ativo: boolean; role: string };
-type Version = { id: string; number: number; status: string; revision: number; steps: Array<{ name: string; managerId: string; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Array<{ fieldKey: string; mode: Policy["mode"]; required: boolean }> }> };
+type Version = { id: string; number: number; status: string; revision: number; steps: Array<{ id: string; position: number; name: string; managerId: string; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Array<{ fieldKey: string; mode: Policy["mode"]; required: boolean }> }> };
 type Workflow = { id: string; activeVersionId: string | null; versions: Version[] };
-type PendingInvoice = { id: string; numeroNota: string; fornecedor: { nome: string }; workflowExecution?: unknown };
+type PendingInvoice = { id: string; numeroNota: string; status: string; observacaoValidacao: string | null; fornecedor: { nome: string }; workflowExecution?: unknown };
 type Notification = { id: string; recipient: string; status: string; task: { step: { name: string }; execution: { invoice: { numeroNota: string } } }; attempts: Array<{ error: string | null }> };
 type AuditEvent = { id: string; action: string; actorName: string; createdAt: string; versionId: string | null };
 type Attempt = { id: string; status: string; error: string | null; createdAt: string };
@@ -25,9 +25,14 @@ export default function WorkflowSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
+  const [inconsistentInvoices, setInconsistentInvoices] = useState<PendingInvoice[]>([]);
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+  const [selectedInconsistentInvoices, setSelectedInconsistentInvoices] = useState<string[]>([]);
+  const [inconsistentDestinations, setInconsistentDestinations] = useState<Record<string, string>>({});
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoicePages, setInvoicePages] = useState(1);
+  const [inconsistentPage, setInconsistentPage] = useState(1);
+  const [inconsistentPages, setInconsistentPages] = useState(1);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [audit, setAudit] = useState<AuditEvent[] | null>(null);
   const [attempts, setAttempts] = useState<{ notificationId: string; items: Attempt[]; page: number; totalPages: number } | null>(null);
@@ -39,24 +44,29 @@ export default function WorkflowSettingsPage() {
     { label: "Data obrigatória e OC ou contrato editável no fluxo", done: steps.some((step) => step.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE" && field.required)) && steps.some((step) => step.requiresPurchaseOrder && step.fields.some((field) => ["ordemCompra", "ocContrato"].includes(field.key) && field.mode === "EDITABLE")) },
     { label: "Data de pagamento editável na última etapa", done: Boolean(steps.at(-1)?.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE")) }
   ];
+  const activeVersion = workflow?.versions.find((version) => version.id === workflow.activeVersionId);
 
-  const refresh = useCallback(async (page: number) => {
-    const [catalogResponse, managersResponse, workflowResponse, invoicesResponse, notificationsResponse] = await Promise.all([
-      fetch("/api/workflows/field-catalog?documentType=NFSE"), fetch("/api/gestores"), fetch("/api/workflows?documentType=NFSE"), fetch(`/api/notas/minhas?status=AGUARDANDO_APROVACAO&pageSize=100&page=${page}`), fetch("/api/workflows/notifications")
+  const refresh = useCallback(async (page: number, inconsistentPageNumber = 1) => {
+    const [catalogResponse, managersResponse, workflowResponse, invoicesResponse, inconsistentResponse, notificationsResponse] = await Promise.all([
+      fetch("/api/workflows/field-catalog?documentType=NFSE"), fetch("/api/gestores"), fetch("/api/workflows?documentType=NFSE"), fetch(`/api/notas/minhas?status=AGUARDANDO_APROVACAO&pageSize=100&page=${page}`), fetch(`/api/notas/minhas?status=DADOS_INCONSISTENTES&pageSize=100&page=${inconsistentPageNumber}`), fetch("/api/workflows/notifications")
     ]);
-    if (!catalogResponse.ok || !managersResponse.ok || !workflowResponse.ok || !invoicesResponse.ok || !notificationsResponse.ok) throw new Error("Não foi possível carregar a configuração. Verifique seu acesso de administrador.");
+    if (!catalogResponse.ok || !managersResponse.ok || !workflowResponse.ok || !invoicesResponse.ok || !inconsistentResponse.ok || !notificationsResponse.ok) throw new Error("Não foi possível carregar a configuração. Verifique seu acesso de administrador.");
     const catalog = await catalogResponse.json();
     const users: Manager[] = await managersResponse.json();
     const data = await workflowResponse.json();
     const invoices = await invoicesResponse.json();
+    const inconsistent = await inconsistentResponse.json();
     const notificationData = await notificationsResponse.json();
     setFields(catalog.fields);
     setManagers(users.filter((user) => user.ativo && (user.role === "ADMIN" || user.role === "GESTOR")));
     setWorkflow(data.workflow);
     setNotifications(notificationData.items);
     setPendingInvoices((invoices.items as PendingInvoice[]).filter((invoice) => !invoice.workflowExecution));
+    setInconsistentInvoices((inconsistent.items as PendingInvoice[]).filter((invoice) => !invoice.workflowExecution));
     setInvoicePage(invoices.pagination.page);
     setInvoicePages(invoices.pagination.totalPages);
+    setInconsistentPage(inconsistent.pagination.page);
+    setInconsistentPages(inconsistent.pagination.totalPages);
   }, []);
 
   const showFeedback = useCallback((text: string, tone: "success" | "error" | "info" = "success") => {
@@ -115,13 +125,16 @@ export default function WorkflowSettingsPage() {
   async function enrollSelected() {
     setSaving(true); clearFeedback();
     try {
-      const response = await fetch("/api/workflows/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceIds: selectedInvoices }) });
+      const response = await fetch("/api/workflows/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selections: selectedInvoices.map((invoiceId) => ({ invoiceId, ...(inconsistentDestinations[invoiceId] ? { stepId: inconsistentDestinations[invoiceId] } : {}) })) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Não foi possível encaminhar as notas.");
       const failed = data.results.filter((result: { success: boolean }) => !result.success);
       showFeedback(`${data.results.length - failed.length} nota(s) encaminhada(s). ${failed.map((item: { invoiceId: string; error: string }) => `${item.invoiceId}: ${item.error}`).join(" ")}`, failed.length ? "info" : "success");
-      setSelectedInvoices(failed.map((item: { invoiceId: string }) => item.invoiceId));
-      await refresh(invoicePage);
+      const failedIds = failed.map((item: { invoiceId: string }) => item.invoiceId);
+      setSelectedInvoices(failedIds);
+      setSelectedInconsistentInvoices((current) => current.filter((id) => failedIds.includes(id)));
+      setInconsistentDestinations((current) => Object.fromEntries(Object.entries(current).filter(([id]) => failedIds.includes(id))));
+      await refresh(invoicePage, inconsistentPage);
     } catch (error) { showFeedback(error instanceof Error ? error.message : "Erro ao encaminhar.", "error"); } finally { setSaving(false); }
   }
   async function processNotifications() {
@@ -175,10 +188,15 @@ export default function WorkflowSettingsPage() {
           {notifications.length > 0 && <label className="approval-field"><span className="approval-field-label">Consultar tentativas de um aviso</span><select className="approval-field-control" value={attempts?.notificationId ?? ""} onChange={(event) => { if (event.target.value) void loadAttempts(event.target.value); else setAttempts(null); }}><option value="">Selecione um aviso</option>{notifications.map((item) => <option key={item.id} value={item.id}>Nota {item.task.execution.invoice.numeroNota} · {item.task.step.name} · {item.recipient}</option>)}</select></label>}
           {attempts && <div className="space-y-2"><ul className="space-y-1 text-sm">{attempts.items.map((attempt) => <li key={attempt.id}>{new Date(attempt.createdAt).toLocaleString("pt-BR")} · {attempt.status}{attempt.error ? ` · ${attempt.error}` : ""}</li>)}</ul><div className="flex items-center gap-2"><button type="button" className="btn-secondary" disabled={attempts.page <= 1} onClick={() => loadAttempts(attempts.notificationId, attempts.page - 1)}>Anterior</button><span className="text-sm">Página {attempts.page} de {attempts.totalPages}</span><button type="button" className="btn-secondary" disabled={attempts.page >= attempts.totalPages} onClick={() => loadAttempts(attempts.notificationId, attempts.page + 1)}>Próxima</button></div></div>}
         </section>}
-        {section === "notas" && <section className="space-y-3"><h2 className="text-xl font-semibold">Encaminhar notas existentes</h2><p className="text-sm text-slate-600">Selecione notas pendentes para iniciar o fluxo publicado. São exibidas até 100 notas por página.</p>
+        {section === "notas" && <section className="space-y-5"><h2 className="text-xl font-semibold">Encaminhar notas existentes</h2><p className="text-sm text-slate-600">Notas pendentes seguem para a primeira etapa. Para notas inconsistentes, confira o motivo e escolha uma etapa de destino.</p>
+          <div className="space-y-3"><h3 className="font-semibold">Notas pendentes</h3><p className="text-sm text-slate-600">São exibidas até 100 notas por página.</p>
           {pendingInvoices.length ? <ul className="max-h-60 space-y-2 overflow-y-auto rounded border border-slate-200 bg-white p-3">{pendingInvoices.map((invoice) => <li key={invoice.id}><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selectedInvoices.includes(invoice.id)} onChange={(event) => setSelectedInvoices((current) => event.target.checked ? [...current, invoice.id] : current.filter((id) => id !== invoice.id))} /> Nota {invoice.numeroNota} · {invoice.fornecedor.nome}</label></li>)}</ul> : <p className="text-sm text-slate-600">Nenhuma nota pendente disponível nesta página.</p>}
-          <button type="button" className="btn-secondary" disabled={saving || !selectedInvoices.length || !workflow?.activeVersionId} onClick={enrollSelected}>Encaminhar selecionadas</button>
-          <div className="flex items-center gap-2"><button type="button" className="btn-secondary" disabled={saving || invoicePage <= 1} onClick={() => refresh(invoicePage - 1).catch((error) => showFeedback(error.message, "error"))}>Anterior</button><span className="text-sm">Página {invoicePage} de {invoicePages}</span><button type="button" className="btn-secondary" disabled={saving || invoicePage >= invoicePages} onClick={() => refresh(invoicePage + 1).catch((error) => showFeedback(error.message, "error"))}>Próxima</button></div>
+          <div className="flex items-center gap-2"><button type="button" className="btn-secondary" disabled={saving || invoicePage <= 1} onClick={() => refresh(invoicePage - 1, inconsistentPage).catch((error) => showFeedback(error.message, "error"))}>Anterior</button><span className="text-sm">Página {invoicePage} de {invoicePages}</span><button type="button" className="btn-secondary" disabled={saving || invoicePage >= invoicePages} onClick={() => refresh(invoicePage + 1, inconsistentPage).catch((error) => showFeedback(error.message, "error"))}>Próxima</button></div></div>
+          <div className="space-y-3"><h3 className="font-semibold">Notas com dados inconsistentes</h3><p className="text-sm text-slate-600">Confira o motivo registrado e selecione para qual etapa encaminhar. São exibidas até 100 notas por página.</p>
+          {inconsistentInvoices.length ? <ul className="max-h-96 space-y-3 overflow-y-auto rounded border border-slate-200 bg-white p-3">{inconsistentInvoices.map((invoice) => <li key={invoice.id} className="rounded border border-slate-100 p-3"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={selectedInvoices.includes(invoice.id)} onChange={(event) => { setSelectedInvoices((current) => event.target.checked ? [...current, invoice.id] : current.filter((id) => id !== invoice.id)); setSelectedInconsistentInvoices((current) => event.target.checked ? [...current, invoice.id] : current.filter((id) => id !== invoice.id)); }} /> Nota {invoice.numeroNota} · {invoice.fornecedor.nome}</label><p className="mt-2 text-sm text-slate-700"><span className="font-semibold">Motivo enviado:</span> {invoice.observacaoValidacao?.trim() || "Motivo não registrado."}</p><label className="approval-field mt-2"><span className="approval-field-label">Etapa de destino para a nota {invoice.numeroNota}</span><select className="approval-field-control" value={inconsistentDestinations[invoice.id] ?? ""} disabled={saving || !activeVersion} onChange={(event) => setInconsistentDestinations((current) => ({ ...current, [invoice.id]: event.target.value }))}><option value="">Selecione uma etapa</option>{activeVersion?.steps.map((step) => <option value={step.id} key={step.id}>Etapa {step.position} · {step.name}</option>)}</select></label></li>)}</ul> : <p className="text-sm text-slate-600">Nenhuma nota inconsistente disponível nesta página.</p>}
+          <div className="flex items-center gap-2"><button type="button" className="btn-secondary" disabled={saving || inconsistentPage <= 1} onClick={() => refresh(invoicePage, inconsistentPage - 1).catch((error) => showFeedback(error.message, "error"))}>Anterior</button><span className="text-sm">Página {inconsistentPage} de {inconsistentPages}</span><button type="button" className="btn-secondary" disabled={saving || inconsistentPage >= inconsistentPages} onClick={() => refresh(invoicePage, inconsistentPage + 1).catch((error) => showFeedback(error.message, "error"))}>Próxima</button></div></div>
+          {selectedInconsistentInvoices.some((id) => !inconsistentDestinations[id]) && <p className="text-sm text-amber-800" role="status">Escolha uma etapa para cada nota inconsistente selecionada.</p>}
+          <button type="button" className="btn-secondary" disabled={saving || !selectedInvoices.length || !workflow?.activeVersionId || selectedInconsistentInvoices.some((id) => !inconsistentDestinations[id])} onClick={enrollSelected}>Encaminhar selecionadas</button>
         </section>}
         {section === "configurar" && <><section className="space-y-3 rounded border border-slate-200 bg-white p-4"><div><h2 className="text-xl font-semibold">Workflow de NFS-e</h2><p className="text-sm text-slate-600">Monte as etapas na ordem de aprovação, escolha quem atua em cada uma e configure os campos que cada responsável pode preencher.</p></div>
           {workflow?.versions.length ? <details open={versionsExpanded} onToggle={(event) => setVersionsExpanded(event.currentTarget.open)} className="rounded border border-slate-200 bg-slate-50 p-3"><summary className="cursor-pointer font-semibold">Versões e publicação <span className="text-sm font-normal text-slate-600">· {workflow.versions.length} versão(ões){workflow.activeVersionId ? " · há uma versão vigente" : ""}</span></summary><ul className="mt-3 space-y-2">{workflow.versions.map((version) => <li key={version.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 bg-white p-3"><span>Versão {version.number} · {workflow.activeVersionId === version.id ? "Vigente" : version.status === "DRAFT" ? "Rascunho" : "Publicada"}</span><div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" disabled={saving} onClick={() => copyVersion(version)}>Copiar para editar</button>{version.status === "DRAFT" && <button type="button" className="btn-secondary" disabled={saving} onClick={() => publish(version)}>Publicar</button>}</div></li>)}</ul>
@@ -202,3 +220,4 @@ export default function WorkflowSettingsPage() {
     </main>
   </AppLayout>;
 }
+
