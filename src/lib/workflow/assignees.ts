@@ -21,7 +21,7 @@ export async function resolveStepAssignees(tx: Prisma.TransactionClient, step: A
   const candidates = step.responsibilityMode === "SELECTED_USERS"
     ? step.responsibleManagers.map(({ manager }) => manager)
     : (await tx.managerSupplier.findMany({
-      where: { supplierId, manager: { ativo: true, role: "GESTOR" } },
+      where: { supplierId, manager: { ativo: true, role: { in: ["GESTOR", "ADMIN"] } } },
       select: { manager: { select: { id: true, nome: true, email: true, ativo: true, role: true } } }
     })).map(({ manager }) => manager);
 
