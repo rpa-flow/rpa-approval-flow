@@ -17,3 +17,14 @@ test("rejeita nota repetida, processada ou retida para revisão", () => {
   assert.ok(enrollmentError({ ...pending(), adminReview: { status: "PENDENTE" } }));
   assert.ok(enrollmentError({ ...pending(), adminReview: { status: "IGNORADA" } }));
 });
+
+test("aceita nota inconsistente somente com etapa escolhida e estado legado esperado", () => {
+  const inconsistent = { ...pending(), status: "DADOS_INCONSISTENTES", processada: true, statusProcessamento: "ERRO" };
+  assert.match(enrollmentError(inconsistent) ?? "", /Selecione a etapa/);
+  assert.equal(enrollmentError(inconsistent, { stepId: "step-2" }), null);
+  assert.ok(enrollmentError({ ...inconsistent, processada: false }, { stepId: "step-2" }));
+  assert.ok(enrollmentError({ ...inconsistent, statusProcessamento: "PENDENTE" }, { stepId: "step-2" }));
+  assert.ok(enrollmentError({ ...inconsistent, workflowExecution: { id: "execucao" } }, { stepId: "step-2" }));
+  assert.ok(enrollmentError({ ...inconsistent, adminReview: { status: "PENDENTE" } }, { stepId: "step-2" }));
+});
+
