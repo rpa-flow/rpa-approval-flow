@@ -6,6 +6,7 @@ import { getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isPaymentDateKeyAllowed, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 import { processWorkflowNotifications } from "@/lib/workflow/notifications";
+import { createWorkflowStepAssignments, resolveStepAssignees } from "@/lib/workflow/assignees";
 
 const fieldsSchema = z.object({
   ordemCompra: z.string().trim().regex(/^\d+$/).max(120).nullable().optional(),
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${params.id} FOR UPDATE`;
-      const invoice = await tx.invoice.findUnique({ where: { id: params.id }, include: { adminReview: true, serviceEvaluation: true, workflowExecution: { include: { tasks: { where: { completedAt: null }, include: { step: { include: { fields: true } } } }, version: { include: { steps: { orderBy: { position: "asc" }, include: { manager: true } } } } } } } });
+      const invoice = await tx.invoice.findUnique({ where: { id: params.id }, include: { adminReview: true, serviceEvaluation: true, workflowExecution: { include: { tasks: { where: { completedAt: null }, include: { step: { include: { fields: true } } } }, version: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } } } } } } } } });
       if (!invoice?.workflowExecution) return { code: 404, error: "Workflow não encontrado." };
       const execution = invoice.workflowExecution;
       const previous = await tx.workflowCommand.findUnique({ where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } } });
@@ -37,9 +38,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         if (previous.actorId !== manager.id || previous.payloadHash !== payloadHash || previous.action !== "COMPLETE") return { code: 409, error: "Chave de operação já usada com outros dados." };
         return { code: 200, result: previous.result };
       }
-      if (execution.status !== "ACTIVE" || execution.revision !== input.revision || execution.tasks.length !== 1) return { code: 409, error: "A etapa mudou. Atualize a nota." };
-      const task = execution.tasks[0];
-      if (task.managerId !== manager.id || !manager.ativo || manager.role === "FORNECEDOR") return { code: 403, error: "Somente o responsável atual pode concluir esta etapa." };
+      if (execution.status !== "ACTIVE" || execution.revision !== input.revision || !execution.tasks.length) return { code: 409, error: "A etapa mudou. Atualize a nota." };
+      const task = execution.tasks.find((candidate) => candidate.managerId === manager.id);
+      if (!task || !manager.ativo || manager.role === "FORNECEDOR" || execution.tasks.some((candidate) => candidate.stepId !== task.stepId)) return { code: 403, error: "Somente um responsável atual pode concluir esta etapa." };
       if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") return { code: 409, error: "Nota retida para revisão administrativa." };
       if (invoice.status !== "AGUARDANDO_APROVACAO" || invoice.processada || invoice.statusProcessamento !== "PENDENTE") return { code: 409, error: "A situação da nota não permite concluir a etapa." };
       const policies = new Map(task.step.fields.map((field) => [field.fieldKey, field]));
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
       if (task.step.requiresPurchaseOrder && !values.ordemCompra?.trim() && !values.ocContrato?.trim()) return { code: 400, error: "Informe ordem de compra ou contrato." };
       const next = execution.version.steps.find((step) => step.position > task.step.position);
-      if (next && (!next.manager.ativo || next.manager.role === "FORNECEDOR")) return { code: 409, error: "O responsável da próxima etapa está indisponível." };
+      const nextAssignees = next ? await resolveStepAssignees(tx, next, invoice.fornecedorId) : [];
+      if (next && !nextAssignees.length) return { code: 409, error: `A próxima etapa (${next.name}) não tem responsáveis ativos para este fornecedor.` };
       const now = new Date();
       if (!next) {
         if (!values.ordemCompra?.trim() && !values.ocContrato?.trim()) return { code: 400, error: "Informe ordem de compra ou contrato." };
@@ -70,18 +72,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const evaluationData = { ...serviceEvaluation, qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM", managerId: manager.id, managerName: manager.nome, managerEmail: manager.email };
         await tx.serviceEvaluation.upsert({ where: { invoiceId: invoice.id }, create: { invoiceId: invoice.id, ...evaluationData }, update: evaluationData });
       }
-      await tx.invoiceWorkflowTask.update({ where: { id: task.id }, data: { completedAt: now } });
+      await tx.invoiceWorkflowTask.updateMany({ where: { executionId: execution.id, stepId: task.stepId, completedAt: null }, data: { completedAt: now } });
       let nextTaskId: string | null = null;
       if (next) {
-        const nextTask = await tx.invoiceWorkflowTask.create({ data: { executionId: execution.id, stepId: next.id, managerId: next.managerId, managerName: next.manager.nome, managerEmail: next.manager.email } });
-        nextTaskId = nextTask.id;
-        await tx.workflowNotification.create({ data: { taskId: nextTask.id, deduplicationKey: `assignment:${nextTask.id}`, recipient: nextTask.managerEmail, payload: { invoiceId: invoice.id, executionId: execution.id, stepId: next.id } } });
+        const nextTasks = await createWorkflowStepAssignments(tx, { executionId: execution.id, invoiceId: invoice.id, stepId: next.id, assignees: nextAssignees });
+        nextTaskId = nextTasks[0]?.id ?? null;
       } else {
         await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: invoice.status, newStatus: "APROVADO" } });
       }
       const result = { executionId: execution.id, revision: input.revision + 1, completed: !next, nextTaskId };
       const beforeFields = Object.fromEntries(Object.keys(input.fields).map((key) => [key, key === "serviceEvaluation" ? invoice.serviceEvaluation : invoice[key as keyof typeof invoice]]));
-      await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "WORKFLOW_STEP_COMPLETED", actionDescription: `Etapa ${task.step.name} concluída`, previousStatus: invoice.status, newStatus: next ? invoice.status : "APROVADO", beforeData: JSON.parse(JSON.stringify({ stepId: task.stepId, managerId: task.managerId, fields: beforeFields })) as Prisma.InputJsonValue, afterData: { ...result, fields: input.fields } as Prisma.InputJsonValue } });
+      await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "WORKFLOW_STEP_COMPLETED", actionDescription: `Etapa ${task.step.name} concluída por ${manager.nome}`, previousStatus: invoice.status, newStatus: next ? invoice.status : "APROVADO", beforeData: JSON.parse(JSON.stringify({ stepId: task.stepId, assignedManagerIds: execution.tasks.map((item) => item.managerId), fields: beforeFields })) as Prisma.InputJsonValue, afterData: { ...result, fields: input.fields } as Prisma.InputJsonValue } });
       await tx.workflowCommand.create({ data: { executionId: execution.id, idempotencyKey: input.idempotencyKey, actorId: manager.id, action: "COMPLETE", payloadHash, result } });
       return { code: 200, result };
     });
@@ -94,3 +95,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Não foi possível concluir a etapa." }, { status: 500 });
   }
 }
+

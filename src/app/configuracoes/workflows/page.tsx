@@ -7,9 +7,10 @@ import { createNfseWorkflowExample } from "@/lib/workflow/settings-presets";
 
 type Field = { key: string; label: string; editable: boolean };
 type Policy = { key: string; mode: "HIDDEN" | "READ_ONLY" | "EDITABLE"; required: boolean };
-type Step = { name: string; managerId: string; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Policy[] };
+type ResponsibilityMode = "SUPPLIER_MANAGERS" | "SELECTED_USERS";
+type Step = { name: string; responsibilityMode: ResponsibilityMode; managerIds: string[]; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Policy[] };
 type Manager = { id: string; nome: string; ativo: boolean; role: string };
-type Version = { id: string; number: number; status: string; revision: number; steps: Array<{ id: string; position: number; name: string; managerId: string; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Array<{ fieldKey: string; mode: Policy["mode"]; required: boolean }> }> };
+type Version = { id: string; number: number; status: string; revision: number; steps: Array<{ id: string; position: number; name: string; responsibilityMode: ResponsibilityMode; responsibleManagers: Array<{ manager: { id: string; nome: string } }>; consultationScope: "ASSIGNED" | "ALL"; requiresPurchaseOrder: boolean; fields: Array<{ fieldKey: string; mode: Policy["mode"]; required: boolean }> }> };
 type Workflow = { id: string; activeVersionId: string | null; versions: Version[] };
 type PendingInvoice = { id: string; numeroNota: string; status: string; observacaoValidacao: string | null; fornecedor: { nome: string }; workflowExecution?: unknown };
 type Notification = { id: string; recipient: string; status: string; task: { step: { name: string }; execution: { invoice: { numeroNota: string } } }; attempts: Array<{ error: string | null }> };
@@ -39,7 +40,7 @@ export default function WorkflowSettingsPage() {
   const [section, setSection] = useState<"configurar" | "notas" | "avisos">("configurar");
   const [versionsExpanded, setVersionsExpanded] = useState(false);
   const workflowChecks = [
-    { label: "Etapas com nome e responsável", done: steps.length > 0 && steps.every((step) => Boolean(step.name.trim() && step.managerId)) },
+    { label: "Etapas com nome e responsável", done: steps.length > 0 && steps.every((step) => Boolean(step.name.trim() && (step.responsibilityMode === "SUPPLIER_MANAGERS" || step.managerIds.length > 0))) },
     { label: "Avaliação obrigatória em uma etapa", done: steps.some((step) => step.fields.some((field) => field.key === "serviceEvaluation" && field.mode === "EDITABLE" && field.required)) },
     { label: "Data obrigatória e OC ou contrato editável no fluxo", done: steps.some((step) => step.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE" && field.required)) && steps.some((step) => step.requiresPurchaseOrder && step.fields.some((field) => ["ordemCompra", "ocContrato"].includes(field.key) && field.mode === "EDITABLE")) },
     { label: "Data de pagamento editável na última etapa", done: Boolean(steps.at(-1)?.fields.some((field) => field.key === "dataPagamento" && field.mode === "EDITABLE")) }
@@ -80,14 +81,14 @@ export default function WorkflowSettingsPage() {
     setSteps((current) => current.map((step, i) => i === index ? { ...step, ...update } : step));
   }
   function addStep() {
-    setSteps((current) => [...current, { name: "", managerId: "", consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: fields.map((field) => ({ key: field.key, mode: "READ_ONLY", required: false })) }]);
+    setSteps((current) => [...current, { name: "", responsibilityMode: "SELECTED_USERS", managerIds: [], consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: fields.map((field) => ({ key: field.key, mode: "READ_ONLY", required: false })) }]);
   }
   function createExample() {
     setSteps(createNfseWorkflowExample(fields));
     showFeedback("Exemplo criado. Escolha os responsáveis e ajuste os campos de cada etapa.", "info");
   }
   function copyVersion(version: Version) {
-    setSteps(version.steps.map((step) => ({ name: step.name, managerId: step.managerId, consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, fields: fields.map((field) => {
+    setSteps(version.steps.map((step) => ({ name: step.name, responsibilityMode: step.responsibilityMode, managerIds: step.responsibleManagers.map(({ manager }) => manager.id), consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, fields: fields.map((field) => {
       const existing = step.fields.find((policy) => policy.fieldKey === field.key);
       return { key: field.key, mode: existing?.mode ?? "HIDDEN", required: existing?.required ?? false };
     }) })));
@@ -102,7 +103,7 @@ export default function WorkflowSettingsPage() {
     setSteps((current) => { const next = [...current]; const target = index + offset; if (target < 0 || target >= next.length) return current; [next[index], next[target]] = [next[target], next[index]]; return next; });
   }
   async function createDraft() {
-    const invalidStep = steps.findIndex((step) => !step.name.trim() || !step.managerId);
+    const invalidStep = steps.findIndex((step) => !step.name.trim() || (step.responsibilityMode === "SELECTED_USERS" && !step.managerIds.length));
     if (invalidStep >= 0) { showFeedback(`Na etapa ${invalidStep + 1}, preencha o nome e escolha o responsável.`, "error"); return; }
     setSaving(true); clearFeedback();
     try {
@@ -208,9 +209,10 @@ export default function WorkflowSettingsPage() {
           {steps.length > 0 && <div className="rounded border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">Pronto para publicar?</p><span className="text-xs text-slate-600">{steps.length} etapa(s)</span></div><ul className="mt-2 grid gap-1 text-sm sm:grid-cols-2">{workflowChecks.map((check) => <li key={check.label} className={check.done ? "text-emerald-800" : "text-slate-700"}><span aria-hidden="true">{check.done ? "✓" : "○"}</span> <span className="sr-only">{check.done ? "Concluído: " : "Pendente: "}</span>{check.label}</li>)}</ul><p className="mt-2 text-xs text-slate-600">A data de pagamento também deve ficar editável na etapa final para permitir correção se o prazo passar.</p></div>}
           {steps.map((step, index) => <fieldset key={index} className="space-y-4 rounded border border-slate-300 bg-white p-4"><legend className="max-w-full px-2 font-semibold">Etapa {index + 1}{step.name.trim() ? ` · ${step.name.trim()}` : " · Nova etapa"}</legend>
             <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Nome da etapa</span><input className="approval-field-control" value={step.name} onChange={(event) => updateStep(index, { name: event.target.value })} /></label>
-              <label className="approval-field"><span className="approval-field-label">Responsável</span><select className="approval-field-control" value={step.managerId} onChange={(event) => updateStep(index, { managerId: event.target.value })}><option value="">Selecione</option>{managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.nome}</option>)}</select></label>
+              <label className="approval-field"><span className="approval-field-label">Modo de responsabilidade</span><select className="approval-field-control" value={step.responsibilityMode} onChange={(event) => updateStep(index, { responsibilityMode: event.target.value as ResponsibilityMode, managerIds: [] })}><option value="SELECTED_USERS">Lista de usuários do sistema</option><option value="SUPPLIER_MANAGERS">Gestores vinculados ao fornecedor</option></select></label>
               <label className="approval-field"><span className="approval-field-label">Notas que pode consultar</span><select className="approval-field-control" value={step.consultationScope} onChange={(event) => updateStep(index, { consultationScope: event.target.value as Step["consultationScope"] })}><option value="ASSIGNED">Somente atribuídas</option><option value="ALL">Todas</option></select></label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={step.requiresPurchaseOrder} onChange={(event) => updateStep(index, { requiresPurchaseOrder: event.target.checked })} /> Exigir OC ou contrato nesta etapa</label></div>
+            {step.responsibilityMode === "SELECTED_USERS" ? <fieldset className="space-y-2 rounded border border-slate-200 p-3"><legend className="px-1 text-sm font-semibold">Usuários responsáveis</legend><p className="text-xs text-slate-600">Selecione uma ou mais pessoas. Qualquer responsável poderá concluir a etapa.</p><div className="grid gap-2 sm:grid-cols-2">{managers.map((manager) => <label key={manager.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={step.managerIds.includes(manager.id)} onChange={(event) => updateStep(index, { managerIds: event.target.checked ? [...step.managerIds, manager.id] : step.managerIds.filter((id) => id !== manager.id) })} />{manager.nome}{manager.role === "ADMIN" ? " (ADMIN)" : ""}</label>)}</div>{!step.managerIds.length && <p className="text-xs text-rose-700" role="alert">Selecione ao menos um usuário.</p>}</fieldset> : <p className="rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">As tarefas serão atribuídas aos gestores ativos vinculados ao fornecedor de cada nota. Se houver mais de um, qualquer um poderá concluir a etapa.</p>}
             <details className="rounded border border-slate-200 p-3"><summary className="cursor-pointer font-semibold">Configurar campos desta etapa <span className="text-sm font-normal text-slate-600">· {step.fields.filter((field) => field.mode === "EDITABLE").length} editável(is), {step.fields.filter((field) => field.mode === "HIDDEN").length} oculto(s)</span></summary><p className="mt-2 text-sm text-slate-600">Escolha o que o responsável pode ver ou preencher. Marque “Obrigatório” apenas para campos editáveis.</p><div className="mt-3 space-y-2">{fields.map((field) => { const policy = step.fields.find((item) => item.key === field.key)!; return <div key={field.key} className="grid items-center gap-2 border-t border-slate-100 py-2 sm:grid-cols-[1fr_12rem_9rem]"><span className="text-sm">{field.label}</span><label className="text-sm"><span className="sr-only">Visibilidade de {field.label}</span><select className="approval-field-control" value={policy.mode} onChange={(event) => { const mode = event.target.value as Policy["mode"]; updatePolicy(index, field.key, { mode, required: mode === "EDITABLE" && policy.required }); }}><option value="HIDDEN">Oculto</option><option value="READ_ONLY">Somente leitura</option>{field.editable && <option value="EDITABLE">Editável</option>}</select></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={policy.mode !== "EDITABLE"} checked={policy.required} onChange={(event) => updatePolicy(index, field.key, { required: event.target.checked })} /> Obrigatório</label></div>; })}</div></details>
             <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3"><button type="button" className="btn-secondary" disabled={index === 0} onClick={() => moveStep(index, -1)}>Subir etapa</button><button type="button" className="btn-secondary" disabled={index === steps.length - 1} onClick={() => moveStep(index, 1)}>Descer etapa</button><button type="button" className="btn-secondary" onClick={() => setSteps((current) => current.filter((_, i) => i !== index))}>Remover etapa</button></div>
           </fieldset>)}

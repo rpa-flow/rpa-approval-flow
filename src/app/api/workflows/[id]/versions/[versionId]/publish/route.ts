@@ -18,13 +18,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const result = await prisma.$transaction(async (tx) => {
       const workflow = await tx.approvalWorkflow.findUnique({ where: { id: params.id } });
-      const version = await tx.approvalWorkflowVersion.findFirst({ where: { id: params.versionId, workflowId: params.id }, include: { steps: { orderBy: { position: "asc" }, include: { fields: true } } } });
+      const version = await tx.approvalWorkflowVersion.findFirst({
+        where: { id: params.versionId, workflowId: params.id },
+        include: {
+          steps: {
+            orderBy: { position: "asc" },
+            include: { fields: true, responsibleManagers: { include: { manager: { select: { id: true, ativo: true, role: true } } } } }
+          }
+        }
+      });
       if (!workflow || !version) return { kind: "not_found" as const };
       if (version.status !== "DRAFT" || version.revision !== input.data.revision) throw new PublicationConflict();
-      const configuration = { documentType: workflow.documentType, steps: version.steps.map((step) => ({ name: step.name, managerId: step.managerId, consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, fields: step.fields.map((field) => ({ key: field.fieldKey, mode: field.mode, required: field.required })) })) };
+      const configuration = { documentType: workflow.documentType, steps: version.steps.map((step) => ({ name: step.name, responsibilityMode: step.responsibilityMode, managerIds: step.responsibleManagers.map(({ manager }) => manager.id), consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, fields: step.fields.map((field) => ({ key: field.fieldKey, mode: field.mode, required: field.required })) })) };
       const parsed = nfseWorkflowPublishSchema.safeParse(configuration);
       if (!parsed.success) return { kind: "invalid" as const, details: parsed.error.flatten() };
-      const managerIds = Array.from(new Set(version.steps.map((step) => step.managerId)));
+      const managerIds = Array.from(new Set(version.steps.flatMap((step) => step.responsibleManagers.map(({ manager }) => manager.id))));
       const count = await tx.manager.count({ where: { id: { in: managerIds }, ativo: true, role: { in: ["ADMIN", "GESTOR"] } } });
       if (count !== managerIds.length) return { kind: "inactive" as const };
       const changedVersion = await tx.approvalWorkflowVersion.updateMany({ where: { id: version.id, status: "DRAFT", revision: input.data.revision }, data: { status: "PUBLISHED", publishedAt: new Date(), revision: { increment: 1 } } });
@@ -44,3 +52,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Não foi possível publicar o workflow." }, { status: 500 });
   }
 }
+

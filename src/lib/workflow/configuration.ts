@@ -9,7 +9,8 @@ const fieldPolicySchema = z.object({
 
 const stepSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  managerId: z.string().min(1),
+  responsibilityMode: z.enum(["SUPPLIER_MANAGERS", "SELECTED_USERS"]),
+  managerIds: z.array(z.string().min(1)).max(50),
   consultationScope: z.enum(["ASSIGNED", "ALL"]),
   requiresPurchaseOrder: z.boolean(),
   fields: z.array(fieldPolicySchema)
@@ -21,6 +22,15 @@ export const nfseWorkflowDraftSchema = z.object({
   steps: z.array(stepSchema).max(50)
 }).strict().superRefine((draft, ctx) => {
   draft.steps.forEach((step, stepIndex) => {
+    if (step.responsibilityMode === "SELECTED_USERS" && step.managerIds.length === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps", stepIndex, "managerIds"], message: "Selecione ao menos um usuário responsável." });
+    }
+    if (step.responsibilityMode === "SUPPLIER_MANAGERS" && step.managerIds.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps", stepIndex, "managerIds"], message: "A etapa por fornecedor não pode incluir usuários selecionados." });
+    }
+    if (new Set(step.managerIds).size !== step.managerIds.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps", stepIndex, "managerIds"], message: "Há usuários duplicados na etapa." });
+    }
     const seen = new Set<string>();
     step.fields.forEach((policy, fieldIndex) => {
       const path = ["steps", stepIndex, "fields", fieldIndex];
@@ -73,3 +83,4 @@ export const nfseWorkflowPublishSchema = nfseWorkflowDraftSchema.superRefine((dr
 });
 
 export type NfseWorkflowDraft = z.infer<typeof nfseWorkflowDraftSchema>;
+

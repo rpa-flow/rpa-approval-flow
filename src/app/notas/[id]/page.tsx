@@ -655,7 +655,7 @@ export default function NotaDetalhePage() {
 
       <aside className="space-y-4">
 
-        {approvalInfo?.execution.status === "ACTIVE" && <section className="card space-y-3"><div><h3 className="section-title">Etapa de aprovação</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Aprovação em andamento"}</p></div><p className="text-sm text-slate-600">Responsável: {approvalInfo.tasks.find((task) => !task.completedAt)?.managerName ?? "Aguardando responsável"}</p>{canApproveWorkflow ? <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button> : <p className="text-sm text-slate-600">Esta aprovação está atribuída a outro responsável.</p>}</section>}
+        {approvalInfo?.execution.status === "ACTIVE" && <section className="card space-y-3"><div><h3 className="section-title">Etapa de aprovação</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Aprovação em andamento"}</p></div><p className="text-sm text-slate-600">Responsáveis: {approvalInfo.tasks.filter((task) => !task.completedAt).map((task) => task.managerName).join(", ") || "Aguardando responsável"}</p>{canApproveWorkflow ? <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button> : <p className="text-sm text-slate-600">Esta aprovação está atribuída a outro responsável.</p>}</section>}
         {approvalInfo?.execution.status === "BLOCKED" && <section className="card space-y-3 border-amber-200 bg-amber-50/50"><div><h3 className="section-title">Aprovação aguardando responsável</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Etapa pendente"}</p></div><p className="text-sm text-slate-700">A etapa será encaminhada quando houver um responsável ativo.</p>{approvalInfo.canResume && <button type="button" className="btn-secondary w-full" disabled={isResumingApproval} onClick={resumeApproval}>{isResumingApproval ? "Retomando…" : "Retomar aprovação"}</button>}</section>}
 
         {me?.manager.role === "ADMIN" && (!approvalInfo || isCompletedWorkflow) && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
@@ -755,3 +755,4 @@ export default function NotaDetalhePage() {
 
   </AppLayout>;
 }
+

@@ -11,7 +11,17 @@ export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("documentType") !== "NFSE") return NextResponse.json({ error: "Tipo de documento inválido ou indisponível." }, { status: 400 });
   const workflow = await prisma.approvalWorkflow.findUnique({
     where: { documentType: "NFSE" },
-    include: { versions: { orderBy: { number: "desc" }, include: { steps: { orderBy: { position: "asc" }, include: { fields: true } } } } }
+    include: {
+      versions: {
+        orderBy: { number: "desc" },
+        include: {
+          steps: {
+            orderBy: { position: "asc" },
+            include: { fields: true, responsibleManagers: { include: { manager: { select: { id: true, nome: true, role: true, ativo: true } } } } }
+          }
+        }
+      }
+    }
   });
   return NextResponse.json({ workflow });
 }
@@ -25,7 +35,7 @@ export async function POST(request: NextRequest) {
   const parsed = nfseWorkflowDraftSchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: "Configuração inválida.", details: parsed.error.flatten() }, { status: 400 });
 
-  const managerIds = Array.from(new Set(parsed.data.steps.map((step) => step.managerId)));
+  const managerIds = Array.from(new Set(parsed.data.steps.flatMap((step) => step.managerIds)));
   const managers = await prisma.manager.findMany({ where: { id: { in: managerIds }, ativo: true, role: { in: ["ADMIN", "GESTOR"] } }, select: { id: true } });
   if (managers.length !== managerIds.length) return NextResponse.json({ error: "Selecione responsáveis ativos com perfil de gestor ou administrador." }, { status: 400 });
   try {
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
       const created = await tx.approvalWorkflowVersion.create({
         data: {
           workflowId: workflow.id, number: (last._max.number ?? 0) + 1, createdById: manager.id,
-          steps: { create: parsed.data.steps.map((step, index) => ({ name: step.name, position: index + 1, managerId: step.managerId, consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, fields: { create: step.fields.map((field) => ({ fieldKey: field.key, mode: field.mode, required: field.required })) } })) }
+          steps: { create: parsed.data.steps.map((step, index) => ({ name: step.name, position: index + 1, responsibilityMode: step.responsibilityMode, consultationScope: step.consultationScope, requiresPurchaseOrder: step.requiresPurchaseOrder, responsibleManagers: { create: step.managerIds.map((managerId) => ({ managerId })) }, fields: { create: step.fields.map((field) => ({ fieldKey: field.key, mode: field.mode, required: field.required })) } })) }
         },
         include: { steps: { orderBy: { position: "asc" }, include: { fields: true } } }
       });
@@ -49,3 +59,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Não foi possível salvar o rascunho." }, { status: 500 });
   }
 }
+

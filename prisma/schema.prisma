@@ -79,6 +79,11 @@ enum WorkflowConsultationScope {
   ALL
 }
 
+enum WorkflowResponsibilityMode {
+  SUPPLIER_MANAGERS
+  SELECTED_USERS
+}
+
 enum WorkflowExecutionStatus {
   ACTIVE
   COMPLETED
@@ -161,7 +166,7 @@ model Manager {
   invoicesCriadas  Invoice[]         @relation("InvoiceCreatedBy")
   activationTokens AccountActivationToken[]
   passwordResetTokens PasswordResetToken[]
-  workflowSteps ApprovalWorkflowStep[]
+  workflowSteps ApprovalWorkflowStepManager[]
   workflowTasks InvoiceWorkflowTask[]
 }
 
@@ -528,14 +533,22 @@ model ApprovalWorkflowStep {
   versionId             String
   name                  String
   position              Int
-  managerId             String
+  responsibilityMode    WorkflowResponsibilityMode @default(SELECTED_USERS)
   consultationScope     WorkflowConsultationScope @default(ASSIGNED)
   requiresPurchaseOrder Boolean @default(false)
   version               ApprovalWorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
-  manager               Manager @relation(fields: [managerId], references: [id], onDelete: Restrict)
+  responsibleManagers   ApprovalWorkflowStepManager[]
   fields                ApprovalStepFieldPolicy[]
   tasks                 InvoiceWorkflowTask[]
   @@unique([versionId, position])
+}
+
+model ApprovalWorkflowStepManager {
+  stepId    String
+  managerId String
+  step      ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
+  manager   Manager @relation(fields: [managerId], references: [id], onDelete: Restrict)
+  @@id([stepId, managerId])
   @@index([managerId])
 }
 
@@ -577,7 +590,7 @@ model InvoiceWorkflowTask {
   step           ApprovalWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
   manager        Manager @relation(fields: [managerId], references: [id], onDelete: Restrict)
   notifications  WorkflowNotification[]
-  @@unique([executionId, stepId])
+  @@unique([executionId, stepId, managerId])
   @@index([managerId, completedAt])
 }
 
@@ -632,3 +645,4 @@ model WorkflowNotificationAttempt {
   notification   WorkflowNotification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
   @@index([notificationId, createdAt])
 }
+

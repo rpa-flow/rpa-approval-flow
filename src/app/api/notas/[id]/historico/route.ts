@@ -17,7 +17,7 @@ export async function GET(_: Request, { params }: Params) {
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
   if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(invoice.fornecedorId) && invoice.criadoPorId !== manager.id) {
-    const assigned = manager.role === "GESTOR" && ((await hasGlobalNfseWorkflowAccess(manager.id)) || await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } }] }, select: { id: true } }));
+    const assigned = manager.role === "GESTOR" && ((await hasGlobalNfseWorkflowAccess(manager.id)) || await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { responsibleManagers: { some: { managerId: manager.id } }, consultationScope: "ALL" } } } }] }, select: { id: true } }));
     if (!assigned) return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
 
@@ -44,3 +44,4 @@ export async function GET(_: Request, { params }: Params) {
   timeline.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
   return NextResponse.json(timeline);
 }
+

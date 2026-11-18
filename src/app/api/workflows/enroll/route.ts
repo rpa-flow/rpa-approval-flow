@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { enrollmentError } from "@/lib/workflow/enrollment";
 import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 import { processWorkflowNotifications } from "@/lib/workflow/notifications";
+import { createWorkflowStepAssignments, resolveStepAssignees } from "@/lib/workflow/assignees";
 
 const selectionSchema = z.object({
   invoiceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
         const eligible = await tx.invoice.findFirst({ where: { id: invoiceId, AND: [invoicesAvailableForApproval()] }, select: { id: true } });
         if (!eligible) return { invoiceId, success: false, error: "A nota exige revisão administrativa." };
         if (invoice.documentType && invoice.documentType !== "NFSE") return { invoiceId, success: false, error: "Tipo de documento não suportado." };
-        const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType: "NFSE" }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { manager: true } } } } } });
+        const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType: "NFSE" }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } } } } } } });
         const version = workflow?.activeVersion;
         if (!version || version.status !== "PUBLISHED" || !version.steps.length) return { invoiceId, success: false, error: "Não há workflow NFS-e publicado." };
         const isInconsistent = invoice.status === "DADOS_INCONSISTENTES";
@@ -45,15 +46,15 @@ export async function POST(request: NextRequest) {
           ? version.steps.find((candidate) => candidate.id === selection.stepId)
           : version.steps[0];
         if (!step) return { invoiceId, success: false, error: isInconsistent ? "A etapa selecionada não pertence à versão publicada." : "O workflow publicado não possui primeira etapa." };
-        if (!step.manager.ativo || step.manager.role === "FORNECEDOR") return { invoiceId, success: false, error: `O responsável da etapa ${step.name} está indisponível.` };
+        const assignees = await resolveStepAssignees(tx, step, invoice.fornecedorId);
+        if (!assignees.length) return { invoiceId, success: false, error: `A etapa ${step.name} não tem responsáveis ativos para este fornecedor.` };
         const execution = await tx.invoiceWorkflow.create({ data: { invoiceId, versionId: version.id } });
-        const task = await tx.invoiceWorkflowTask.create({ data: { executionId: execution.id, stepId: step.id, managerId: step.manager.id, managerName: step.manager.nome, managerEmail: step.manager.email } });
-        await tx.workflowNotification.create({ data: { taskId: task.id, deduplicationKey: `assignment:${task.id}`, recipient: task.managerEmail, payload: { invoiceId, executionId: execution.id, stepId: step.id } } });
+        await createWorkflowStepAssignments(tx, { executionId: execution.id, invoiceId, stepId: step.id, assignees });
         if (isInconsistent) {
           await tx.invoice.update({ where: { id: invoiceId }, data: { status: "AGUARDANDO_APROVACAO", processada: false, statusProcessamento: "PENDENTE", responsavelValidacao: null, dataValidacao: null } });
           await tx.noteStatusHistory.create({ data: { invoiceId, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: invoice.status, newStatus: "AGUARDANDO_APROVACAO", reason: invoice.observacaoValidacao } });
         }
-        await tx.noteAuditLog.create({ data: { invoiceId, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "WORKFLOW_STARTED", actionDescription: isInconsistent ? `Nota inconsistente encaminhada diretamente à etapa ${step.name}` : "Nota encaminhada ao workflow", previousStatus: isInconsistent ? invoice.status : undefined, newStatus: isInconsistent ? "AGUARDANDO_APROVACAO" : undefined, afterData: { executionId: execution.id, versionId: version.id, stepId: step.id, stepName: step.name, managerId: step.manager.id, ...(isInconsistent ? { reason: invoice.observacaoValidacao } : {}) } } });
+        await tx.noteAuditLog.create({ data: { invoiceId, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "WORKFLOW_STARTED", actionDescription: isInconsistent ? `Nota inconsistente encaminhada diretamente à etapa ${step.name}` : "Nota encaminhada ao workflow", previousStatus: isInconsistent ? invoice.status : undefined, newStatus: isInconsistent ? "AGUARDANDO_APROVACAO" : undefined, afterData: { executionId: execution.id, versionId: version.id, stepId: step.id, stepName: step.name, managerIds: assignees.map((assignee) => assignee.id), responsibilityMode: step.responsibilityMode, ...(isInconsistent ? { reason: invoice.observacaoValidacao } : {}) } } });
         return { invoiceId, success: true };
       });
       results.push(result);

@@ -33,7 +33,7 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
         : { OR: [
             { fornecedorId: { in: allowedSupplierIds } },
             { workflowExecution: { is: { tasks: { some: { managerId: manager.id, completedAt: null } } } } },
-            { workflowExecution: { is: { version: { is: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } } } } },
+            { workflowExecution: { is: { version: { is: { steps: { some: { responsibleManagers: { some: { managerId: manager.id } }, consultationScope: "ALL" } } } } } } },
             ...(globalNfseAccess ? [{ OR: [{ documentType: "NFSE" as const }, { documentType: null }] }] : [])
           ] };
   const filters: Prisma.InvoiceWhereInput[] = [scopeWhere];
@@ -66,3 +66,4 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
   filters.push(invoicesAvailableForApproval());
   return { AND: filters };
 }
+

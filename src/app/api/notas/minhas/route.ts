@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     where: assignedTaskPages ? { id: { in: assignedInvoiceIds } } : where,
     include: {
       adminReview: { select: { status: true, valorConfirmado: true } },
-      workflowExecution: { select: { status: true, tasks: { where: { completedAt: null }, select: activeTaskSelect, take: 1 } } },
+      workflowExecution: { select: { status: true, tasks: { where: { completedAt: null }, select: activeTaskSelect, orderBy: { assignedAt: "asc" } } } },
       fornecedor: {
         select: {
           id: true,
@@ -138,3 +138,4 @@ export async function GET(request: NextRequest) {
     }
   );
 }
+

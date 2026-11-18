@@ -6,8 +6,8 @@ const policy = (key: string, required = false) => ({ key, mode: "EDITABLE" as co
 const valid = (): NfseWorkflowDraft => ({
   documentType: "NFSE" as const,
   steps: [
-    { name: "Gestor", managerId: "gestor", consultationScope: "ASSIGNED" as const, requiresPurchaseOrder: false, fields: [policy("serviceEvaluation", true)] },
-    { name: "Suprimentos", managerId: "suprimentos", consultationScope: "ALL" as const, requiresPurchaseOrder: true, fields: [policy("ordemCompra"), policy("ocContrato"), policy("dataPagamento", true)] }
+    { name: "Gestor", responsibilityMode: "SELECTED_USERS" as const, managerIds: ["gestor"], consultationScope: "ASSIGNED" as const, requiresPurchaseOrder: false, fields: [policy("serviceEvaluation", true)] },
+    { name: "Suprimentos", responsibilityMode: "SELECTED_USERS" as const, managerIds: ["suprimentos"], consultationScope: "ALL" as const, requiresPurchaseOrder: true, fields: [policy("ordemCompra"), policy("ocContrato"), policy("dataPagamento", true)] }
   ]
 });
 
@@ -67,8 +67,9 @@ test("aceita configurar somente uma das alternativas de compra como editável", 
 
 test("permite corrigir data na última etapa quando o fluxo demora", () => {
   const draft = valid();
-  draft.steps.push({ name: "Final", managerId: "gestor-final", consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: [] });
+  draft.steps.push({ name: "Final", responsibilityMode: "SELECTED_USERS", managerIds: ["gestor-final"], consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: [] });
   assert.equal(nfseWorkflowPublishSchema.safeParse(draft).success, false);
   draft.steps[2].fields.push(policy("dataPagamento"));
   assert.equal(nfseWorkflowPublishSchema.safeParse(draft).success, true);
 });
+

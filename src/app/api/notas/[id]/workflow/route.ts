@@ -12,12 +12,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     include: {
       invoice: { include: { fornecedor: { select: { nome: true, cnpj: true } }, serviceEvaluation: true, adminReview: true } },
       tasks: { orderBy: { assignedAt: "asc" }, include: { step: { include: { fields: true } } } },
-      version: { include: { steps: { where: { managerId: manager.id, consultationScope: "ALL" }, select: { id: true } } } }
+      version: { include: { steps: { where: { responsibleManagers: { some: { managerId: manager.id } }, consultationScope: "ALL" }, select: { id: true } } } }
     }
   });
   if (!execution) return NextResponse.json({ error: "Workflow não encontrado." }, { status: 404 });
-  const current = execution.tasks.find((task) => !task.completedAt);
-  const allowed = manager.role === "ADMIN" || current?.managerId === manager.id || execution.version.steps.length > 0 || getAllowedSupplierIds(manager).includes(execution.invoice.fornecedorId) || execution.invoice.criadoPorId === manager.id || (manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id));
+  const currentTasks = execution.tasks.filter((task) => !task.completedAt);
+  const current = currentTasks[0];
+  const isAssigned = currentTasks.some((task) => task.managerId === manager.id);
+  const allowed = manager.role === "ADMIN" || isAssigned || execution.version.steps.length > 0 || getAllowedSupplierIds(manager).includes(execution.invoice.fornecedorId) || execution.invoice.criadoPorId === manager.id || (manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id));
   if (!allowed) return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   if (execution.invoice.adminReview && execution.invoice.adminReview.status !== "LIBERADA") return NextResponse.json({ error: "Nota retida para revisão administrativa." }, { status: 404 });
   const { xmlOriginal, adminReview, ...invoice } = execution.invoice;
@@ -31,7 +33,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     execution: { id: execution.id, versionId: execution.versionId, status: execution.status, revision: execution.revision },
     tasks: execution.tasks.map((task) => ({ id: task.id, managerName: task.managerName, stepName: task.step.name, assignedAt: task.assignedAt, completedAt: task.completedAt })),
     currentStep: current ? { id: current.step.id, name: current.step.name, managerId: current.managerId, fields: current.step.fields, requiresPurchaseOrder: current.step.requiresPurchaseOrder } : null,
-    canComplete: execution.status === "ACTIVE" && manager.role !== "FORNECEDOR" && current?.managerId === manager.id,
+    canComplete: execution.status === "ACTIVE" && manager.role !== "FORNECEDOR" && isAssigned,
     canResume: manager.role === "ADMIN" && execution.status === "BLOCKED"
   });
 }
+
