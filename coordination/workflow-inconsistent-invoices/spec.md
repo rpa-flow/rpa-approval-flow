@@ -5,7 +5,7 @@
 - Objetivo: permitir que ADMIN escolha responsáveis por etapa pelo fornecedor ou por uma lista fixa e encaminhe notas `DADOS_INCONSISTENTES` a uma etapa escolhida.
 - Em escopo: dois modos exclusivos de responsáveis por etapa; atribuição e notificação de várias pessoas; conclusão da etapa por qualquer pessoa atribuída; exibição do motivo de inconsistência; escolha da etapa por nota e transição de status; auditoria e migração compatível com configurações existentes.
 - Fora de escopo: misturar gestores do fornecedor e usuários fixos na mesma etapa; quórum ou exigência de aprovação de todos; alterar configuração de execução já iniciada; notas de outros tipos.
-- Fonte: pedidos e decisões do usuário nesta conversa. A expansão descrita aqui ainda não está implementada nem aprovada para implementação.
+- Fonte: pedidos e decisões do usuário nesta conversa. A expansão está sendo entregue em PR separado, após a conclusão do PR #122.
 
 ## Fatos observados e decisão pendente
 
@@ -19,7 +19,7 @@
 | Decisão do usuário | A tela deve exibir o motivo enviado no e-mail para ajudar o ADMIN a decidir o destino. | Pedido nesta conversa. A origem proposta é `Invoice.observacaoValidacao`, que registra a observação associada ao status inconsistente. |
 | Decisão do usuário | Cada etapa usa exatamente um modo de responsabilidade: gestores vinculados ao fornecedor da nota, ou uma lista de usuários do sistema. Os modos não se combinam. | Esclarecimento nesta conversa. |
 | Decisão do usuário | Havendo mais de um responsável atribuído à etapa, qualquer um pode concluí-la. | Resposta nesta conversa. |
-| Proposta técnica | No modo fornecedor, atribuir a todos os gestores ativos (`GESTOR`) atualmente vinculados ao fornecedor no momento em que a nota entra na etapa. No modo lista, atribuir a todos os usuários ativos selecionados (`GESTOR` ou `ADMIN`). Uma conclusão encerra as outras tarefas da mesma etapa. Se não houver destinatário ativo, não criar atribuição parcial e devolver erro claro ao administrador. | Adaptar o relacionamento `ManagerSupplier` e o estado atual das tarefas. Confirmar junto com o escopo revisado. |
+| Decisão técnica implementada | No modo fornecedor, atribuir a todos os gestores ativos (`GESTOR`) atualmente vinculados ao fornecedor no momento em que a nota entra na etapa. No modo lista, atribuir a todos os usuários ativos selecionados (`GESTOR` ou `ADMIN`). Uma conclusão encerra as outras tarefas da mesma etapa. Se não houver destinatário ativo, não criar atribuição parcial e devolver erro claro ao administrador. | Adaptar o relacionamento `ManagerSupplier` e o estado das tarefas. |
 
 ## Domínio
 
