@@ -647,8 +647,8 @@ export default function DashboardPage() {
 
   function canApproveFromRow(invoice: Invoice) {
     if (!me || me.manager.role === "FORNECEDOR") return false;
-    const currentTask = invoice.workflowExecution?.tasks[0];
-    if (invoice.workflowExecution?.status === "ACTIVE") return currentTask?.managerId === me.manager.id;
+    const currentTask = invoice.workflowExecution?.tasks.find((task) => task.managerId === me.manager.id);
+    if (invoice.workflowExecution?.status === "ACTIVE") return Boolean(currentTask);
     return (!invoice.workflowExecution || invoice.workflowExecution.status === "COMPLETED") && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status);
   }
 
@@ -775,7 +775,8 @@ export default function DashboardPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {invoices.map((invoice) => {
-              const currentTask = invoice.workflowExecution?.status === "ACTIVE" ? invoice.workflowExecution.tasks[0] : undefined;
+              const activeTasks = invoice.workflowExecution?.status === "ACTIVE" ? invoice.workflowExecution.tasks : [];
+              const currentTask = activeTasks.find((task) => task.managerId === me?.manager.id) ?? activeTasks[0];
               const waitingTime = formatWaitingTime(currentTask?.assignedAt);
               const canApprove = canApproveFromRow(invoice);
               return <Fragment key={invoice.id}>
@@ -786,7 +787,7 @@ export default function DashboardPage() {
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{workflowFieldVisible(invoice, "dataEmissao") && invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{workflowFieldVisible(invoice, "dataCompetencia") ? formatCompetence(invoice.dataCompetencia) : "-"}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="flex flex-col items-center gap-1"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>{invoice.statusProcessamento === "ERRO" && <span className="badge bg-rose-700 text-white ring-2 ring-rose-200">⚠ Erro no processamento</span>}</div></td>
-                <td className="px-2 py-2 text-left text-slate-700">{invoice.workflowExecution && invoice.workflowExecution.status !== "COMPLETED" ? invoice.workflowExecution.tasks[0]?.managerName ?? "Aguardando responsável" : getResponsibleName(invoice)}</td>
+                <td className="px-2 py-2 text-left text-slate-700">{invoice.workflowExecution && invoice.workflowExecution.status !== "COMPLETED" ? invoice.workflowExecution.tasks.map((task) => task.managerName).join(", ") || "Aguardando responsável" : getResponsibleName(invoice)}</td>
                 <td className="px-1.5 py-2 text-center text-slate-600" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: canApprove ? "9.5rem" : "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="dashboard-row-actions flex items-center justify-center gap-1">{canApprove && <button type="button" className="btn-primary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(event) => { event.stopPropagation(); void abrirModalAprovacao(invoice); }}>Aprovar</button>}<button type="button" aria-label={`Mais ações para nota ${invoice.numeroNota}`} className="btn-secondary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>{canApprove ? "Mais" : "Ações"} ▾</button></div></td>
               </tr>
@@ -847,3 +848,4 @@ export default function DashboardPage() {
     </section>}
   </AppLayout>;
 }
+

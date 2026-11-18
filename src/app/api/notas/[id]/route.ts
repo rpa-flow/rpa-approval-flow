@@ -47,7 +47,7 @@ async function canAccessInvoice(invoice: { id: string; fornecedorId: string; cri
   if (manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id) return true;
   if (manager.role !== "GESTOR" || forUpdate) return false;
   if ((!invoice.documentType || invoice.documentType === "NFSE") && await hasGlobalNfseWorkflowAccess(manager.id)) return true;
-  return Boolean(await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { managerId: manager.id, consultationScope: "ALL" } } } }] }, select: { id: true } }));
+  return Boolean(await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { responsibleManagers: { some: { managerId: manager.id } }, consultationScope: "ALL" } } } }] }, select: { id: true } }));
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
@@ -399,3 +399,4 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   return NextResponse.json(serializeInvoiceResponse(updated, includeXml));
 }
+

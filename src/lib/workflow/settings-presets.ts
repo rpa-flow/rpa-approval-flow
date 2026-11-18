@@ -7,7 +7,8 @@ export function createNfseWorkflowExample(fields: ReadonlyArray<{ key: string }>
     required: required.includes(field.key)
   }));
   return [
-    { name: "Avaliação do serviço", managerId: "", consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: makeFields(["serviceEvaluation"], ["serviceEvaluation"]) },
-    { name: "Compra e pagamento", managerId: "", consultationScope: "ASSIGNED", requiresPurchaseOrder: true, fields: makeFields(["ordemCompra", "ocContrato", "dataPagamento"], ["dataPagamento"]) }
+    { name: "Avaliação do serviço", responsibilityMode: "SELECTED_USERS", managerIds: [], consultationScope: "ASSIGNED", requiresPurchaseOrder: false, fields: makeFields(["serviceEvaluation"], ["serviceEvaluation"]) },
+    { name: "Compra e pagamento", responsibilityMode: "SELECTED_USERS", managerIds: [], consultationScope: "ASSIGNED", requiresPurchaseOrder: true, fields: makeFields(["ordemCompra", "ocContrato", "dataPagamento"], ["dataPagamento"]) }
   ];
 }
+
