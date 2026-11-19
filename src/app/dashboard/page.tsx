@@ -526,6 +526,11 @@ export default function DashboardPage() {
       }
     }
 
+    const paymentDateKey = getValue("dataPagamento").slice(0, 10);
+    if (paymentDateKey && paymentDateKey < minimumPaymentDate()) {
+      setApproveModalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
     const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
     const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
