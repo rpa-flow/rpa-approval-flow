@@ -12,7 +12,7 @@ import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPoli
 import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
-type EmailManager = { id: string; nome: string; email: string };
+type EmailManager = { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
 type InvoiceStatus = "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO" | "PROCESSADO" | "EXPIRADA" | "DADOS_INCONSISTENTES";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
@@ -690,7 +690,7 @@ export default function NotaDetalhePage() {
               {isRecipientPickerOpen && recipientDraft.trim() && <div id="status-email-suggestions" role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
                 {recipientSuggestions.map((manager) => <button type="button" role="option" aria-selected="false" key={manager.id} className="flex w-full items-start gap-3 px-3 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onMouseDown={(event) => event.preventDefault()} onClick={() => addRecipient(manager)}>
                   <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-brand">{manager.nome.trim().charAt(0).toLocaleUpperCase()}</span>
-                  <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{manager.nome}</span><span className="block truncate text-xs text-slate-500">{manager.email}</span></span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{manager.nome}{manager.role === "ADMIN" ? " (ADMIN)" : ""}</span><span className="block truncate text-xs text-slate-500">{manager.email}</span></span>
                 </button>)}
                 {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientDraft.trim()) && !recipientSuggestions.some((manager) => manager.email.toLowerCase() === recipientDraft.trim().toLowerCase()) && <button type="button" role="option" aria-selected="false" className="w-full border-t border-slate-100 px-3 py-2 text-left text-sm text-brand hover:bg-slate-50" onMouseDown={(event) => event.preventDefault()} onClick={addTypedRecipient}>Adicionar <strong>{recipientDraft.trim()}</strong></button>}
               </div>}
