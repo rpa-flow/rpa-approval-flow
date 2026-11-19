@@ -526,6 +526,16 @@ export default function DashboardPage() {
       }
     }
 
+    const paymentDateKey = getValue("dataPagamento").slice(0, 10);
+    if (policies.some((policy) => policy.fieldKey === "dataPagamento") && paymentDateKey && paymentDateKey < minimumPaymentDate()) {
+      setApproveModalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
+    const installmentCountValue = getValue("numeroParcelas").trim();
+    if (policies.some((policy) => policy.fieldKey === "numeroParcelas") && installmentCountValue && (!Number.isInteger(Number(installmentCountValue)) || Number(installmentCountValue) < 1)) {
+      setApproveModalError("O número de parcelas deve ser um inteiro maior ou igual a 1.");
+      return;
+    }
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
     const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
     const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
