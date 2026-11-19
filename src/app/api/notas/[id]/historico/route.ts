@@ -9,7 +9,7 @@ export async function GET(_: Request, { params }: Params) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, include: { adminReview: true } });
+  const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, select: { id: true, fornecedorId: true, criadoPorId: true, adminReview: { select: { status: true } } } });
   if (!invoice) return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
     return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 404 });

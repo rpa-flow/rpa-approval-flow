@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainHeader } from "@/app/components/main-header";
 import { AppLayout, EmptyState, ErrorState, LoadingState, PageHeader, PaginationControls } from "@/components/ui-kit";
@@ -218,6 +218,7 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const notesRequestId = useRef(0);
   const [notesLoadError, setNotesLoadError] = useState(false);
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [myApprovalsOnly, setMyApprovalsOnly] = useState(false);
@@ -263,6 +264,7 @@ export default function DashboardPage() {
   }, [router]);
 
   const loadData = useCallback(async () => {
+    const requestId = ++notesRequestId.current;
     const params = new URLSearchParams({
       page: String(page),
       pageSize: String(pageSize)
@@ -284,6 +286,7 @@ export default function DashboardPage() {
     setNotesLoadError(false);
     try {
       const notesRes = await fetch(`/api/notas/minhas?${params.toString()}`);
+      if (requestId !== notesRequestId.current) return;
       if (notesRes.status === 401) return router.push("/login");
       if (!notesRes.ok) {
         setNotesLoadError(true);
@@ -293,6 +296,7 @@ export default function DashboardPage() {
       }
 
       const data = await notesRes.json() as NotesResponse;
+      if (requestId !== notesRequestId.current) return;
       setInvoices(data.items);
       setPagination(data.pagination);
       setAllNotesTotal(data.allNotesTotal ?? data.pagination.total);
@@ -300,11 +304,12 @@ export default function DashboardPage() {
       setSupplierOptions(data.supplierOptions);
       setManagerOptions(data.managerOptions);
     } catch {
+      if (requestId !== notesRequestId.current) return;
       setNotesLoadError(true);
       setMessageType("error");
       setMessage("Não foi possível comunicar com o servidor. Recarregue a página e tente novamente.");
     } finally {
-      setIsLoadingNotes(false);
+      if (requestId === notesRequestId.current) setIsLoadingNotes(false);
     }
   }, [competenceFrom, competenceTo, debouncedTakerFilter, issueFrom, issueTo, myApprovalsOnly, page, pageSize, responsibleFilter, router, statusFilter, supplierFilter, updatedFrom, updatedTo]);
 
