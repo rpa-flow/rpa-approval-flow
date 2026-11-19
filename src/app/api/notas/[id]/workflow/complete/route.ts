@@ -42,7 +42,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const task = execution.tasks.find((candidate) => candidate.managerId === manager.id);
       if (!task || !manager.ativo || manager.role === "FORNECEDOR" || execution.tasks.some((candidate) => candidate.stepId !== task.stepId)) return { code: 403, error: "Somente um responsável atual pode concluir esta etapa." };
       if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") return { code: 409, error: "Nota retida para revisão administrativa." };
-      if (invoice.status !== "AGUARDANDO_APROVACAO" || invoice.processada || invoice.statusProcessamento !== "PENDENTE") return { code: 409, error: "A situação da nota não permite concluir a etapa." };
+      const lastStep = execution.version.steps[execution.version.steps.length - 1];
+      const isReopenedInconsistentLastStep = invoice.status === "DADOS_INCONSISTENTES"
+        && invoice.processada
+        && invoice.statusProcessamento === "ERRO"
+        && task.stepId === lastStep?.id;
+      const isPendingApproval = invoice.status === "AGUARDANDO_APROVACAO" && !invoice.processada && invoice.statusProcessamento === "PENDENTE";
+      if (!isPendingApproval && !isReopenedInconsistentLastStep) return { code: 409, error: "A situação da nota não permite concluir a etapa." };
       const policies = new Map(task.step.fields.map((field) => [field.fieldKey, field]));
       for (const key of Object.keys(input.fields)) if (policies.get(key)?.mode !== "EDITABLE") return { code: 403, error: `O campo ${key} não pode ser alterado nesta etapa.` };
       const data: Prisma.InvoiceUpdateInput = {};
