@@ -422,6 +422,11 @@ export default function NotaDetalhePage() {
         return;
       }
     }
+    const paymentDateKey = getValue("dataPagamento").slice(0, 10);
+    if (paymentDateKey && paymentDateKey < minimumPaymentDate()) {
+      setApprovalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
     const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
     if (evaluationPolicy?.required && !evaluationComplete) {
