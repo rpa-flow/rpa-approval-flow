@@ -50,9 +50,9 @@ As propostas abaixo não são decisões já confirmadas pelo usuário. Devem ser
 
 | ID | Decisão | Recomendação para a primeira entrega |
 |---|---|---|
-| D1 | Gestor fixo pode atuar sem vínculo com o fornecedor? Pode continuar consultando depois de sua etapa? | Atribuição concede acesso somente àquela nota; manter consulta aos participantes que já atuaram e aprovação apenas ao responsável atual. Não criar vínculo com todas as notas do fornecedor. Preservar os demais acessos existentes. |
-| D2 | Quais exigências atuais continuam obrigatórias na aprovação final? | Preservar avaliação, OC ou contrato e data válida; permitir distribuir seu preenchimento entre etapas. Publicação valida que há caminho editável para cada requisito. Campos fiscais originais e de processamento não se tornam editáveis só por configuração. |
-| D3 | Como ativar sem mudar notas antigas e sem perder novas entradas? | Ativação explícita por tipo e data de corte, após publicar a primeira versão. Notas anteriores mantêm o fluxo legado; novas notas entram no workflow. Não criar aprovações históricas fictícias. Após ativação, ausência de configuração deixa novas notas bloqueadas para configuração administrativa. |
+| D1 | Acesso do gestor atribuído | Confirmado: pode acessar a nota da etapa mesmo sem vínculo com o fornecedor. O alcance da consulta, inclusive para suprimentos, deve ser configurável no workflow. Os modos disponíveis e o acesso após a etapa precisam ser detalhados. |
+| D2 | Em qual etapa registrar a avaliação e quais outros requisitos manter? | Confirmado: avaliação ocorre na etapa configurada para aprovação do gestor. O workflow deve ter uma etapa configurada para solicitar obrigatoriamente OC ou contrato e data de pagamento. A publicação deve verificar essa configuração. |
+| D3 | Como encaminhar notas existentes? | Confirmado: somente ADMIN poderá selecionar notas existentes e enviá-las ao workflow; não migrar automaticamente todas. Critérios de elegibilidade e comportamento de novas notas ainda precisam de definição. |
 | D4 | Como tratar recusa/reabertura/erro de processamento existentes e gestor inativo em execução? | Manter o legado para notas sem execução. Para notas com workflow, definir na F0 uma política mínima de compatibilidade e recuperação; não permitir que rotas antigas alterem status deixando execução divergente. Não desenvolver novo fluxo de devolução. |
 | D5 | Como acionar a fila de e-mails e por quanto tempo preservar eventos? | Consumidor autenticado acionado por agendamento compatível com o ambiente; sem processo residente. Impedir exclusão destrutiva de notas/versões com histórico novo. Fechar retenção e acesso operacional antes de ativar. |
 | D6 | Etapas consecutivas com o mesmo gestor geram novo aviso? | Tratar cada entrada em etapa como nova tarefa, sem pular aprovação, e notificar mesmo quando o gestor se repete. Esta extensão deve ser validada. |
@@ -87,7 +87,7 @@ O bloqueio administrativo é uma condição prévia, não uma etapa livremente r
 ### Regras técnicas propostas
 
 - **DR-8:** publicação valida nome/ordem das etapas, presença de responsável ativo elegível, catálogo de campos e requisitos finais; campo obrigatório deve ser visível e editável na etapa. Rejeitar campos desconhecidos, combinações impossíveis e edição de campos imutáveis.
-- **DR-9:** separar consulta de execução. Somente o responsável atual pode editar os campos autorizados e concluir a etapa; ADMIN não pula etapas implicitamente. A ampliação de consulta por atribuição depende de D1.
+- **DR-9:** separar consulta de execução. O responsável atual pode acessar a nota atribuída mesmo sem vínculo com o fornecedor. Somente o responsável atual pode editar os campos autorizados e concluir a etapa; ADMIN não pula etapas implicitamente. Acesso geral e acesso após conclusão dependem de definição em D1.
 - **DR-10:** toda escrita valida os campos no servidor. Leitura continua disponível pelas permissões usuais; ocultar visualmente não autoriza editar dados por chamada direta. Reutilizar validações dos valores e validar obrigatoriedade na conclusão, sem exigir campos ainda destinados a etapas futuras.
 - **DR-11:** alteração de campos, decisão, avanço, nova atribuição, auditoria e outbox são atômicos. Uma falha reverte a transição completa. Configuração também é salva com sua auditoria na mesma transação.
 - **DR-12:** ação exige revisão esperada e chave idempotente. Repetição idêntica devolve o resultado original; reutilização da chave com outro conteúdo é rejeitada. Ação obsoleta ou concorrente gera conflito sem segundo avanço ou nova intenção de envio.
@@ -238,4 +238,27 @@ O bloqueio administrativo é uma condição prévia, não uma etapa livremente r
 
 ## Rastreabilidade e entrega
 
-O [plano de implementação](plan.md) detalha contratos propostos, modelo de persistência, fases, verificações, ativação e reversão. A implementação deverá mapear suas evidências aos IDs DR/AC deste documento. D1–D6 permanecem recomendações até alinhamento explícito.
+O [plano de implementação](plan.md) detalha contratos propostos, modelo de persistência, fases, verificações, ativação e reversão. A implementação deverá mapear suas evidências aos IDs DR/AC deste documento. D1–D3 foram parcialmente resolvidas conforme a tabela; seus pontos restantes e D4–D6 continuam pendentes.
+
+## Alterações confirmadas após o plano
+
+- A atribuição da etapa dá acesso à nota ao gestor configurado mesmo sem vínculo com o fornecedor. O exemplo de suprimentos indica necessidade de configurar responsabilidades por função; ainda não define se haverá cadastro separado de papéis ou apenas uma etapa associada a um gestor.
+- Notas existentes poderão ser selecionadas e encaminhadas ao workflow por uma funcionalidade do sistema. A seleção deve demonstrar quais notas foram encaminhadas e quais falharam, com resultado auditável e sem criar execuções duplicadas. Critérios de elegibilidade e autorização da operação precisam ser definidos.
+- A avaliação do serviço deve ser realizada na etapa configurada como aprovação do gestor; sua autoria é do gestor que a realizou.
+- Atualização: OC ou contrato e data de pagamento são obrigatórios em uma etapa configurada do workflow; a publicação deve ser rejeitada se nenhuma etapa solicitar esses dados. A data deve atender à regra de validade existente na aprovação final.
+- O alcance de consulta do responsável deve ser configurável no workflow. A atribuição sempre permite acesso à nota correspondente, independentemente do fornecedor; a configuração de consulta não autoriza concluir etapas de outros responsáveis.
+- Somente ADMIN pode selecionar e encaminhar notas existentes ao workflow. A operação deve validar a autorização no servidor e registrar o resultado individual de cada nota.
+
+### AC-17: configuração obrigatória dos dados de compra e pagamento
+
+**Given** um rascunho de workflow NFS-e
+
+**When** ADMIN tenta publicá-lo sem uma etapa que solicite OC ou contrato e data de pagamento como obrigatórios
+
+**Then** a publicação é rejeitada e a interface identifica os dados que precisam ser configurados.
+
+**Given** uma etapa configurada para solicitar esses dados
+
+**When** seu responsável tenta concluí-la sem OC e contrato ou sem data de pagamento
+
+**Then** a conclusão é rejeitada com indicação dos campos necessários.

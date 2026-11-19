@@ -17,6 +17,8 @@ Sistema com API + frontend para gestão e aprovação de NFSe com controle de ac
 
 ## Endpoints
 
+O workflow configurável de NFS-e, suas condições de implantação e a operação dos avisos estão descritos em [docs/workflow-nfse.md](docs/workflow-nfse.md).
+
 ### Autenticação
 - `POST /api/auth/login`
 - `POST /api/auth/logout`

@@ -4,6 +4,7 @@ import { createInvoiceAuditLog } from "@/lib/audit";
 import { getSessionManager } from "@/lib/auth";
 import { sendInvoiceStatusEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -25,16 +26,33 @@ export async function POST(request: NextRequest, { params }: Params) {
   const image = imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
 
   if (!Object.values(InvoiceStatus).includes(newStatus)) return NextResponse.json({ error: "Selecione um status válido." }, { status: 400 });
-  if (!reason || reason.length > 500) return NextResponse.json({ error: "Informe um motivo de até 500 caracteres." }, { status: 400 });
-  if (!recipients.length || recipients.some((email) => !EMAIL_PATTERN.test(email))) return NextResponse.json({ error: "Informe ao menos um destinatário válido." }, { status: 400 });
-  if (message.length > 2000) return NextResponse.json({ error: "A mensagem deve ter no máximo 2.000 caracteres." }, { status: 400 });
-  if (image && (!ALLOWED_IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_SIZE)) return NextResponse.json({ error: "A imagem deve ser JPG, PNG, GIF ou WebP e ter no máximo 5 MB." }, { status: 400 });
-
-  const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true, adminReview: true } });
+  const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true, adminReview: true, workflowExecution: { select: { status: true } } } });
   if (!existing) return NextResponse.json({ error: "Nota não encontrada." }, { status: 404 });
   if (existing.adminReview && existing.adminReview.status !== "LIBERADA") {
     return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 409 });
   }
+  const isWorkflowProcessedAction = newStatus === "PROCESSADO" && existing.workflowExecution?.status === "COMPLETED";
+  if (!isWorkflowProcessedAction && (!reason || reason.length > 500)) return NextResponse.json({ error: "Informe um motivo de até 500 caracteres." }, { status: 400 });
+  if (!isWorkflowProcessedAction && (!recipients.length || recipients.some((email) => !EMAIL_PATTERN.test(email)))) return NextResponse.json({ error: "Informe ao menos um destinatário válido." }, { status: 400 });
+  if (!isWorkflowProcessedAction && message.length > 2000) return NextResponse.json({ error: "A mensagem deve ter no máximo 2.000 caracteres." }, { status: 400 });
+  if (!isWorkflowProcessedAction && image && (!ALLOWED_IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_SIZE)) return NextResponse.json({ error: "A imagem deve ser JPG, PNG, GIF ou WebP e ter no máximo 5 MB." }, { status: 400 });
+
+  if (isWorkflowProcessedAction) {
+    const codigoDelphi = String(formData.get("codigoDelphi") ?? "").trim();
+    if (!codigoDelphi || codigoDelphi.length > 120) return NextResponse.json({ error: "Informe um código Delphi válido, com até 120 caracteres." }, { status: 400 });
+    const processed = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${existing.id} FOR UPDATE`;
+      const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { workflowExecution: true } });
+      if (!current || current.workflowExecution?.status !== "COMPLETED" || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime() || current.status === "PROCESSADO") return null;
+      const invoice = await tx.invoice.update({ where: { id: existing.id }, data: { status: "PROCESSADO", processada: true, statusProcessamento: "CONCLUIDO", dataLancamentoDelphi: new Date(), codigoDelphi } });
+      await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: "PROCESSADO" } });
+      await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "STATUS_CHANGED", actionDescription: `${manager.nome} marcou a nota como processada`, previousStatus: existing.status, newStatus: "PROCESSADO", beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
+      return invoice;
+    });
+    if (!processed) return NextResponse.json({ error: "A nota mudou ou não está com a aprovação concluída. Atualize a página." }, { status: 409 });
+    return NextResponse.json({ invoice: processed, processed: true });
+  }
+
   if (existing.status === newStatus) return NextResponse.json({ error: "Escolha um status diferente do atual." }, { status: 400 });
 
   const processing = newStatus === "PROCESSADO"
@@ -46,6 +64,13 @@ export async function POST(request: NextRequest, { params }: Params) {
         : { processada: true, statusProcessamento: "ERRO" as const };
 
   const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${existing.id} FOR UPDATE`;
+    const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { workflowExecution: { include: { tasks: { include: { step: true } } } } } });
+    if (!current || (current.workflowExecution && current.workflowExecution.status !== "COMPLETED") || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime()) return null;
+    if (current.workflowExecution?.status === "COMPLETED" && !["PROCESSADO", "DADOS_INCONSISTENTES"].includes(newStatus)) return null;
+    const execution = current.workflowExecution;
+    const lastStepTasks = execution?.tasks.length ? execution.tasks.filter((task) => task.step.position === Math.max(...execution.tasks.map((item) => item.step.position))) : [];
+    if (execution && newStatus === "DADOS_INCONSISTENTES" && !lastStepTasks.length) return null;
     const invoice = await tx.invoice.update({
       where: { id: existing.id },
       data: {
@@ -55,9 +80,23 @@ export async function POST(request: NextRequest, { params }: Params) {
         ...processing
       }
     });
+    if (execution && newStatus === "DADOS_INCONSISTENTES") {
+      const reopenedAt = new Date();
+      const nextRevision = execution.revision + 1;
+      await tx.invoiceWorkflowTask.updateMany({ where: { executionId: execution.id, stepId: lastStepTasks[0].stepId }, data: { completedAt: null, assignedAt: reopenedAt } });
+      await tx.invoiceWorkflow.update({ where: { id: execution.id }, data: { status: "ACTIVE", completedAt: null, revision: { increment: 1 } } });
+      for (const task of lastStepTasks) await tx.workflowNotification.create({ data: { taskId: task.id, deduplicationKey: `reopened:${task.id}:${nextRevision}`, recipient: task.managerEmail, payload: { invoiceId: invoice.id, executionId: execution.id, stepId: task.stepId, reason: "DADOS_INCONSISTENTES" } } });
+    }
     await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus, reason } });
+    await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "STATUS_CHANGED", actionDescription: `${manager.nome} alterou o status da nota`, previousStatus: existing.status, newStatus, reason, beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
     return invoice;
   });
+
+  if (!updated) return NextResponse.json({ error: "A nota mudou ou está em um workflow. Atualize a página." }, { status: 409 });
+
+  if (newStatus === "DADOS_INCONSISTENTES") {
+    try { await processWorkflowNotifications(); } catch { /* A atribuição permanece visível e o aviso pendente será processado depois. */ }
+  }
 
   let emailResult;
   try {

@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { BarChart3, Building2, FileText, Truck, LayoutDashboard, Settings, Tags, UserCircle, Users } from "lucide-react";
 import { AppHeader } from "@/app/components/app-header";
 
-const DEFAULT_HEADER_LINKS: Array<{ href: string; label: string; icon: ComponentType<{ size?: number | string; className?: string }> }> = [
+type HeaderLink = { href: string; label: string; icon: ComponentType<{ size?: number | string; className?: string }>; adminOnly?: boolean; children?: HeaderLink[] };
+
+const DEFAULT_HEADER_LINKS: HeaderLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/notas", label: "Lançar nota", icon: FileText },
@@ -14,7 +16,7 @@ const DEFAULT_HEADER_LINKS: Array<{ href: string; label: string; icon: Component
   { href: "/gestores", label: "Gestores", icon: Users },
   { href: "/categorias-fornecedores", label: "Categorias", icon: Tags },
   { href: "/notas/revisoes", label: "Revisões administrativas", icon: FileText },
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/configuracoes", label: "Configurações", icon: Settings, children: [{ href: "/configuracoes/workflows", label: "Workflow de aprovação", icon: FileText, adminOnly: true }] },
   { href: "/perfil", label: "Perfil", icon: UserCircle }
 ];
 
@@ -54,7 +56,10 @@ export function MainHeader(_: MainHeaderProps) {
   }, []);
 
   const filteredLinks = useMemo(() => {
-    return DEFAULT_HEADER_LINKS.filter((link) => {
+    return DEFAULT_HEADER_LINKS.map((link) => ({
+      ...link,
+      children: link.children?.filter((child) => !child.adminOnly || role === "ADMIN")
+    })).filter((link) => {
       if (link.href === "/relatorios") {
         return role === "ADMIN" || acessoRelatorios;
       }

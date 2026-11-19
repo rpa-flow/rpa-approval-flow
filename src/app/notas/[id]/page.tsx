@@ -8,9 +8,11 @@ import { MainHeader } from "@/app/components/main-header";
 import { AppLayout } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink, RatingScaleHint } from "@/components/evaluation-guidance";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
+import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPolicy } from "@/app/components/workflow-approval-fields";
+import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
-type EmailManager = { id: string; nome: string; email: string };
+type EmailManager = { id: string; nome: string; email: string; role?: "ADMIN" | "GESTOR" };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
 type InvoiceStatus = "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO" | "PROCESSADO" | "EXPIRADA" | "DADOS_INCONSISTENTES";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
@@ -53,6 +55,14 @@ type Invoice = {
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
   fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
+};
+type ApprovalInfo = {
+  execution: { id: string; status: string; revision: number };
+  currentStep: { id: string; name: string; managerId: string; requiresPurchaseOrder: boolean; fields: ApprovalFieldPolicy[] } | null;
+  canComplete: boolean;
+  canResume: boolean;
+  tasks: Array<{ managerName: string; completedAt: string | null }>;
+  invoice?: Record<string, unknown> & { serviceEvaluation?: { rating: number; qualifica: boolean | null; riskLevel: RiskLevel; comment?: string | null } | null };
 };
 
 const STATUS_COLORS: Record<InvoiceStatus, string> = {
@@ -134,11 +144,12 @@ export default function NotaDetalhePage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [approvalInfo, setApprovalInfo] = useState<ApprovalInfo | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
-  const [evaluation, setEvaluation] = useState<{ rating: 1 | 2 | 3 | 4 | 5 | null; qualifica: "SIM" | "NAO" | ""; riskLevel: RiskLevel | "" }>({ rating: null, qualifica: "", riskLevel: "" });
+  const [evaluation, setEvaluation] = useState<ApprovalEvaluation>({ rating: null, qualifica: "", riskLevel: "", comment: "" });
   const [paymentDate, setPaymentDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const [contractPurchaseOrder, setContractPurchaseOrder] = useState("");
@@ -146,66 +157,94 @@ export default function NotaDetalhePage() {
   const [isApproving, setIsApproving] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   const [approvalError, setApprovalError] = useState("");
+  const [stepApprovalValues, setStepApprovalValues] = useState<Record<string, string>>({});
+  const [stepOperationKey, setStepOperationKey] = useState("");
+  const [isLoadingStepApproval, setIsLoadingStepApproval] = useState(false);
   const [rejectionObservation, setRejectionObservation] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isResumingApproval, setIsResumingApproval] = useState(false);
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
-  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, recipients: "", reason: "", message: "" });
+  const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, reason: "", message: "" });
+  const [codigoDelphiProcessing, setCodigoDelphiProcessing] = useState("");
   const [emailManagers, setEmailManagers] = useState<EmailManager[]>([]);
-  const [selectedManagerEmails, setSelectedManagerEmails] = useState<string[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<EmailManager[]>([]);
+  const [recipientDraft, setRecipientDraft] = useState("");
+  const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
   const [communicationImage, setCommunicationImage] = useState<File | null>(null);
   const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const meRes = await fetch("/api/auth/me");
-    if (!meRes.ok) {
-      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-      return;
-    }
-    const meData = await meRes.json() as Me;
-    setMe(meData);
-    if (meData.manager.role === "ADMIN") {
-      const managersRes = await fetch("/api/gestores?forStatusEmail=1");
-      if (managersRes.ok) setEmailManagers(await managersRes.json() as EmailManager[]);
-    }
+    try {
+      const [meRes, workflowRes, invoiceRes, historyRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch(`/api/notas/${params.id}/workflow`),
+        fetch(`/api/notas/${params.id}`),
+        fetch(`/api/notas/${params.id}/historico`)
+      ]);
+      if (!meRes.ok) {
+        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+        return;
+      }
+      const meData = await meRes.json() as Me;
+      setMe(meData);
+      if (meData.manager.role === "ADMIN") {
+        void fetch("/api/gestores?forStatusEmail=1")
+          .then(async (response) => { if (response.ok) setEmailManagers(await response.json() as EmailManager[]); })
+          .catch(() => setEmailManagers([]));
+      }
 
-    const [invoiceRes, historyRes] = await Promise.all([
-      fetch(`/api/notas/${params.id}`),
-      fetch(`/api/notas/${params.id}/historico`)
-    ]);
+      setApprovalInfo(null);
+      let completedWorkflow = false;
+      if (workflowRes.ok) {
+        const workflowData = await workflowRes.json() as ApprovalInfo;
+        completedWorkflow = workflowData.execution.status === "COMPLETED";
+        setApprovalInfo(workflowData);
+      } else if (workflowRes.status !== 404 && workflowRes.status !== 403) {
+        setMessageType("error");
+        setMessage("Não foi possível carregar os dados da aprovação.");
+        setLoading(false);
+        return;
+      }
 
-    if (invoiceRes.status === 401 || historyRes.status === 401) {
-      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-      return;
-    }
+      if (invoiceRes.status === 401 || historyRes.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+        return;
+      }
 
-    if (invoiceRes.status === 403 || historyRes.status === 403) {
-      setMessageType("error");
-      setMessage("Você não tem acesso a esta nota fiscal.");
+      if (invoiceRes.status === 403 || historyRes.status === 403) {
+        setMessageType("error");
+        setMessage("Você não tem acesso a esta nota fiscal.");
+        setLoading(false);
+        return;
+      }
+
+      if (!invoiceRes.ok) {
+        setMessageType("error");
+        setMessage("Nota fiscal não encontrada.");
+        setLoading(false);
+        return;
+      }
+
+      const loadedInvoice = await invoiceRes.json();
+      setInvoice(loadedInvoice);
+      if (historyRes.ok) setEvents(await historyRes.json());
+      setPaymentDate("");
+      setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
+      setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
+      setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+      setCodigoDelphiProcessing(loadedInvoice.codigoDelphi ?? "");
+      setCommunication((current) => ({
+        ...current,
+        status: completedWorkflow ? "PROCESSADO" : STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
+      }));
       setLoading(false);
-      return;
-    }
-
-    if (!invoiceRes.ok) {
+    } catch {
       setMessageType("error");
-      setMessage("Nota fiscal não encontrada.");
+      setMessage("Não foi possível carregar a nota. Verifique sua conexão e tente novamente.");
       setLoading(false);
-      return;
     }
-
-    const loadedInvoice = await invoiceRes.json();
-    setInvoice(loadedInvoice);
-    if (historyRes.ok) setEvents(await historyRes.json());
-    setPaymentDate("");
-    setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
-    setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
-    setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
-    setCommunication((current) => ({
-      ...current,
-      status: STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
-    }));
-    setLoading(false);
   }, [params.id, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -259,7 +298,54 @@ export default function NotaDetalhePage() {
     }
   }
 
+  async function abrirModalAprovacao() {
+    setApprovalError("");
+    setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
+    setStepApprovalValues({});
+    setStepOperationKey("");
+    setIsApprovalModalOpen(true);
+
+    if (!hasOpenApproval) {
+      setPaymentDate("");
+      return;
+    }
+
+    setIsLoadingStepApproval(true);
+    try {
+      const response = await fetch(`/api/notas/${params.id}/workflow`);
+      const context = await response.json() as ApprovalInfo;
+      if (!response.ok || !context.canComplete || !context.currentStep || !context.invoice) {
+        throw new Error("Esta aprovação não está mais atribuída a você. Atualize a página.");
+      }
+      const values: Record<string, string> = {};
+      for (const policy of context.currentStep.fields) {
+        if (policy.fieldKey === "serviceEvaluation") continue;
+        const value = context.invoice[policy.fieldKey];
+        values[policy.fieldKey] = policy.fieldKey === "dataPagamento" && value
+          ? String(value).slice(0, 10)
+          : value === null || value === undefined ? "" : String(value);
+      }
+      const savedEvaluation = context.invoice.serviceEvaluation;
+      if (savedEvaluation) {
+        setEvaluation({ rating: savedEvaluation.rating as ApprovalEvaluation["rating"], qualifica: savedEvaluation.qualifica === null ? "" : savedEvaluation.qualifica ? "SIM" : "NAO", riskLevel: savedEvaluation.riskLevel, comment: savedEvaluation.comment ?? "" });
+      }
+      setApprovalInfo(context);
+      setStepApprovalValues(values);
+      setStepOperationKey(window.crypto.randomUUID());
+    } catch (error) {
+      setIsApprovalModalOpen(false);
+      setMessageType("error");
+      setMessage(error instanceof Error ? error.message : "Não foi possível abrir esta aprovação.");
+    } finally {
+      setIsLoadingStepApproval(false);
+    }
+  }
+
   async function aprovarComAvaliacao() {
+    if (hasOpenApproval) {
+      await concluirAprovacaoDaEtapa();
+      return;
+    }
     if (!invoice || !evaluation.rating || !evaluation.qualifica || !evaluation.riskLevel) {
       setApprovalError("Preencha a pontuação, o campo Qualifica, a classificação de risco e a data de pagamento para aprovar a nota.");
       return;
@@ -312,7 +398,7 @@ export default function NotaDetalhePage() {
       setMessage("Nota aprovada com sucesso.");
       setIsApprovalModalOpen(false);
       setApprovalError("");
-      setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
+      setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
       setPurchaseOrder("");
       setContractPurchaseOrder("");
       setInstallmentCount("1");
@@ -324,11 +410,64 @@ export default function NotaDetalhePage() {
     }
   }
 
-  function abrirModalAprovacao() {
+  async function concluirAprovacaoDaEtapa() {
+    if (!approvalInfo?.canComplete || !approvalInfo.currentStep || !stepOperationKey) return;
+    const policies = approvalInfo.currentStep.fields.filter((policy) => policy.mode === "EDITABLE");
+    const getValue = (key: string) => stepApprovalValues[key] ?? "";
+    for (const policy of policies) {
+      if (policy.fieldKey === "serviceEvaluation") continue;
+      if (policy.required && !getValue(policy.fieldKey).trim()) {
+        const label = NFSE_WORKFLOW_FIELDS.find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
+        setApprovalError(`Preencha o campo obrigatório: ${label}.`);
+        return;
+      }
+    }
+    const paymentDateKey = getValue("dataPagamento").slice(0, 10);
+    if (policies.some((policy) => policy.fieldKey === "dataPagamento") && paymentDateKey && paymentDateKey < minimumPaymentDate()) {
+      setApprovalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
+      return;
+    }
+    const installmentCountValue = getValue("numeroParcelas").trim();
+    if (policies.some((policy) => policy.fieldKey === "numeroParcelas") && installmentCountValue && (!Number.isInteger(Number(installmentCountValue)) || Number(installmentCountValue) < 1)) {
+      setApprovalError("O número de parcelas deve ser um inteiro maior ou igual a 1.");
+      return;
+    }
+    const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
+    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
+    if (evaluationPolicy?.required && !evaluationComplete) {
+      setApprovalError("Complete a avaliação do serviço com pontuação e classificação de risco.");
+      return;
+    }
+    if (approvalInfo.currentStep.requiresPurchaseOrder && !getValue("ordemCompra").trim() && !getValue("ocContrato").trim()) {
+      setApprovalError("Informe a ordem de compra ou o contrato para continuar.");
+      return;
+    }
+    const fields: Record<string, unknown> = {};
+    for (const policy of policies) {
+      if (policy.fieldKey === "serviceEvaluation") {
+        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim() || "Avaliação registrada", riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
+        continue;
+      }
+      const value = getValue(policy.fieldKey).trim();
+      if (policy.fieldKey === "dataPagamento") fields[policy.fieldKey] = value ? paymentDateAtSaoPauloNoon(value).toISOString() : null;
+      else if (policy.fieldKey === "numeroParcelas") { if (value) fields[policy.fieldKey] = Number(value); }
+      else fields[policy.fieldKey] = value || null;
+    }
+    setIsApproving(true);
     setApprovalError("");
-    setEvaluation({ rating: null, qualifica: "", riskLevel: "" });
-    setPaymentDate("");
-    setIsApprovalModalOpen(true);
+    try {
+      const response = await fetch(`/api/notas/${invoice?.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: approvalInfo.execution.revision, idempotencyKey: stepOperationKey, fields }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(String(result.error || "Não foi possível concluir esta aprovação.").replace(/workflow/gi, "aprovação"));
+      setMessageType("success");
+      setMessage(result.completed ? "Aprovação concluída." : "Aprovação registrada. A nota seguirá para a próxima etapa.");
+      setIsApprovalModalOpen(false);
+      await loadData();
+    } catch (error) {
+      setApprovalError((error instanceof Error ? error.message : "Não foi possível comunicar com o servidor.").replace(/workflow/gi, "aprovação"));
+    } finally {
+      setIsApproving(false);
+    }
   }
 
   async function alterarStatusAprovado() {
@@ -380,10 +519,19 @@ export default function NotaDetalhePage() {
 
     const formData = new FormData();
     formData.set("status", communication.status);
-    formData.set("recipients", [...selectedManagerEmails, communication.recipients].filter(Boolean).join(";"));
-    formData.set("reason", communication.reason);
-    formData.set("message", communication.message);
-    if (communicationImage) formData.set("image", communicationImage);
+    const isProcessingCompletedWorkflow = isCompletedWorkflow && communication.status === "PROCESSADO";
+    if (isProcessingCompletedWorkflow) formData.set("codigoDelphi", codigoDelphiProcessing.trim());
+    const pendingRecipient = recipientDraft.trim();
+    const recipientEmails = [
+      ...selectedRecipients.map((recipient) => recipient.email),
+      ...(pendingRecipient ? [pendingRecipient] : [])
+    ];
+    if (!isProcessingCompletedWorkflow) {
+      formData.set("recipients", recipientEmails.join(";"));
+      formData.set("reason", communication.reason);
+      formData.set("message", communication.message);
+      if (communicationImage) formData.set("image", communicationImage);
+    }
 
     try {
       const res = await fetch(`/api/notas/${invoice.id}/comunicacao`, { method: "POST", body: formData });
@@ -396,9 +544,10 @@ export default function NotaDetalhePage() {
       }
 
       setMessageType("success");
-      setMessage(result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
-      setCommunication((current) => ({ ...current, recipients: "", reason: "", message: "" }));
-      setSelectedManagerEmails([]);
+      setMessage(isProcessingCompletedWorkflow ? "Nota marcada como processada com o código Delphi informado." : result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
+      setCommunication((current) => ({ ...current, reason: "", message: "" }));
+      setSelectedRecipients([]);
+      setRecipientDraft("");
       setCommunicationImage(null);
       await loadData();
     } catch {
@@ -409,9 +558,53 @@ export default function NotaDetalhePage() {
     }
   }
 
-  const canApprove = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
-  const canReject = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  async function resumeApproval() {
+    if (!invoice || !approvalInfo?.canResume) return;
+    setIsResumingApproval(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/notas/${invoice.id}/workflow/resume`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(String(result.error || "Não foi possível retomar a aprovação.").replace(/workflow/gi, "aprovação"));
+      setMessageType("success");
+      setMessage("A aprovação foi retomada.");
+      await loadData();
+    } catch (error) {
+      setMessageType("error");
+      setMessage((error instanceof Error ? error.message : "Não foi possível retomar a aprovação.").replace(/workflow/gi, "aprovação"));
+    } finally {
+      setIsResumingApproval(false);
+    }
+  }
+
+  const hasOpenApproval = approvalInfo?.execution.status === "ACTIVE" || approvalInfo?.execution.status === "BLOCKED";
+  function isApprovalFieldVisible(fieldKey: string) {
+    if (!hasOpenApproval) return true;
+    return approvalInfo?.currentStep?.fields.some((field) => field.fieldKey === fieldKey && field.mode !== "HIDDEN") ?? false;
+  }
+  const canApprove = Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  const canApproveWorkflow = Boolean(approvalInfo?.execution.status === "ACTIVE" && approvalInfo.canComplete && me?.manager.role !== "FORNECEDOR");
+  const canReject = Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
+  const isCompletedWorkflow = approvalInfo?.execution.status === "COMPLETED";
+  const recipientSuggestions = emailManagers
+    .filter((manager) => !selectedRecipients.some((recipient) => recipient.email.toLowerCase() === manager.email.toLowerCase()))
+    .filter((manager) => `${manager.nome} ${manager.email}`.toLowerCase().includes(recipientDraft.trim().toLowerCase()))
+    .slice(0, 6);
+  const recipientDraftIsValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientDraft.trim());
+
+  function addRecipient(recipient: EmailManager) {
+    setSelectedRecipients((current) => current.some((item) => item.email.toLowerCase() === recipient.email.toLowerCase()) ? current : [...current, recipient]);
+    setRecipientDraft("");
+    setIsRecipientPickerOpen(false);
+  }
+
+  function addTypedRecipient() {
+    const email = recipientDraft.trim().replace(/[;,]+$/, "");
+    if (!email) return;
+    const manager = emailManagers.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    addRecipient(manager ?? { id: email.toLowerCase(), nome: email, email });
+  }
 
   return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
@@ -437,74 +630,95 @@ export default function NotaDetalhePage() {
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
         <div className="grid gap-3 md:grid-cols-3">
-          <DetailItem label={invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" ? "Valor para aprovação (validado pelo admin)" : "Valor de serviço"} value={formatCurrency(invoice.valorParaAprovacao ?? invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />
-          <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />
-          <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />
-          <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />
-          <DetailItem label="CNPJ fornecedor" value={invoice.fornecedor.cnpj ?? invoice.prestadorCnpj} />
+          {isApprovalFieldVisible("valorParaAprovacao") && <DetailItem label={invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" ? "Valor para aprovação (validado pelo admin)" : "Valor de serviço"} value={formatCurrency(invoice.valorParaAprovacao ?? invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />}
+          {isApprovalFieldVisible("dataEmissao") && <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />}
+          {isApprovalFieldVisible("dataCompetencia") && <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />}
+          {isApprovalFieldVisible("prestadorNome") && <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />}
+          {isApprovalFieldVisible("prestadorCnpj") && <DetailItem label="CNPJ fornecedor" value={invoice.fornecedor.cnpj ?? invoice.prestadorCnpj} />}
           <DetailItem label="Código externo" value={invoice.fornecedor.codigoExterno} />
-          <DetailItem label="Tomador" value={invoice.tomadorNome} />
-          <DetailItem label="CNPJ tomador" value={invoice.tomadorCnpj} />
-          <DetailItem label="E-mail tomador" value={invoice.tomadorEmail} />
+          {isApprovalFieldVisible("tomadorNome") && <DetailItem label="Tomador" value={invoice.tomadorNome} />}
+          {isApprovalFieldVisible("tomadorCnpj") && <DetailItem label="CNPJ tomador" value={invoice.tomadorCnpj} />}
+          {isApprovalFieldVisible("tomadorEmail") && <DetailItem label="E-mail tomador" value={invoice.tomadorEmail} />}
         </div>
 
-        <DetailTextItem label="Descrição do serviço" value={invoice.descricaoServico} />
+        {isApprovalFieldVisible("descricaoServico") && <DetailTextItem label="Descrição do serviço" value={invoice.descricaoServico} />}
 
         <div className="grid gap-3 md:grid-cols-2">
-          <DetailItem label="Local de emissão" value={invoice.localEmissao} />
-          <DetailItem label="Local de prestação" value={invoice.localPrestacao} />
-          <DetailItem label="Município de incidência" value={invoice.municipioIncidencia} />
-          <DetailItem label="NBS / serviço" value={invoice.nbsDescricao} />
-          <DetailItem label="Item tributação nacional" value={invoice.itemTributacaoNac} />
-          <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />
+          {isApprovalFieldVisible("localEmissao") && <DetailItem label="Local de emissão" value={invoice.localEmissao} />}
+          {isApprovalFieldVisible("localPrestacao") && <DetailItem label="Local de prestação" value={invoice.localPrestacao} />}
+          {isApprovalFieldVisible("municipioIncidencia") && <DetailItem label="Município de incidência" value={invoice.municipioIncidencia} />}
+          {isApprovalFieldVisible("nbsDescricao") && <DetailItem label="NBS / serviço" value={invoice.nbsDescricao} />}
+          {isApprovalFieldVisible("itemTributacaoNac") && <DetailItem label="Item tributação nacional" value={invoice.itemTributacaoNac} />}
+          {isApprovalFieldVisible("itemTributacaoMun") && <DetailItem label="Item tributação municipal" value={invoice.itemTributacaoMun} />}
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <DetailItem label="Valor do serviço" value={invoice.valorServico == null ? "-" : formatCurrency(invoice.valorServico)} />
+          {isApprovalFieldVisible("valorServico") && <DetailItem label="Valor do serviço" value={invoice.valorServico == null ? "-" : formatCurrency(invoice.valorServico)} />}
           <DetailItem label="Valor retido" value={formatCurrency(invoice.valorTotalRetido)} hint={<RetentionHint details={invoice.retentionDetails} />} />
-          <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />
-          <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />
-          <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />
-          <DetailItem label="Alíquota" value={invoice.aliquota === null || invoice.aliquota === undefined ? "-" : `${invoice.aliquota}%`} />
+          {isApprovalFieldVisible("valorLiquido") && <DetailItem label="Valor líquido" value={formatCurrency(invoice.valorLiquido)} />}
+          {isApprovalFieldVisible("valorBaseCalculo") && <DetailItem label="Base cálculo" value={formatCurrency(invoice.valorBaseCalculo)} />}
+          {isApprovalFieldVisible("valorIssqn") && <DetailItem label="ISSQN" value={formatCurrency(invoice.valorIssqn)} />}
+          {isApprovalFieldVisible("aliquota") && <DetailItem label="Alíquota" value={invoice.aliquota === null || invoice.aliquota === undefined ? "-" : `${invoice.aliquota}%`} />}
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
           <DetailItem label="Responsável validação" value={getResponsibleName(invoice)} />
           <DetailItem label="Data validação" value={formatDateTime(invoice.dataValidacao)} />
-          <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />
-          <DetailItem label="Ordem de Compra – Pontual" value={invoice.ordemCompra} />
+          {isApprovalFieldVisible("dataPagamento") && <DetailItem label="Data de vencimento" value={formatDate(invoice.dataPagamento)} />}
+          {isApprovalFieldVisible("ordemCompra") && <DetailItem label="Ordem de Compra – Pontual" value={invoice.ordemCompra} />}
           <DetailItem label="Código Delphi" value={invoice.codigoDelphi} />
-          <DetailItem label="Ordem de Compra – Contrato" value={invoice.ocContrato} />
-          <DetailItem label="Número de parcelas" value={invoice.numeroParcelas ?? 1} />
+          {isApprovalFieldVisible("ocContrato") && <DetailItem label="Ordem de Compra – Contrato" value={invoice.ocContrato} />}
+          {isApprovalFieldVisible("numeroParcelas") && <DetailItem label="Número de parcelas" value={invoice.numeroParcelas ?? 1} />}
           <DetailItem label="Lançamento Delphi" value={formatDateTime(invoice.dataLancamentoDelphi)} />
         </div>
 
-        {invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
+        {isApprovalFieldVisible("observacaoValidacao") && invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
       </section>
 
       <aside className="space-y-4">
 
-        {me?.manager.role === "ADMIN" && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
+        {approvalInfo?.execution.status === "ACTIVE" && <section className="card space-y-3"><div><h3 className="section-title">Etapa de aprovação</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Aprovação em andamento"}</p></div><p className="text-sm text-slate-600">Responsáveis: {approvalInfo.tasks.filter((task) => !task.completedAt).map((task) => task.managerName).join(", ") || "Aguardando responsável"}</p>{canApproveWorkflow ? <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button> : <p className="text-sm text-slate-600">Esta aprovação está atribuída a outro responsável.</p>}</section>}
+        {approvalInfo?.execution.status === "BLOCKED" && <section className="card space-y-3 border-amber-200 bg-amber-50/50"><div><h3 className="section-title">Aprovação aguardando responsável</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Etapa pendente"}</p></div><p className="text-sm text-slate-700">A etapa será encaminhada quando houver um responsável ativo.</p>{approvalInfo.canResume && <button type="button" className="btn-secondary w-full" disabled={isResumingApproval} onClick={resumeApproval}>{isResumingApproval ? "Retomando…" : "Retomar aprovação"}</button>}</section>}
+
+        {me?.manager.role === "ADMIN" && (!approvalInfo || isCompletedWorkflow) && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Somente administradores</p>
-            <h3 className="section-title">Alterar status e comunicar</h3>
-            <p className="section-description">Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos.</p>
+            <h3 className="section-title">{isCompletedWorkflow ? "Finalizar nota" : "Alterar status e comunicar"}</h3>
+            <p className="section-description">{isCompletedWorkflow ? "A aprovação foi concluída. Para processar, informe o código Delphi. Se houver inconsistência, comunique os responsáveis e reabra o último step para conferência do gestor." : "Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos."}</p>
           </div>
-          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => option.value !== invoice.status).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => (option.value !== invoice.status || option.value === communication.status) && (!isCompletedWorkflow || ["PROCESSADO", "DADOS_INCONSISTENTES"].includes(option.value))).map((option) => <option key={option.value} value={option.value} disabled={option.value === invoice.status}>{option.label}</option>)}</select></label>
+          {isCompletedWorkflow && communication.status === "PROCESSADO" && <label className="approval-field"><span className="approval-field-label">Código Delphi</span><input className="approval-field-control" value={codigoDelphiProcessing} onChange={(event) => setCodigoDelphiProcessing(event.target.value)} maxLength={120} required placeholder="Informe o código do lançamento no Delphi" /></label>}
+          {!(isCompletedWorkflow && communication.status === "PROCESSADO") && <>
           <div className="approval-field space-y-2">
-            <label className="approval-field-label" htmlFor="status-email-managers">Selecionar gestores</label>
-            <select id="status-email-managers" className="approval-field-control min-h-28" multiple value={selectedManagerEmails} onChange={(event) => setSelectedManagerEmails(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} aria-describedby="status-email-managers-help">
-              {emailManagers.map((manager) => <option key={manager.id} value={manager.email}>{manager.nome} — {manager.email}</option>)}
-            </select>
-            <span id="status-email-managers-help" className="text-xs text-slate-500">Use Ctrl (Windows) ou Command (Mac) para selecionar mais de um gestor.</span>
-            <label className="approval-field-label" htmlFor="status-email-manual">Adicionar outros e-mails</label>
-            <textarea id="status-email-manual" className="approval-field-control" value={communication.recipients} onChange={(event) => setCommunication((current) => ({ ...current, recipients: event.target.value }))} rows={3} placeholder="nome@empresa.com; outro@empresa.com" /><span className="text-xs text-slate-500">Separe vários e-mails por vírgula, ponto e vírgula ou linha.</span>
+            <label className="approval-field-label" htmlFor="status-email-recipients">Para</label>
+            <div className="relative">
+              <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-md border border-border bg-white px-2 py-1.5 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
+                {selectedRecipients.map((recipient) => <span key={recipient.email} className="inline-flex max-w-full items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs text-slate-800">
+                  <span className="truncate" title={`${recipient.nome} <${recipient.email}>`}>{recipient.nome === recipient.email ? recipient.email : `${recipient.nome} <${recipient.email}>`}</span>
+                  <button type="button" aria-label={`Remover ${recipient.email}`} className="rounded px-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900" onClick={() => setSelectedRecipients((current) => current.filter((item) => item.email.toLowerCase() !== recipient.email.toLowerCase()))}>×</button>
+                </span>)}
+                <input id="status-email-recipients" className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400 focus:ring-0" value={recipientDraft} onFocus={() => setIsRecipientPickerOpen(true)} onBlur={() => window.setTimeout(() => setIsRecipientPickerOpen(false), 120)} onChange={(event) => { setRecipientDraft(event.target.value); setIsRecipientPickerOpen(true); }} onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "," || event.key === ";") { event.preventDefault(); if (recipientSuggestions.length && recipientDraft.trim()) addRecipient(recipientSuggestions[0]); else addTypedRecipient(); }
+                  if (event.key === "Backspace" && !recipientDraft && selectedRecipients.length) setSelectedRecipients((current) => current.slice(0, -1));
+                  if (event.key === "Escape") setIsRecipientPickerOpen(false);
+                }} placeholder={selectedRecipients.length ? "Adicionar destinatário..." : "Digite um nome ou e-mail"} aria-autocomplete="list" aria-expanded={isRecipientPickerOpen && recipientSuggestions.length > 0} aria-controls="status-email-suggestions" />
+              </div>
+              {isRecipientPickerOpen && recipientDraft.trim() && <div id="status-email-suggestions" role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
+                {recipientSuggestions.map((manager) => <button type="button" role="option" aria-selected="false" key={manager.id} className="flex w-full items-start gap-3 px-3 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onMouseDown={(event) => event.preventDefault()} onClick={() => addRecipient(manager)}>
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-brand">{manager.nome.trim().charAt(0).toLocaleUpperCase()}</span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{manager.nome}{manager.role === "ADMIN" ? " (ADMIN)" : ""}</span><span className="block truncate text-xs text-slate-500">{manager.email}</span></span>
+                </button>)}
+                {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientDraft.trim()) && !recipientSuggestions.some((manager) => manager.email.toLowerCase() === recipientDraft.trim().toLowerCase()) && <button type="button" role="option" aria-selected="false" className="w-full border-t border-slate-100 px-3 py-2 text-left text-sm text-brand hover:bg-slate-50" onMouseDown={(event) => event.preventDefault()} onClick={addTypedRecipient}>Adicionar <strong>{recipientDraft.trim()}</strong></button>}
+              </div>}
+            </div>
+            <span className="text-xs text-slate-500">Digite para buscar uma pessoa ou informe um endereço externo. Pressione Enter ou vírgula para adicionar.</span>
           </div>
           <label className="approval-field"><span className="approval-field-label">Motivo da alteração</span><textarea className="approval-field-control" value={communication.reason} onChange={(event) => setCommunication((current) => ({ ...current, reason: event.target.value }))} rows={3} maxLength={500} placeholder="Explique por que o status está sendo alterado" required /></label>
           <label className="approval-field"><span className="approval-field-label">Mensagem adicional <span className="text-xs font-normal text-slate-500">(opcional)</span></span><textarea className="approval-field-control" value={communication.message} onChange={(event) => setCommunication((current) => ({ ...current, message: event.target.value }))} rows={3} maxLength={2000} placeholder="Inclua orientações para os destinatários" /></label>
           <label className="approval-field"><span className="approval-field-label">Imagem no corpo do e-mail <span className="text-xs font-normal text-slate-500">(opcional, até 5 MB)</span></span><input className="approval-field-control" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => setCommunicationImage(event.target.files?.[0] ?? null)} />{communicationImage && <span className="text-xs font-semibold text-blue-700">Selecionada: {communicationImage.name}</span>}</label>
-          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || (!communication.recipients.trim() && !selectedManagerEmails.length) || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : "Alterar status e enviar e-mail"}</button>
           <p className="text-xs text-slate-500">O e-mail incluirá número, código, fornecedor, valor, emissão, status anterior, novo status e motivo.</p>
+          </>}
+          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || communication.status === invoice.status || (isCompletedWorkflow && communication.status === "PROCESSADO" ? !codigoDelphiProcessing.trim() : (!selectedRecipients.length && !recipientDraftIsValidEmail) || (Boolean(recipientDraft.trim()) && !recipientDraftIsValidEmail) || !communication.reason.trim())}>{isSendingCommunication ? "Salvando..." : isCompletedWorkflow && communication.status === "DADOS_INCONSISTENTES" ? "Sinalizar inconsistência e enviar e-mail" : isCompletedWorkflow ? "Marcar como processada" : "Alterar status e enviar e-mail"}</button>
         </section>}
 
 
@@ -552,17 +766,18 @@ export default function NotaDetalhePage() {
         <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor.nome}</p></div><span className="badge badge-blue">Aprovação</span></div>
         {invoice.statusProcessamento === "ERRO" && <div className="mt-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {invoice.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
         {approvalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approvalError}</div>}
-        <div className="mt-5 space-y-4">
+        {isLoadingStepApproval ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : hasOpenApproval && approvalInfo?.currentStep ? <div className="mt-5 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields policies={approvalInfo.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{approvalInfo.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="mt-5 space-y-4">
           <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
           <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label></div>
           <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>
           <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Pontual <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={purchaseOrder} onChange={(event) => setPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label><label className="approval-field"><span className="approval-field-label">Ordem de Compra – Contrato <span className="text-xs font-normal text-slate-500">(opcional)</span></span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={contractPurchaseOrder} onChange={(event) => setContractPurchaseOrder(onlyDigits(event.target.value))} maxLength={120} placeholder="Somente números" /></label></div>
           <label className="approval-field"><span className="approval-field-label">Número de parcelas</span><input className="approval-field-control" type="text" inputMode="numeric" pattern="[0-9]*" value={installmentCount} onChange={(event) => setInstallmentCount(onlyDigits(event.target.value))} onBlur={() => { if (!installmentCount || Number(installmentCount) < 1) setInstallmentCount("1"); }} required /></label>
           <QualificationProcedureLink />
-        </div>
-        <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setIsApprovalModalOpen(false)} disabled={isApproving}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving}>{isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
+        </div>}
+        <div className="form-actions mt-5"><button type="button" className="btn-secondary" onClick={() => setIsApprovalModalOpen(false)} disabled={isApproving}>Cancelar</button><button type="button" className="btn-primary" onClick={aprovarComAvaliacao} disabled={isApproving || isLoadingStepApproval}>{isLoadingStepApproval ? "Carregando…" : isApproving ? "Aprovando..." : "Confirmar aprovação"}</button></div>
       </section>
     </>}
 
   </AppLayout>;
 }
+

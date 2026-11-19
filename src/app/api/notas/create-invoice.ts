@@ -6,7 +6,8 @@ import { sendInvoiceAdminReviewEmail, sendInvoiceCreatedEmail } from "@/lib/emai
 import { parseNFSeXml } from "@/lib/nfse-parser";
 import { evaluateInvoiceAdminReview, extractDescriptionTotal, INVOICE_ADMIN_REVIEW_REASONS } from "@/lib/invoice-admin-review";
 import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
-import { createInvoiceAuditLog } from "@/lib/audit";
+import { startConfiguredWorkflow } from "@/lib/workflow/start";
+import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 import { uploadXmlToOneDrive } from "@/lib/onedrive";
 
 type ManualInvoiceData = {
@@ -264,9 +265,11 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
     : null;
   const missingReviewEmail = reviewDecision.requiresAdminReview && (!reviewConfig?.ativo || !reviewConfig.email);
 
-  const invoice = await prisma.invoice.create({
+  const creation = await prisma.$transaction(async (tx) => {
+  const invoice = await tx.invoice.create({
     data: {
       numeroNota: String(nfseData.numeroNota),
+      documentType: "NFSE",
       codigoIdentificador: String(nfseData.codigoIdentificador),
       fornecedorId: supplier.id,
       nDfse: "nDfse" in nfseData ? nfseData.nDfse : undefined,
@@ -277,6 +280,7 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
       itemTributacaoNac: "itemTributacaoNac" in nfseData ? nfseData.itemTributacaoNac : undefined,
       itemTributacaoMun: "itemTributacaoMun" in nfseData ? nfseData.itemTributacaoMun : undefined,
       nbsDescricao: "nbsDescricao" in nfseData ? nfseData.nbsDescricao : undefined,
+      descricaoServico: descricaoServico || undefined,
       dataProcessamento:
         "dataProcessamento" in nfseData && nfseData.dataProcessamento
           ? new Date(nfseData.dataProcessamento)
@@ -332,8 +336,14 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
     }
   });
 
-  await prisma.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status, reason: validationReason } });
-  await createInvoiceAuditLog({ invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: options.auditDescription ?? "Nota criada e encaminhada para aprovação", newStatus: invoice.status, reason: validationReason, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: invoice as unknown as any });
+  await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, newStatus: invoice.status, reason: validationReason } });
+  await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName: manager?.nome, actorEmail: manager?.email, actionType: "NOTE_CREATED", actionDescription: options.auditDescription ?? "Nota criada e encaminhada para aprovação", newStatus: invoice.status, reason: validationReason, comment: onedriveXmlUrl ? `XML enviado para OneDrive: ${onedriveXmlUrl}` : undefined, afterData: JSON.parse(JSON.stringify(invoice)) } });
+  const workflow = !reviewDecision.requiresAdminReview && !isRejectedOnCreate && initialStatus === InvoiceStatus.AGUARDANDO_APROVACAO
+    ? await startConfiguredWorkflow(tx, invoice.id, { id: manager?.id, name: manager?.nome, email: manager?.email }, invoice.createdAt, true)
+    : "LEGACY" as const;
+  return { invoice, workflow };
+  });
+  const { invoice, workflow } = creation;
 
   if (reviewDecision.requiresAdminReview) {
     const review = await prisma.invoiceAdminReview.findUnique({ where: { invoiceId: invoice.id } });
@@ -360,7 +370,9 @@ export async function createInvoiceFromRequest(request: NextRequest, options: Cr
         });
       }
     }
-  } else if (options.sendCreatedEmail ?? true) {
+  } else if (workflow === "STARTED") {
+    try { await processWorkflowNotifications(); } catch { /* A atribuição permanece na fila. */ }
+  } else if (workflow === "LEGACY" && (options.sendCreatedEmail ?? true)) {
     try {
       await sendInvoiceCreatedEmail({
         invoiceNumber: invoice.numeroNota,

@@ -269,6 +269,10 @@ td { vertical-align: middle; }
 .table-shell .button-secondary {
   white-space: nowrap;
 }
+.dashboard-queue-switch > button,
+.dashboard-row-actions > button {
+  width: auto;
+}
 tbody tr { transition: background .14s ease; }
 tbody tr:hover { background: var(--surface-container-low); }
 

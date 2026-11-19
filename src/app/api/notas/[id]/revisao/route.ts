@@ -3,6 +3,8 @@ import { getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { invoiceAdminReviewDecisionSchema } from "@/lib/validations";
+import { startConfiguredWorkflow } from "@/lib/workflow/start";
+import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 
 type Params = { params: { id: string } };
 
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const allReasonsResolved = (!needsValue || Boolean(confirmedValue)) && (!needsEmissionConfirmation || emissionConfirmed);
   const nextStatus = ignoring ? "IGNORADA" : allReasonsResolved ? "LIBERADA" : "PENDENTE";
   const changed = await prisma.$transaction(async (tx) => {
+    let workflow: "LEGACY" | "STARTED" | "BLOCKED" | "EXISTS" = "LEGACY";
     const result = await tx.invoiceAdminReview.updateMany({
       where: { id: review.id, status: "PENDENTE", versao: parsed.data.versao },
       data: {
@@ -104,11 +107,18 @@ export async function POST(request: NextRequest, { params }: Params) {
         }
       });
     }
-    return result;
+    if (result.count && nextStatus === "LIBERADA") {
+      await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${review.invoiceId} FOR UPDATE`;
+      workflow = await startConfiguredWorkflow(tx, review.invoiceId, { id: manager.id, name: manager.nome, email: manager.email }, review.invoice.createdAt);
+    }
+    return { ...result, workflow };
   });
   if (!changed.count) return NextResponse.json({ error: "A revisão mudou desde que foi carregada. Atualize a fila." }, { status: 409 });
 
-  if (nextStatus === "LIBERADA") {
+  if (changed.workflow === "STARTED") {
+    try { await processWorkflowNotifications(); } catch { /* O aviso permanece na fila. */ }
+  }
+  if (nextStatus === "LIBERADA" && changed.workflow === "LEGACY") {
     const recipients = Array.from(new Set([
       ...review.invoice.fornecedor.managerSuppliers.map((item) => item.manager.email),
       ...(review.invoice.fornecedor.notificationConfig?.emailsExtras ?? [])
