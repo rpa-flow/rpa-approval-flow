@@ -14,7 +14,7 @@ const fieldsSchema = z.object({
   numeroParcelas: z.number().int().min(1).optional(),
   dataPagamento: z.string().datetime().nullable().optional(),
   observacaoValidacao: z.string().max(500).nullable().optional(),
-  serviceEvaluation: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().min(5), riskLevel: z.enum(["BAIXO", "MEDIO", "ALTO"]), qualifica: z.enum(["SIM", "NAO"]).optional() }).strict().optional()
+  serviceEvaluation: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(1000).optional(), riskLevel: z.enum(["BAIXO", "MEDIO", "ALTO"]), qualifica: z.enum(["SIM", "NAO"]).optional() }).strict().optional()
 }).strict();
 const bodySchema = z.object({ revision: z.number().int().positive(), idempotencyKey: z.string().min(1).max(120), fields: fieldsSchema }).strict();
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!changed.count) return { code: 409, error: "A etapa mudou. Atualize a nota." };
       await tx.invoice.update({ where: { id: invoice.id }, data });
       if (serviceEvaluation) {
-        const evaluationData = { ...serviceEvaluation, qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM", managerId: manager.id, managerName: manager.nome, managerEmail: manager.email };
+        const evaluationData = { ...serviceEvaluation, comment: serviceEvaluation.comment?.trim() || invoice.serviceEvaluation?.comment || "Avaliação registrada", qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM", managerId: manager.id, managerName: manager.nome, managerEmail: manager.email };
         await tx.serviceEvaluation.upsert({ where: { invoiceId: invoice.id }, create: { invoiceId: invoice.id, ...evaluationData }, update: evaluationData });
       }
       await tx.invoiceWorkflowTask.updateMany({ where: { executionId: execution.id, stepId: task.stepId, completedAt: null }, data: { completedAt: now } });
