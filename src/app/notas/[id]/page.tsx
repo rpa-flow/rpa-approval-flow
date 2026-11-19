@@ -166,6 +166,7 @@ export default function NotaDetalhePage() {
   const [statusChange, setStatusChange] = useState<{ status: Exclude<InvoiceStatus, "APROVADO">; reason: string }>({ status: "AGUARDANDO_APROVACAO", reason: "" });
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [communication, setCommunication] = useState({ status: "AGUARDANDO_APROVACAO" as InvoiceStatus, reason: "", message: "" });
+  const [codigoDelphiProcessing, setCodigoDelphiProcessing] = useState("");
   const [emailManagers, setEmailManagers] = useState<EmailManager[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<EmailManager[]>([]);
   const [recipientDraft, setRecipientDraft] = useState("");
@@ -232,6 +233,7 @@ export default function NotaDetalhePage() {
     setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
     setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
     setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+    setCodigoDelphiProcessing(loadedInvoice.codigoDelphi ?? "");
     setCommunication((current) => ({
       ...current,
       status: completedWorkflow ? "PROCESSADO" : STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
@@ -501,15 +503,19 @@ export default function NotaDetalhePage() {
 
     const formData = new FormData();
     formData.set("status", communication.status);
+    const isProcessingCompletedWorkflow = isCompletedWorkflow && communication.status === "PROCESSADO";
+    if (isProcessingCompletedWorkflow) formData.set("codigoDelphi", codigoDelphiProcessing.trim());
     const pendingRecipient = recipientDraft.trim();
     const recipientEmails = [
       ...selectedRecipients.map((recipient) => recipient.email),
       ...(pendingRecipient ? [pendingRecipient] : [])
     ];
-    formData.set("recipients", recipientEmails.join(";"));
-    formData.set("reason", communication.reason);
-    formData.set("message", communication.message);
-    if (communicationImage) formData.set("image", communicationImage);
+    if (!isProcessingCompletedWorkflow) {
+      formData.set("recipients", recipientEmails.join(";"));
+      formData.set("reason", communication.reason);
+      formData.set("message", communication.message);
+      if (communicationImage) formData.set("image", communicationImage);
+    }
 
     try {
       const res = await fetch(`/api/notas/${invoice.id}/comunicacao`, { method: "POST", body: formData });
@@ -522,7 +528,7 @@ export default function NotaDetalhePage() {
       }
 
       setMessageType("success");
-      setMessage(result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
+      setMessage(isProcessingCompletedWorkflow ? "Nota marcada como processada com o código Delphi informado." : result?.email?.simulated ? "Status alterado. O e-mail foi simulado porque o Microsoft Graph não está configurado." : "Status alterado e e-mail enviado com sucesso.");
       setCommunication((current) => ({ ...current, reason: "", message: "" }));
       setSelectedRecipients([]);
       setRecipientDraft("");
@@ -661,10 +667,12 @@ export default function NotaDetalhePage() {
         {me?.manager.role === "ADMIN" && (!approvalInfo || isCompletedWorkflow) && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Somente administradores</p>
-            <h3 className="section-title">{isCompletedWorkflow ? "Finalizar e comunicar" : "Alterar status e comunicar"}</h3>
-            <p className="section-description">{isCompletedWorkflow ? "A aprovação foi concluída. Marque a nota como processada e comunique os responsáveis por e-mail." : "Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos."}</p>
+            <h3 className="section-title">{isCompletedWorkflow ? "Finalizar nota" : "Alterar status e comunicar"}</h3>
+            <p className="section-description">{isCompletedWorkflow ? "A aprovação foi concluída. Para processar, informe o código Delphi. Se houver inconsistência, comunique os responsáveis e reabra o último step para conferência do gestor." : "Atualize o status e envie os dados da nota aos responsáveis. Os destinatários podem ser gestores ou outros contatos."}</p>
           </div>
-          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => option.value !== invoice.status && (!isCompletedWorkflow || option.value === "PROCESSADO")).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="approval-field"><span className="approval-field-label">Novo status</span><select className="approval-field-control" value={communication.status} onChange={(event) => setCommunication((current) => ({ ...current, status: event.target.value as InvoiceStatus }))}>{STATUS_OPTIONS.filter((option) => (option.value !== invoice.status || option.value === communication.status) && (!isCompletedWorkflow || ["PROCESSADO", "DADOS_INCONSISTENTES"].includes(option.value))).map((option) => <option key={option.value} value={option.value} disabled={option.value === invoice.status}>{option.label}</option>)}</select></label>
+          {isCompletedWorkflow && communication.status === "PROCESSADO" && <label className="approval-field"><span className="approval-field-label">Código Delphi</span><input className="approval-field-control" value={codigoDelphiProcessing} onChange={(event) => setCodigoDelphiProcessing(event.target.value)} maxLength={120} required placeholder="Informe o código do lançamento no Delphi" /></label>}
+          {!(isCompletedWorkflow && communication.status === "PROCESSADO") && <>
           <div className="approval-field space-y-2">
             <label className="approval-field-label" htmlFor="status-email-recipients">Para</label>
             <div className="relative">
@@ -692,8 +700,9 @@ export default function NotaDetalhePage() {
           <label className="approval-field"><span className="approval-field-label">Motivo da alteração</span><textarea className="approval-field-control" value={communication.reason} onChange={(event) => setCommunication((current) => ({ ...current, reason: event.target.value }))} rows={3} maxLength={500} placeholder="Explique por que o status está sendo alterado" required /></label>
           <label className="approval-field"><span className="approval-field-label">Mensagem adicional <span className="text-xs font-normal text-slate-500">(opcional)</span></span><textarea className="approval-field-control" value={communication.message} onChange={(event) => setCommunication((current) => ({ ...current, message: event.target.value }))} rows={3} maxLength={2000} placeholder="Inclua orientações para os destinatários" /></label>
           <label className="approval-field"><span className="approval-field-label">Imagem no corpo do e-mail <span className="text-xs font-normal text-slate-500">(opcional, até 5 MB)</span></span><input className="approval-field-control" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => setCommunicationImage(event.target.files?.[0] ?? null)} />{communicationImage && <span className="text-xs font-semibold text-blue-700">Selecionada: {communicationImage.name}</span>}</label>
-          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || (!selectedRecipients.length && !recipientDraftIsValidEmail) || (Boolean(recipientDraft.trim()) && !recipientDraftIsValidEmail) || !communication.reason.trim()}>{isSendingCommunication ? "Alterando e enviando..." : isCompletedWorkflow ? "Marcar processada e enviar e-mail" : "Alterar status e enviar e-mail"}</button>
           <p className="text-xs text-slate-500">O e-mail incluirá número, código, fornecedor, valor, emissão, status anterior, novo status e motivo.</p>
+          </>}
+          <button type="button" className="btn-primary w-full" onClick={sendStatusCommunication} disabled={isSendingCommunication || communication.status === invoice.status || (isCompletedWorkflow && communication.status === "PROCESSADO" ? !codigoDelphiProcessing.trim() : (!selectedRecipients.length && !recipientDraftIsValidEmail) || (Boolean(recipientDraft.trim()) && !recipientDraftIsValidEmail) || !communication.reason.trim())}>{isSendingCommunication ? "Salvando..." : isCompletedWorkflow && communication.status === "DADOS_INCONSISTENTES" ? "Sinalizar inconsistência e enviar e-mail" : isCompletedWorkflow ? "Marcar como processada" : "Alterar status e enviar e-mail"}</button>
         </section>}
 
 
