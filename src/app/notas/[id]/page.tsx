@@ -12,7 +12,7 @@ import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPoli
 import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
-type EmailManager = { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" };
+type EmailManager = { id: string; nome: string; email: string; role?: "ADMIN" | "GESTOR" };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
 type InvoiceStatus = "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO" | "PROCESSADO" | "EXPIRADA" | "DADOS_INCONSISTENTES";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
