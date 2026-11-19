@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (!changed.count) return { code: 409, error: "A etapa mudou. Atualize a nota." };
       await tx.invoice.update({ where: { id: invoice.id }, data });
       if (serviceEvaluation) {
-        const evaluationData = { ...serviceEvaluation, qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM", managerId: manager.id, managerName: manager.nome, managerEmail: manager.email };
+        const evaluationData = { ...serviceEvaluation, comment: serviceEvaluation.comment?.trim() || invoice.serviceEvaluation?.comment || "Avaliação registrada", qualifica: serviceEvaluation.qualifica === undefined ? null : serviceEvaluation.qualifica === "SIM", managerId: manager.id, managerName: manager.nome, managerEmail: manager.email };
         await tx.serviceEvaluation.upsert({ where: { invoiceId: invoice.id }, create: { invoiceId: invoice.id, ...evaluationData }, update: evaluationData });
       }
       await tx.invoiceWorkflowTask.update({ where: { id: task.id }, data: { completedAt: now } });
