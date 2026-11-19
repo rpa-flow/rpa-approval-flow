@@ -90,8 +90,8 @@ export async function GET(request: NextRequest) {
 
   if (request.nextUrl.searchParams.get("forStatusEmail") === "1") {
     const managers = await prisma.manager.findMany({
-      where: { ativo: true, role: "GESTOR" },
-      select: { id: true, nome: true, email: true },
+      where: { ativo: true, role: { in: ["GESTOR", "ADMIN"] } },
+      select: { id: true, nome: true, email: true, role: true },
       orderBy: { nome: "asc" }
     });
     return NextResponse.json(managers);
