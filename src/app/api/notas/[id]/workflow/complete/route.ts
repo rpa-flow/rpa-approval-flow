@@ -13,7 +13,7 @@ const fieldsSchema = z.object({
   numeroParcelas: z.number().int().min(1).optional(),
   dataPagamento: z.string().datetime().nullable().optional(),
   observacaoValidacao: z.string().max(500).nullable().optional(),
-  serviceEvaluation: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().min(5), riskLevel: z.enum(["BAIXO", "MEDIO", "ALTO"]), qualifica: z.enum(["SIM", "NAO"]).optional() }).strict().optional()
+  serviceEvaluation: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(1000).optional(), riskLevel: z.enum(["BAIXO", "MEDIO", "ALTO"]), qualifica: z.enum(["SIM", "NAO"]).optional() }).strict().optional()
 }).strict();
 const bodySchema = z.object({ revision: z.number().int().positive(), idempotencyKey: z.string().min(1).max(120), fields: fieldsSchema }).strict();
 

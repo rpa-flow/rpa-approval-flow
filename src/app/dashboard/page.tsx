@@ -521,10 +521,10 @@ export default function DashboardPage() {
 
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
     const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
-    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel && evaluation.comment.trim().length >= 5);
+    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
     if (evaluationPolicy?.required && !evaluationComplete || hasEvaluationInput && !evaluationComplete) {
       setMessageType("error");
-      setMessage("Complete a avaliação do serviço com pontuação, risco e comentário.");
+      setMessage("Complete a avaliação do serviço com pontuação e classificação de risco.");
       return;
     }
     if (stepApproval.currentStep.requiresPurchaseOrder && !getValue("ordemCompra").trim() && !getValue("ocContrato").trim()) {
@@ -537,7 +537,7 @@ export default function DashboardPage() {
     for (const policy of policies) {
       const key = policy.fieldKey;
       if (key === "serviceEvaluation") {
-        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim(), riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
+        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim() || "Avaliação registrada", riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
         continue;
       }
       const value = getValue(key).trim();

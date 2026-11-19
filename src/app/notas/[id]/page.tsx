@@ -415,9 +415,9 @@ export default function NotaDetalhePage() {
       }
     }
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
-    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel && evaluation.comment.trim().length >= 5);
+    const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
     if (evaluationPolicy?.required && !evaluationComplete) {
-      setApprovalError("Complete a avaliação do serviço com pontuação, risco e comentário de pelo menos 5 caracteres.");
+      setApprovalError("Complete a avaliação do serviço com pontuação e classificação de risco.");
       return;
     }
     if (approvalInfo.currentStep.requiresPurchaseOrder && !getValue("ordemCompra").trim() && !getValue("ocContrato").trim()) {
@@ -427,7 +427,7 @@ export default function NotaDetalhePage() {
     const fields: Record<string, unknown> = {};
     for (const policy of policies) {
       if (policy.fieldKey === "serviceEvaluation") {
-        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim() || "Qualificação registrada", riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
+        if (evaluationComplete) fields.serviceEvaluation = { rating: evaluation.rating, comment: evaluation.comment.trim() || "Avaliação registrada", riskLevel: evaluation.riskLevel, ...(evaluation.qualifica ? { qualifica: evaluation.qualifica } : {}) };
         continue;
       }
       const value = getValue(policy.fieldKey).trim();
