@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionManager } from "@/lib/auth";
-import { canViewReports, APPROVAL_SLA_HOURS, getReportsScope, loadInvoices, parseFilters } from "@/lib/reports";
-import { slaEvolution } from "@/lib/reports-aggregations";
+import { canViewReports, APPROVAL_SLA_HOURS, getReportsScope, invoiceWhere, parseFilters } from "@/lib/reports";
+import { prisma } from "@/lib/prisma";
+import { approvalTiming, slaEvolution } from "@/lib/reports-aggregations";
 
 export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
@@ -9,14 +10,24 @@ export async function GET(request: NextRequest) {
   if (!canViewReports(manager)) return NextResponse.json({ error: "Acesso aos relatórios não permitido." }, { status: 403 });
 
   const filters = parseFilters(request);
-  const invoices = await loadInvoices(getReportsScope(manager), filters);
-  const monthly = slaEvolution(invoices, APPROVAL_SLA_HOURS);
-  const approved = invoices.filter((invoice) => invoice.status === "APROVADO");
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      ...invoiceWhere(getReportsScope(manager), { ...filters, from: undefined, to: undefined, status: undefined }),
+      status: { in: ["APROVADO", "PROCESSADO"] }
+    },
+    include: { fornecedor: true, criadoPor: true, serviceEvaluation: true, auditLogs: true, statusHistory: { orderBy: { createdAt: "asc" } } },
+    orderBy: { createdAt: "desc" }
+  });
+  const inApprovalPeriod = invoices.filter((invoice) => {
+    const { approvalAt } = approvalTiming(invoice);
+    return (!filters.from || approvalAt >= filters.from) && (!filters.to || approvalAt <= filters.to);
+  });
+  const monthly = slaEvolution(inApprovalPeriod, APPROVAL_SLA_HOURS);
+  const approved = inApprovalPeriod;
 
   const ranking = approved
     .map((invoice) => {
-      const approvalAt = invoice.dataValidacao ?? invoice.dataAtualizacao;
-      const approvalHours = (approvalAt.getTime() - invoice.createdAt.getTime()) / 3600000;
+      const { approvalHours } = approvalTiming(invoice);
       return {
         invoiceId: invoice.id,
         numeroNota: invoice.numeroNota,
@@ -32,7 +43,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     slaHours: APPROVAL_SLA_HOURS,
     monthly,
-    outOfSlaCount: ranking.filter((item) => item.outOfSla).length,
+    outOfSlaCount: monthly.reduce((total, row) => total + row.outOfSla, 0),
     ranking
   });
 }

@@ -13,9 +13,19 @@ type InvoiceLike = {
   codigoDelphi?: string | null;
   fornecedor: { nome: string };
   criadoPor: { nome: string } | null;
+  statusHistory?: Array<{ previousStatus: InvoiceStatus | null; newStatus: InvoiceStatus; createdAt: Date }>;
 };
 
 const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+
+export function approvalTiming(invoice: InvoiceLike) {
+  const approvalEvents = invoice.statusHistory?.filter((event) => event.newStatus === "APROVADO") ?? [];
+  const approvalEvent = approvalEvents[approvalEvents.length - 1];
+  const approvalAt = approvalEvent?.createdAt ?? invoice.dataValidacao ?? invoice.dataAtualizacao;
+  const pendingEvents = invoice.statusHistory?.filter((event) => event.newStatus === "AGUARDANDO_APROVACAO" && event.createdAt <= approvalAt) ?? [];
+  const pendingAt = pendingEvents[pendingEvents.length - 1]?.createdAt ?? invoice.createdAt;
+  return { approvalAt, pendingAt, approvalHours: (approvalAt.getTime() - pendingAt.getTime()) / 3600000 };
+}
 
 export function createdVsProcessedByMonth(invoices: InvoiceLike[]) {
   const map = new Map<string, { month: string; created: number; processed: number }>();
@@ -35,13 +45,12 @@ export function createdVsProcessedByMonth(invoices: InvoiceLike[]) {
 }
 
 export function slaEvolution(invoices: InvoiceLike[], slaHours: number) {
-  const approved = invoices.filter((i) => i.status === "APROVADO" && (i.dataValidacao || i.dataAtualizacao));
+  const approved = invoices.filter((i) => ["APROVADO", "PROCESSADO"].includes(i.status) && (i.dataValidacao || i.dataAtualizacao));
   const monthly = new Map<string, { month: string; total: number; outOfSla: number; avgApprovalHours: number }>();
   for (const inv of approved) {
-    const approvalAt = inv.dataValidacao ?? inv.dataAtualizacao;
+    const { approvalAt, approvalHours: hours } = approvalTiming(inv);
     const key = monthKey(approvalAt);
     const row = monthly.get(key) ?? { month: key, total: 0, outOfSla: 0, avgApprovalHours: 0 };
-    const hours = (approvalAt.getTime() - inv.createdAt.getTime()) / 3600000;
     row.total += 1;
     row.avgApprovalHours += hours;
     if (hours > slaHours) row.outOfSla += 1;
