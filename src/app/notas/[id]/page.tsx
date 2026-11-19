@@ -423,7 +423,7 @@ export default function NotaDetalhePage() {
       }
     }
     const paymentDateKey = getValue("dataPagamento").slice(0, 10);
-    if (paymentDateKey && paymentDateKey < minimumPaymentDate()) {
+    if (policies.some((policy) => policy.fieldKey === "dataPagamento") && paymentDateKey && paymentDateKey < minimumPaymentDate()) {
       setApprovalError(`A data de pagamento deve ser a partir de ${minimumPaymentDate().split("-").reverse().join("/")}.`);
       return;
     }
