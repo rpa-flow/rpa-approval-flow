@@ -40,8 +40,7 @@ export async function GET(request: NextRequest) {
         ? { managerSuppliers: { some: { supplier: { invoices: { some: { criadoPorId: manager.id } } } } }, ativo: true }
         : { managerSuppliers: { some: { supplierId: { in: getAllowedSupplierIds(manager) } } }, ativo: true };
 
-  const [total, allNotesTotal, myApprovalsTotal, supplierOptions, managerOptions] = await Promise.all([
-    prisma.invoice.count({ where }),
+  const [allNotesTotal, myApprovalsTotal, supplierOptions, managerOptions] = await Promise.all([
     prisma.invoice.count({ where: allNotesWhere }),
     prisma.invoice.count({ where: { AND: [allNotesWhere, myApprovalsWhere] } }),
     prisma.supplier.findMany({
@@ -57,6 +56,7 @@ export async function GET(request: NextRequest) {
     })
   ]);
 
+  const total = showMyApprovals ? myApprovalsTotal : allNotesTotal;
   const pagination = getPaginationMetadata(total, requestedPage, pageSize);
   const activeTaskSelect = { managerId: true, managerName: true, assignedAt: true, step: { select: { name: true, fields: { select: { fieldKey: true, mode: true } } } } } as const;
   const assignedTaskPages = showMyApprovals
@@ -71,7 +71,56 @@ export async function GET(request: NextRequest) {
   const assignedInvoiceIds = assignedTaskPages?.map((task) => task.execution.invoiceId) ?? [];
   const invoices = await prisma.invoice.findMany({
     where: assignedTaskPages ? { id: { in: assignedInvoiceIds } } : where,
-    include: {
+    select: {
+      id: true,
+      codigoIdentificador: true,
+      documentType: true,
+      numeroNota: true,
+      nDfse: true,
+      fornecedorId: true,
+      status: true,
+      processada: true,
+      statusProcessamento: true,
+      dataAtualizacao: true,
+      createdAt: true,
+      tentativasNotificacao: true,
+      ultimoLembreteEm: true,
+      gestoresSincronizadosIds: true,
+      xmlOriginal: includeXml,
+      localEmissao: true,
+      localPrestacao: true,
+      municipioIncidencia: true,
+      itemTributacaoNac: true,
+      itemTributacaoMun: true,
+      nbsDescricao: true,
+      descricaoServico: true,
+      dataProcessamento: true,
+      dataEmissao: true,
+      dataCompetencia: true,
+      dataPagamento: true,
+      ordemCompra: true,
+      ocContrato: true,
+      numeroParcelas: true,
+      dataLancamentoDelphi: true,
+      codigoDelphi: true,
+      statusIntegracaoDelphi: true,
+      situacaoNotaFiscal: true,
+      responsavelValidacao: true,
+      dataValidacao: true,
+      observacaoValidacao: true,
+      prestadorCnpj: true,
+      prestadorNome: true,
+      prestadorEmail: true,
+      tomadorCnpj: true,
+      tomadorNome: true,
+      tomadorEmail: true,
+      valorBaseCalculo: true,
+      valorIssqn: true,
+      valorTotalRetido: true,
+      valorLiquido: true,
+      valorServico: true,
+      aliquota: true,
+      criadoPorId: true,
       adminReview: { select: { status: true, valorConfirmado: true } },
       workflowExecution: { select: { status: true, tasks: { where: { completedAt: null }, select: activeTaskSelect, orderBy: { assignedAt: "asc" } } } },
       fornecedor: {

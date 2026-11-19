@@ -176,69 +176,75 @@ export default function NotaDetalhePage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const meRes = await fetch("/api/auth/me");
-    if (!meRes.ok) {
-      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-      return;
-    }
-    const meData = await meRes.json() as Me;
-    setMe(meData);
-    if (meData.manager.role === "ADMIN") {
-      const managersRes = await fetch("/api/gestores?forStatusEmail=1");
-      if (managersRes.ok) setEmailManagers(await managersRes.json() as EmailManager[]);
-    }
+    try {
+      const [meRes, workflowRes, invoiceRes, historyRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch(`/api/notas/${params.id}/workflow`),
+        fetch(`/api/notas/${params.id}`),
+        fetch(`/api/notas/${params.id}/historico`)
+      ]);
+      if (!meRes.ok) {
+        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+        return;
+      }
+      const meData = await meRes.json() as Me;
+      setMe(meData);
+      if (meData.manager.role === "ADMIN") {
+        void fetch("/api/gestores?forStatusEmail=1")
+          .then(async (response) => { if (response.ok) setEmailManagers(await response.json() as EmailManager[]); })
+          .catch(() => setEmailManagers([]));
+      }
 
-    setApprovalInfo(null);
-    let completedWorkflow = false;
-    const workflowRes = await fetch(`/api/notas/${params.id}/workflow`);
-    if (workflowRes.ok) {
-      const workflowData = await workflowRes.json() as ApprovalInfo;
-      completedWorkflow = workflowData.execution.status === "COMPLETED";
-      setApprovalInfo(workflowData);
-    } else if (workflowRes.status !== 404 && workflowRes.status !== 403) {
-      setMessageType("error");
-      setMessage("Não foi possível carregar os dados da aprovação.");
+      setApprovalInfo(null);
+      let completedWorkflow = false;
+      if (workflowRes.ok) {
+        const workflowData = await workflowRes.json() as ApprovalInfo;
+        completedWorkflow = workflowData.execution.status === "COMPLETED";
+        setApprovalInfo(workflowData);
+      } else if (workflowRes.status !== 404 && workflowRes.status !== 403) {
+        setMessageType("error");
+        setMessage("Não foi possível carregar os dados da aprovação.");
+        setLoading(false);
+        return;
+      }
+
+      if (invoiceRes.status === 401 || historyRes.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
+        return;
+      }
+
+      if (invoiceRes.status === 403 || historyRes.status === 403) {
+        setMessageType("error");
+        setMessage("Você não tem acesso a esta nota fiscal.");
+        setLoading(false);
+        return;
+      }
+
+      if (!invoiceRes.ok) {
+        setMessageType("error");
+        setMessage("Nota fiscal não encontrada.");
+        setLoading(false);
+        return;
+      }
+
+      const loadedInvoice = await invoiceRes.json();
+      setInvoice(loadedInvoice);
+      if (historyRes.ok) setEvents(await historyRes.json());
+      setPaymentDate("");
+      setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
+      setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
+      setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
+      setCodigoDelphiProcessing(loadedInvoice.codigoDelphi ?? "");
+      setCommunication((current) => ({
+        ...current,
+        status: completedWorkflow ? "PROCESSADO" : STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
+      }));
       setLoading(false);
-      return;
-    }
-
-    const [invoiceRes, historyRes] = await Promise.all([
-      fetch(`/api/notas/${params.id}`),
-      fetch(`/api/notas/${params.id}/historico`)
-    ]);
-
-    if (invoiceRes.status === 401 || historyRes.status === 401) {
-      router.push(`/login?redirect=${encodeURIComponent(`/notas/${params.id}`)}`);
-      return;
-    }
-
-    if (invoiceRes.status === 403 || historyRes.status === 403) {
+    } catch {
       setMessageType("error");
-      setMessage("Você não tem acesso a esta nota fiscal.");
+      setMessage("Não foi possível carregar a nota. Verifique sua conexão e tente novamente.");
       setLoading(false);
-      return;
     }
-
-    if (!invoiceRes.ok) {
-      setMessageType("error");
-      setMessage("Nota fiscal não encontrada.");
-      setLoading(false);
-      return;
-    }
-
-    const loadedInvoice = await invoiceRes.json();
-    setInvoice(loadedInvoice);
-    if (historyRes.ok) setEvents(await historyRes.json());
-    setPaymentDate("");
-    setPurchaseOrder(loadedInvoice.ordemCompra ?? "");
-    setContractPurchaseOrder(loadedInvoice.ocContrato ?? "");
-    setInstallmentCount(String(loadedInvoice.numeroParcelas ?? 1));
-    setCodigoDelphiProcessing(loadedInvoice.codigoDelphi ?? "");
-    setCommunication((current) => ({
-      ...current,
-      status: completedWorkflow ? "PROCESSADO" : STATUS_OPTIONS.find((option) => option.value !== loadedInvoice.status)?.value ?? "AGUARDANDO_APROVACAO"
-    }));
-    setLoading(false);
   }, [params.id, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
