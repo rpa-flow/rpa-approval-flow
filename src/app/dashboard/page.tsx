@@ -241,6 +241,7 @@ export default function DashboardPage() {
   const [menuState, setMenuState] = useState<{ invoice: Invoice; x: number; y: number } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ invoice: Invoice; events: AuditEvent[] } | null>(null);
   const [approveModal, setApproveModal] = useState<Invoice | null>(null);
+  const [approveModalError, setApproveModalError] = useState("");
   const [stepApproval, setStepApproval] = useState<StepApprovalContext | null>(null);
   const [stepApprovalLoading, setStepApprovalLoading] = useState(false);
   const [stepApprovalValues, setStepApprovalValues] = useState<Record<string, string>>({});
@@ -358,6 +359,7 @@ export default function DashboardPage() {
 
   async function abrirModalAprovacao(invoice: Invoice) {
     setMenuState(null);
+    setApproveModalError("");
     setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
     setPaymentDate("");
     setPurchaseOrder(invoice.ordemCompra ?? "");
@@ -407,6 +409,7 @@ export default function DashboardPage() {
 
   function fecharModalAprovacao() {
     setApproveModal(null);
+    setApproveModalError("");
     setStepApproval(null);
     setStepApprovalValues({});
     setStepOperationKey("");
@@ -518,8 +521,7 @@ export default function DashboardPage() {
       if (policy.fieldKey === "serviceEvaluation") continue;
       if (policy.required && !getValue(policy.fieldKey).trim()) {
         const label = NFSE_WORKFLOW_FIELDS.find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
-        setMessageType("error");
-        setMessage(`Preencha o campo obrigatório: ${label}.`);
+        setApproveModalError(`Preencha o campo obrigatório: ${label}.`);
         return;
       }
     }
@@ -528,13 +530,11 @@ export default function DashboardPage() {
     const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
     const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
     if (evaluationPolicy?.required && !evaluationComplete || hasEvaluationInput && !evaluationComplete) {
-      setMessageType("error");
-      setMessage("Complete a avaliação do serviço com pontuação e classificação de risco.");
+      setApproveModalError("Complete a avaliação do serviço com pontuação e classificação de risco.");
       return;
     }
     if (stepApproval.currentStep.requiresPurchaseOrder && !getValue("ordemCompra").trim() && !getValue("ocContrato").trim()) {
-      setMessageType("error");
-      setMessage("Informe a ordem de compra ou o contrato para continuar.");
+      setApproveModalError("Informe a ordem de compra ou o contrato para continuar.");
       return;
     }
 
@@ -552,6 +552,7 @@ export default function DashboardPage() {
     }
 
     setIsApproving(true);
+    setApproveModalError("");
     setMessage("");
     try {
       const response = await fetch(`/api/notas/${approveModal.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: stepApproval.execution.revision, idempotencyKey: stepOperationKey, fields }) });
@@ -562,8 +563,7 @@ export default function DashboardPage() {
       await loadData();
       fecharModalAprovacao();
     } catch (error) {
-      setMessageType("error");
-      setMessage((error instanceof Error ? error.message : "Não foi possível comunicar com o servidor para aprovar a nota.").replace(/workflow/gi, "aprovação"));
+      setApproveModalError((error instanceof Error ? error.message : "Não foi possível comunicar com o servidor para aprovar a nota.").replace(/workflow/gi, "aprovação"));
     } finally {
       setIsApproving(false);
     }
@@ -833,6 +833,7 @@ export default function DashboardPage() {
     {approveModal && <section role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6" onClick={(e) => e.stopPropagation()}>
       <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">{approveModal.workflowExecution?.status === "ACTIVE" ? "Aprovar nota" : "Avaliação obrigatória do serviço"}</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p><p className="section-description">Código externo: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p>{stepApproval && <p className="section-description">Etapa: {stepApproval.currentStep.name}</p>}</div><span className="badge badge-blue">Aprovação</span></div>
       {approveModal.statusProcessamento === "ERRO" && <div className="mb-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {approveModal.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
+      {approveModalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approveModalError}</div>}
       {stepApprovalLoading ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : stepApproval ? <div className="mt-4 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields policies={stepApproval.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{stepApproval.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="space-y-4">
         <div role="group" aria-labelledby="dashboard-rating-label"><p id="dashboard-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
         <div className="grid items-start gap-3 sm:grid-cols-3"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="approval-field"><span className="approval-field-label">Data de pagamento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label></div>
