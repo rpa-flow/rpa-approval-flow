@@ -38,6 +38,18 @@ export function buildInvoiceWhere(manager: SessionManager, searchParams: URLSear
           ] };
   const filters: Prisma.InvoiceWhereInput[] = [scopeWhere];
 
+  // Durante um workflow ativo, a nota aparece apenas para quem possui uma
+  // tarefa pendente no momento. O vínculo permanente com o fornecedor segue
+  // permitindo consultar notas fora de um workflow ativo.
+  if (manager.role === "GESTOR") {
+    filters.push({
+      OR: [
+        { workflowExecution: { isNot: { status: "ACTIVE" } } },
+        { workflowExecution: { is: { status: "ACTIVE", tasks: { some: { managerId: manager.id, completedAt: null } } } } }
+      ]
+    });
+  }
+
   if (searchParams.get("myApprovals") === "true") {
     filters.push({ workflowExecution: { is: { status: "ACTIVE", tasks: { some: { managerId: manager.id, completedAt: null } } } } });
   }
