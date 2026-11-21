@@ -22,6 +22,15 @@ services:
       DATABASE_URL: postgresql://local:local@db:5432/approval_local
       AUTH_SECRET: local-only-secret-do-not-use-in-production
       APP_BASE_URL: http://localhost:3000
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      DISABLE_INVOICE_CREATED_EMAIL: "true"
+      REMINDER_API_KEY: local-test-reminder-key
+      CRON_SECRET: local-test-cron-secret
+      # Valores fictícios para o Compose local; não reutilize fora de desenvolvimento.
+      INVOICE_INGEST_API_KEY: local-test-fiscal-ingest-key
+      NFE_INGEST_ENABLED: "true"
+      CTE_INGEST_ENABLED: "true"
       WATCHPACK_POLLING: "true"
     ports:
       - "127.0.0.1:3000:3000"
