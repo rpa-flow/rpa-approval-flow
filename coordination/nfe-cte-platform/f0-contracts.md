@@ -1,16 +1,25 @@
 # Fase 0 — descoberta e definição dos contratos
 
-Estado: em andamento. Inspeção estática local concluída para os pontos abaixo; regras da plataforma em alinhamento. Documentação e exemplos externos pendentes por solicitação do usuário. Este documento não autoriza implementação nem comprova comportamento em produção.
+Estado: Fase 0 de planejamento concluída; consultar [f0-consolidado.md](f0-consolidado.md) para a versão vigente e verificações restantes. Minerion/Delphi e coleta direta FSist estão fora deste plano. Este documento não comprova implementação nem comportamento em produção.
+
+> Consolidação vigente: a arquitetura acordada é uma tabela central com dados comuns e uma tabela de detalhes para cada tipo; preservar versões e histórico e relacionar CT-e substituto ao original. Workflow é configurado por tipo. A API distingue reenvio equivalente de conflito de conteúdo. Campos de interface foram aprovados. Trechos abaixo que tratam esses pontos como pendentes estão superados; referências a lançamento externo são histórico fora do escopo.
+
+Pendências técnicas de Fase 0: mapear os campos comuns e específicos, desenhar migração compatível com NFS-e e dados existentes, detalhar identidade e comparação de XML, respostas da API, situação fiscal e bloqueios, e resolver associação de empresa e chegada de substituição fora de ordem. Esses pontos não exigem definir o consumidor externo.
+
+As respostas recentes fecham decisões de ingestão e associação. Contrato externo do consumidor não será desenhado aqui: entrada, autenticação e resposta devem seguir a API NFS-e existente. Decisões antigas sobre envio, timeout, reconciliação e campos obrigatórios do Minerion estão adiadas; não são critérios de aceite deste plano.
 
 ## Decisões confirmadas
 
-- Incluir NF-e e CT-e com obtenção FSist, gestão/aprovação centralizadas e lançamento no Minerion.
+- Receber NFS-e, NF-e e CT-e por uma interface API e exibi-los no portal de aprovação.
+- A API existente de NFS-e é o padrão de formato, autenticação e resposta para os três tipos. O consumidor é separado e está fora do plano.
 - Cada tipo (NFS-e, NF-e e CT-e) terá sua própria configuração de workflow.
-- Documentação, homologação e exemplos estão disponíveis com o usuário; sua disponibilização/análise fica pendente por orientação explícita, sem bloquear a discussão de regras da plataforma.
-- Minerion e Delphi designam o mesmo destino; obtenção e lançamento continuam no `rpa-web` (resposta afirmativa à pergunta composta). Isso não comprova o contrato atual do robô, ainda não inspecionado.
+- Exemplos de NF-e e CT-e foram inspecionados; a NFS-e segue o formato já recebido pela plataforma.
+- Minerion/Delphi, `rpa-web` e lançamento após aprovação ficam explicitamente fora do escopo deste plano.
 - NF-e/CT-e sem workflow publicado aguardam configuração, sem aprovação legada ou lançamento.
+- Após recepção e validações, notas novas entram automaticamente no workflow já publicado para o tipo; sem workflow publicado, aguardam seleção do ADMIN depois da primeira publicação.
+- XML corrigido de documento existente cria versão histórica, sinaliza a mudança e suspende o avanço até revisão do ADMIN. Se a versão anterior já foi aprovada e a correção for aceita, iniciar novo ciclo desde a primeira etapa.
 - Exigências de aprovação serão configuráveis por tipo; não presumir requisitos idênticos nos três tipos.
-- Revisão administrativa por valor zero e emissão anterior ao mês corrente vale para os três tipos. Campo de valor de referência dos novos tipos ainda pendente.
+- Revisão administrativa por valor zero e emissão anterior ao mês corrente vale para os três tipos; referência: valor atual de NFS-e, `vNF` em NF-e e `vTPrest` em CT-e.
 - Entrada de NF-e/CT-e somente pela integração nesta entrega, sem upload manual nem cadastro sem XML.
 - Cobertura dos novos tipos: somente compras e fretes contratados pelas empresas, sem documentos de saída.
 - Vínculos CT-e/NF-e são informativos; as aprovações são independentes, inclusive quando a NF-e referenciada ainda não estiver importada.
@@ -87,16 +96,36 @@ Os termos abaixo descrevem condições operacionais; não são proposta fechada 
 | Sucesso confirmado | Persistir referência e concluir | Repetição de confirmação deve ser inócua |
 | Cancelamento informado | Impedir novos envios; se lançado, reconciliação manual pelo ADMIN sem estorno automático (confirmado) | Preservar histórico; tentativa já em andamento exige apuração do resultado, sem presumir interrupção |
 
-## Contratos ainda necessários
+## Contratos ainda necessários no escopo revisado
 
-### FSist
+### API de recebimento e portal
+
+- Inspecionar e documentar a autenticação, formato, respostas e validações da rota NFS-e atual; estender esse mesmo contrato aos tipos novos, sem redesenhar o consumidor.
+- Definir chaves de identidade por tipo e a resposta existente para repetição equivalente/conflitante; a regra de domínio já está decidida.
+- Implementar a proposta de campos mínimos para lista e detalhe do portal aprovada pelo usuário, baseada nos exemplos XML.
+- Fechar associação a fornecedor/transportadora, campos mínimos para autocadastro e permissões; a empresa não resolvida aguarda ADMIN.
+- Definir armazenamento e recuperação de XML válido cuja situação fiscal esteja pendente, além de XML malformado/não parseável ou tipo não suportado.
+- Fechar a apresentação e bloqueios dos CT-e de substituição, inclusive quando o CT-e original já estiver aprovado.
+- Definir estados da nota entre recebimento, revisão, espera de workflow e aprovação/recusa, incluindo operação quando ainda não existe workflow publicado.
+
+### Dados aprovados para a interface
+
+- Lista: tipo e número/chave; fornecedor ou transportadora; empresa/estabelecimento; emissão; valor de referência; situação informada no XML; estado da revisão/workflow.
+- Detalhe: XML original conforme permissão; dados fiscais; NF-e com itens, quantidades e totais; CT-e com tomador, remetente, recebedor, trajeto, carga, componentes do frete, NF-e referenciada e vínculo de substituição; NFS-e com os campos já apresentados hoje.
+- O usuário aprovou esta proposta para compor o plano. Rótulos, organização visual e responsividade ficam para o desenho de UX/implementação, preservando estes dados e as permissões existentes.
+
+### Integrações explicitamente fora do escopo
+
+FSist como origem/coletor e Minerion/Delphi como destino de lançamento não são dependências para concluir este plano. A API recebe documentos de seu consumidor; contratos de coleta e de lançamento serão tratados em outro escopo.
+
+### FSist (adiado; não bloqueia este plano)
 
 - Interface de consulta/download e autenticação; empresa/estabelecimento e tipos cobertos; históricos, frequência e volume.
 - Cursor/paginação, ordenação, expiração, documentos tardios e cobertura de XML completo versus resumos/eventos.
 - Identificadores, situação retornada, limites, erros recuperáveis e recuperação de lacunas.
 - Onde roda o executor, quem guarda recebimentos/checkpoint e como a plataforma reconhece um recebimento já concluído.
 
-### Minerion e consumidor atual
+### Minerion e consumidor atual (adiado; não bloqueia este plano)
 
 - Destino Delphi/Minerion e executor `rpa-web` confirmados; falta inspecionar nomes/versões dos consumidores e exemplos de consulta de pendências/callback atuais.
 - Interface real de lançamento, mapeamentos por tipo, cadastros auxiliares e evidência de sucesso.
@@ -141,8 +170,11 @@ As rodadas funcionais desta conversa estão consolidadas em `spec.md` (DR-8 a DR
 
 Não é necessário repetir agora as perguntas sobre materiais externos que o usuário pediu para manter pendentes. O próximo trabalho técnico pode detalhar o contrato interno e as alternativas de persistência, preservando como pendentes os campos e garantias que dependem das integrações.
 
-## Critério de conclusão da Fase 0
+## Critério de conclusão da Fase 0 revisado
 
-Fase concluída quando a matriz de dados estiver preenchida com os contratos reais, as decisões materiais tiverem resposta explícita, as transições tiverem atores e recuperação definidos e os cenários da especificação/revisão refletirem essas decisões. A parte da plataforma pode ser alinhada antes; a conclusão integral dos contratos de integração continua dependente dos materiais externos adiados. Ausência de capacidade externa necessária deve aparecer como limitação/alternativa concreta. Não declarar concluída com recomendações ainda tratadas como regras aprovadas.
+### Respostas ainda pendentes do usuário
+
+
+Fase concluída quando o contrato de recebimento da API, autenticação e idempotência estiverem definidos; os dados necessários à exibição/aprovação dos três tipos estiverem mapeados; regras de associação, acesso e estados estiverem fechadas; e os cenários de aceite refletirem o escopo. Contratos de FSist e Minerion não são critérios desta Fase 0 revisada.
 
 Verificação nesta etapa: leitura dos contratos/código local e conferência documental. Sem migrations, testes de integração, chamadas a FSist/Minerion ou alterações no código de produto.

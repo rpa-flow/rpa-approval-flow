@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { createInvoiceAuditLog } from "@/lib/audit";
-import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
+import { invoicesAvailableForApproval, legacyInvoiceTypes } from "@/lib/invoice-admin-review-access";
 
 async function buildDueReminders() {
   const invoices = await prisma.invoice.findMany({
     where: {
-      AND: [invoicesAvailableForApproval(), { OR: [{ workflowExecution: { is: null } }, { workflowExecution: { is: { status: "COMPLETED" } } }] }],
+      AND: [invoicesAvailableForApproval(), legacyInvoiceTypes, { OR: [{ workflowExecution: { is: null } }, { workflowExecution: { is: { status: "COMPLETED" } } }] }],
       status: {
         in: ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"]
       }
@@ -37,7 +37,8 @@ async function buildDueReminders() {
   const now = new Date();
 
   return invoices
-    .map((invoice) => {
+    .flatMap((invoice) => {
+      if (!invoice.fornecedor) return [];
       const config = invoice.fornecedor.notificationConfig;
       const recorrenciaDias = config?.recorrenciaDias ?? 2;
       const ativo = config?.ativo ?? true;
@@ -79,7 +80,7 @@ async function processDueReminders(
   const sendEmails = options?.sendEmails ?? false;
 
   for (const reminder of reminders) {
-    const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { invoiceId: reminder.invoiceId }, select: { status: true } });
+    const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { currentInvoiceId: reminder.invoiceId }, select: { status: true } });
     if (currentWorkflow && currentWorkflow.status !== "COMPLETED") continue;
     const nextTentativa = reminder.tentativasAtuais + 1;
 

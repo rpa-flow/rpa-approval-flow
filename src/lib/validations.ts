@@ -1,4 +1,4 @@
-import { DelphiIntegrationStatus, InvoiceSituation, InvoiceStatus, ProcessingStatus, SupplierRiskLevel } from "@prisma/client";
+import { DelphiIntegrationStatus, InvoiceStatus, ProcessingStatus, SupplierRiskLevel } from "@prisma/client";
 import { z } from "zod";
 
 const dateTimeStringSchema = z.preprocess((value) => {
@@ -75,7 +75,7 @@ export const updateInvoiceSchema = z
     dataPagamento: dateTimeStringSchema,
     codigoDelphi: z.string().min(1).nullable().optional(),
     statusIntegracaoDelphi: z.nativeEnum(DelphiIntegrationStatus).optional(),
-    situacaoNotaFiscal: z.nativeEnum(InvoiceSituation).optional(),
+    situacaoNotaFiscal: z.enum(["AUTORIZADA", "CANCELADA"]).optional(),
     observacaoValidacao: z.string().max(500).nullable().optional(),
     reason: z.string().trim().max(500).optional(),
     serviceEvaluation: z.object({

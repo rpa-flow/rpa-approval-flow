@@ -17,7 +17,8 @@ export function uniqueActiveWorkflowAssignees(candidates: WorkflowAssignee[]): W
 }
 
 /** Resolve the immutable user list or the supplier-linked managers at assignment time. */
-export async function resolveStepAssignees(tx: Prisma.TransactionClient, step: AssignableWorkflowStep, supplierId: string): Promise<WorkflowAssignee[]> {
+export async function resolveStepAssignees(tx: Prisma.TransactionClient, step: AssignableWorkflowStep, supplierId: string | null): Promise<WorkflowAssignee[]> {
+  if (!supplierId) return [];
   const candidates = step.responsibilityMode === "SELECTED_USERS"
     ? step.responsibleManagers.map(({ manager }) => manager)
     : (await tx.managerSupplier.findMany({

@@ -14,7 +14,7 @@ test("known fields are mapped", () => {
 });
 
 test("sums federal retentions from the national DPS when vTotalRet is absent", () => {
-  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><vRetIRRF>13.35</vRetIRRF><vRetCSLL>8.90</vRetCSLL><piscofins><vPis>5.79</vPis><vCofins>26.70</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
+  const xml = `<NFSe><infNFSe><Id>${baseId}</Id><nNFSe>10</nNFSe><DPS><infDPS><valores><trib><tribFed><vRetIRRF>13.35</vRetIRRF><vRetCSLL>8.90</vRetCSLL><piscofins><tpRetPisCofins>1</tpRetPisCofins><vPis>5.79</vPis><vCofins>26.70</vCofins></piscofins></tribFed></trib></valores></infDPS></DPS></infNFSe></NFSe>`;
   const parsed = parseNFSeXml(xml);
 
   assert.equal(parsed.valorTotalRetido, "54.74");

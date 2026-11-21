@@ -3,14 +3,16 @@ import { Prisma } from "@prisma/client";
 import { getSessionManager } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { nfseWorkflowDraftSchema } from "@/lib/workflow/configuration";
+import { isDocumentType } from "@/lib/workflow/field-catalog";
 
 export async function GET(request: NextRequest) {
   const manager = await getSessionManager();
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   if (manager.role !== "ADMIN") return NextResponse.json({ error: "Somente ADMIN pode acessar workflows." }, { status: 403 });
-  if (request.nextUrl.searchParams.get("documentType") !== "NFSE") return NextResponse.json({ error: "Tipo de documento inválido ou indisponível." }, { status: 400 });
+  const documentType = request.nextUrl.searchParams.get("documentType");
+  if (!isDocumentType(documentType)) return NextResponse.json({ error: "Tipo de documento inválido ou indisponível." }, { status: 400 });
   const workflow = await prisma.approvalWorkflow.findUnique({
-    where: { documentType: "NFSE" },
+    where: { documentType },
     include: {
       versions: {
         orderBy: { number: "desc" },
@@ -40,7 +42,8 @@ export async function POST(request: NextRequest) {
   if (managers.length !== managerIds.length) return NextResponse.json({ error: "Selecione responsáveis ativos com perfil de gestor ou administrador." }, { status: 400 });
   try {
     const version = await prisma.$transaction(async (tx) => {
-      const workflow = await tx.approvalWorkflow.upsert({ where: { documentType: "NFSE" }, update: {}, create: { documentType: "NFSE" } });
+      const documentType = parsed.data.documentType;
+      const workflow = await tx.approvalWorkflow.upsert({ where: { documentType }, update: {}, create: { documentType } });
       const last = await tx.approvalWorkflowVersion.aggregate({ where: { workflowId: workflow.id }, _max: { number: true } });
       const created = await tx.approvalWorkflowVersion.create({
         data: {

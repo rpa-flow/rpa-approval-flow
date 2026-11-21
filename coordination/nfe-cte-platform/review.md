@@ -1,5 +1,9 @@
 # Revisão do planejamento NF-e/CT-e
 
+## Escopo vigente
+
+O usuário redirecionou o plano para construir a interface via API que recebe NFS-e, NF-e e CT-e e os apresenta no portal de aprovação. FSist como coletor e Minerion/Delphi como destino de lançamento, incluindo `rpa-web`, não fazem parte deste plano. As recomendações abaixo que tratam de coleta ou lançamento são riscos adiados, não bloqueios para este escopo; revisar os cenários de aceite contra `spec.md` e `f0-contracts.md` antes de implementação.
+
 Análise estática do checkout e da especificação nesta conversa. Sem acesso aos contratos externos, execução de integrações ou validação fiscal. Os casos de documentos abaixo são decisões de cobertura a confirmar com exemplos e documentação, não uma afirmação de suporte obrigatório.
 
 Atualização após respostas da Fase 0: o usuário confirmou aguardar configuração quando não há workflow publicado, exigências configuráveis por tipo, revisão de valor zero/mês anterior nos três tipos, entrada dos novos tipos só por integração e destino Minerion/Delphi com executor `rpa-web`. Documentação externa fica pendente por orientação. Essas decisões prevalecem sobre as dúvidas originais abaixo; ver regras confirmadas em `spec.md` e andamento em `f0-contracts.md`.

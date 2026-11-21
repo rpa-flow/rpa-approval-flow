@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  if (!invoice) {
+  if (!invoice || (invoice.documentType && invoice.documentType !== "NFSE")) {
     return NextResponse.json({ error: "Nota fiscal não encontrada." }, { status: 404 });
   }
 
@@ -61,9 +61,10 @@ export async function POST(request: NextRequest) {
   }
 
   const allowedSupplierIds = getAllowedSupplierIds(manager);
-  if (manager.role !== "ADMIN" && !allowedSupplierIds.includes(invoice.fornecedorId)) {
+  if (manager.role !== "ADMIN" && (!invoice.fornecedorId || !allowedSupplierIds.includes(invoice.fornecedorId))) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
+  if (!invoice.fornecedor) return NextResponse.json({ error: "Documento aguarda associação de fornecedor." }, { status: 409 });
   if (invoice.workflowExecution && invoice.workflowExecution.status !== "COMPLETED") {
     return NextResponse.json({ error: "Use os avisos do workflow para esta nota." }, { status: 409 });
   }
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { invoiceId: invoice.id }, select: { status: true } });
+  const currentWorkflow = await prisma.invoiceWorkflow.findUnique({ where: { currentInvoiceId: invoice.id }, select: { status: true } });
   if (currentWorkflow && currentWorkflow.status !== "COMPLETED") return NextResponse.json({ error: "Use os avisos do workflow para esta nota." }, { status: 409 });
 
   await sendApprovalRequestEmail({

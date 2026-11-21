@@ -1,3 +1,4 @@
+import type { Invoice } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validations";
@@ -7,7 +8,12 @@ import { parseNFSeXml } from "@/lib/nfse-parser";
 import { getRetentionDetails } from "@/lib/retention-details";
 import { isFullInvoiceResponse, serializeInvoiceDetail } from "@/lib/invoice-detail-response";
 import { isPaymentDateKeyAllowed, minimumPaymentDate, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
-import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
+import { visibleInvoiceWhere } from "@/lib/invoice-query";
+import { fiscalDetail } from "@/lib/fiscal-document-detail";
+import { hasPendingXmlCandidate, holdFiscalInvoice } from "@/lib/fiscal-document-ingest";
+import { isLegacyProcessingResult, legacyProcessingUnresolved } from "@/lib/fiscal-document-rules";
+import { reopenInconsistentWorkflow } from "@/lib/workflow/reopen";
+import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 
 type Params = {
   params: {
@@ -42,12 +48,8 @@ function hasPurchaseOrderOrContract(values: { ordemCompra?: string | null; ocCon
   return Boolean(values.ordemCompra?.trim() || values.ocContrato?.trim());
 }
 
-async function canAccessInvoice(invoice: { id: string; fornecedorId: string; criadoPorId?: string | null; documentType: "NFSE" | null }, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>, forUpdate = false) {
-  const allowedSupplierIds = getAllowedSupplierIds(manager);
-  if (manager.role === "ADMIN" || allowedSupplierIds.includes(invoice.fornecedorId) || invoice.criadoPorId === manager.id) return true;
-  if (manager.role !== "GESTOR" || forUpdate) return false;
-  if ((!invoice.documentType || invoice.documentType === "NFSE") && await hasGlobalNfseWorkflowAccess(manager.id)) return true;
-  return Boolean(await prisma.invoiceWorkflow.findFirst({ where: { invoiceId: invoice.id, OR: [{ tasks: { some: { managerId: manager.id, completedAt: null } } }, { version: { steps: { some: { responsibleManagers: { some: { managerId: manager.id } }, consultationScope: "ALL" } } } }] }, select: { id: true } }));
+function canUpdateInvoice(invoice: Pick<Invoice, "fornecedorId" | "criadoPorId">, manager: NonNullable<Awaited<ReturnType<typeof getSessionManager>>>) {
+  return manager.role === "ADMIN" || (invoice.fornecedorId !== null && getAllowedSupplierIds(manager).includes(invoice.fornecedorId)) || invoice.criadoPorId === manager.id;
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
@@ -58,42 +60,53 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: params.id },
-    include: {
-      fornecedor: {
-        select: {
-          id: true,
-          nome: true,
-          cnpj: true,
-          codigoExterno: true,
-          managerSuppliers: {
-            select: {
-              manager: {
-                select: { id: true, nome: true, email: true }
+  const isAdmin = manager.role === "ADMIN";
+  // Scope, current XML, extracted fields and related documents must use the same read.
+  const result = await prisma.$transaction(async tx => {
+    const scope = await visibleInvoiceWhere(manager, tx);
+    const invoice = await tx.invoice.findFirst({
+      where: { id: params.id, AND: [scope] },
+      include: {
+        fornecedor: {
+          select: {
+            id: true,
+            nome: true,
+            cnpj: true,
+            codigoExterno: true,
+            managerSuppliers: {
+              select: {
+                manager: {
+                  select: { id: true, nome: true, email: true }
+                }
               }
             }
           }
-        }
-      },
-      adminReview: true
+        },
+        company: { select: { cnpj: true, displayName: true } },
+        _count: { select: { documentVersions: true, workflowHistory: true } },
+        adminReview: true
+      }
+    });
+    if (!invoice) {
+      const exists = !isAdmin && await tx.invoice.findUnique({ where: { id: params.id }, select: { id: true } });
+      return { kind: exists ? "FORBIDDEN" : "MISSING" } as const;
     }
-  });
-
-  if (!invoice) {
+    const isFiscal = invoice.documentType === "NFE" || invoice.documentType === "CTE";
+    const showDetails = isFiscal || invoice._count.workflowHistory > 1 || invoice._count.documentVersions > 1 ||
+      (isAdmin && (invoice.status === "RECUSADO" || invoice.adminReview?.motivos.includes("CONFLITO_XML")));
+    const typedDetail = showDetails ? await fiscalDetail(tx, invoice.id, isAdmin, scope) : null;
+    return { kind: "FOUND", invoice, typedDetail, isFiscal } as const;
+  }, { isolationLevel: "RepeatableRead" });
+  if (result.kind === "FORBIDDEN") {
+    return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
+  }
+  if (result.kind !== "FOUND") {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
 
-  if (!(await canAccessInvoice(invoice, manager))) {
-    return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
-  }
-
-  if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") {
-    return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 404 });
-  }
-
+  const { invoice, typedDetail, isFiscal } = result;
   let parsedXml: ReturnType<typeof parseNFSeXml> | undefined;
-  if (invoice.xmlOriginal) {
+  if (invoice.xmlOriginal && (!invoice.documentType || invoice.documentType === "NFSE")) {
     try {
       parsedXml = parseNFSeXml(invoice.xmlOriginal);
     } catch {
@@ -102,14 +115,18 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
   const totalRetido = invoice.valorTotalRetido ?? parsedXml?.valorTotalRetido ?? null;
 
-  const { adminReview, ...invoiceWithoutReview } = invoice;
+  const { adminReview, _count, ...invoiceWithoutReview } = invoice;
   const valorConfirmado = adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
     ? Number(adminReview.valorConfirmado)
     : null;
 
   return NextResponse.json({
     ...serializeInvoiceDetail(invoiceWithoutReview, full),
-    valorParaAprovacao: valorConfirmado ?? Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
+    documentType: invoice.documentType, referenceValue: invoice.referenceValue, fiscalStatus: invoice.fiscalStatus,
+    empresa: { cnpj: invoice.company?.cnpj ?? invoice.tomadorCnpj, nomeExibicao: invoice.company?.displayName ?? null },
+    adminReview: adminReview ? { status: adminReview.status, motivos: adminReview.motivos } : null,
+    fiscalDocument: typedDetail,
+    valorParaAprovacao: valorConfirmado ?? (isFiscal ? invoice.referenceValue?.toNumber() ?? null : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0)),
     origemValorParaAprovacao: valorConfirmado !== null ? "VALIDACAO_ADMINISTRATIVA" : "XML",
     valorTotalRetido: totalRetido,
     retentionDetails: getRetentionDetails(parsedXml, totalRetido?.toString()),
@@ -152,12 +169,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (!existing) {
     return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
   }
+  if (existing.documentType && existing.documentType !== "NFSE") return NextResponse.json({ error: "Use o workflow do documento fiscal." }, { status: 409 });
   if (existing.adminReview && existing.adminReview.status !== "LIBERADA") {
     return NextResponse.json({ error: "A nota está retida no fluxo de revisão administrativa." }, { status: 409 });
   }
 
 
-  if (manager && !(await canAccessInvoice(existing, manager, true))) {
+  if (manager && !canUpdateInvoice(existing, manager)) {
     return NextResponse.json({ error: "Acesso negado para esta nota." }, { status: 403 });
   }
 
@@ -309,12 +327,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     dataToUpdate.responsavelValidacao = null;
     dataToUpdate.dataValidacao = null;
   }
-  const updated = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${targetInvoiceId} FOR UPDATE`;
-    const current = await tx.invoice.findUnique({ where: { id: targetInvoiceId }, include: { workflowExecution: true } });
+    const current = await tx.invoice.findUnique({ where: { id: targetInvoiceId }, include: { adminReview: true, workflowExecution: true } });
     if (!current || (current.workflowExecution && current.workflowExecution.status !== "COMPLETED") || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime()) return null;
-    if (current.workflowExecution?.status === "COMPLETED" && payloadToSave.status && payloadToSave.status !== current.status && payloadToSave.status !== "PROCESSADO") return null;
+    if (current.adminReview && current.adminReview.status !== "LIBERADA") return null;
+    const processingUnresolved = legacyProcessingUnresolved(current);
+    const deferredConflict = processingUnresolved && await hasPendingXmlCandidate(tx, current.id);
+    const recordingResult = processingUnresolved && (integrationRequest || manager?.role === "ADMIN") &&
+      isLegacyProcessingResult(parsed.data.status, Object.keys(parsed.data));
+    if (deferredConflict && !recordingResult) return null;
+    const execution = current.workflowExecution;
+    const reportedInconsistency = recordingResult && payloadToSave.status === "DADOS_INCONSISTENTES";
+    if (execution?.status === "COMPLETED" && payloadToSave.status && payloadToSave.status !== current.status &&
+      payloadToSave.status !== "PROCESSADO" && !reportedInconsistency) return null;
+    if (execution && reportedInconsistency && !await reopenInconsistentWorkflow(tx, execution)) return null;
     const invoice = await tx.invoice.update({ where: { id: targetInvoiceId }, data: dataToUpdate });
+    if (deferredConflict) await holdFiscalInvoice(tx, invoice.id, "CONFLITO_XML", manager);
 
     if (invoice.status === "APROVADO" && serviceEvaluation) {
       await tx.serviceEvaluation.upsert({
@@ -350,10 +379,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       : invoice.status === "RECUSADO" ? `${actorName} recusou a nota`
       : existing.status !== invoice.status ? `${actorName} alterou o status da nota` : `${actorName} atualizou os dados da nota`;
     await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager?.id, actorName, actorEmail: manager?.email ?? "integracao@delphi.local", actionType, actionDescription, previousStatus: existing.status, newStatus: invoice.status, reason, comment: serviceEvaluation ? `Avaliação ${serviceEvaluation.rating}/5 | Risco ${serviceEvaluation.riskLevel} | Qualifica: ${serviceEvaluation.qualifica === "SIM" ? "Sim" : "Não"}` : undefined, beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
-    return invoice;
+    return { invoice, notifyReopened: Boolean(execution && reportedInconsistency && !deferredConflict) };
   });
 
-  if (!updated) return NextResponse.json({ error: "A nota mudou ou está em um workflow. Atualize a página." }, { status: 409 });
+  if (!result) return NextResponse.json({ error: "A nota mudou ou está em um workflow. Atualize a página." }, { status: 409 });
+  const { invoice: updated, notifyReopened } = result;
+  if (notifyReopened) {
+    try { await processWorkflowNotifications(); } catch { /* O aviso permanece pendente para processamento. */ }
+  }
 
   if (reapprovedFromError) {
     const invoiceWithContacts = await prisma.invoice.findUnique({
@@ -372,7 +405,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
     });
 
-    if (invoiceWithContacts) {
+    if (invoiceWithContacts?.fornecedor) {
       const recipients = Array.from(
         new Set([
           ...invoiceWithContacts.fornecedor.managerSuppliers.map((ms) => ms.manager.email),

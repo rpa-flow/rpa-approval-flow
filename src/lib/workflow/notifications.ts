@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendApprovalRequestEmail } from "@/lib/email";
+import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 
 /** Envia um lote limitado. Uma interrupção durante o envio exige revisão antes de reenviar. */
 export async function processWorkflowNotifications(limit = 20) {
@@ -12,11 +13,12 @@ export async function processWorkflowNotifications(limit = 20) {
     });
   }
 
-  const pending = await prisma.workflowNotification.findMany({ where: { status: "PENDING", availableAt: { lte: now } }, orderBy: { createdAt: "asc" }, select: { id: true }, take: Math.max(1, Math.min(limit, 50)) });
+  const eligibleTask = { completedAt: null, execution: { status: "ACTIVE" as const, currentInvoiceId: { not: null }, invoice: invoicesAvailableForApproval() } };
+  const pending = await prisma.workflowNotification.findMany({ where: { status: "PENDING", availableAt: { lte: now }, task: eligibleTask }, orderBy: { createdAt: "asc" }, select: { id: true }, take: Math.max(1, Math.min(limit, 50)) });
   const results: Array<{ id: string; status: string }> = [];
   for (const item of pending) {
     const leaseUntil = new Date(Date.now() + 5 * 60 * 1000);
-    const claimed = await prisma.workflowNotification.updateMany({ where: { id: item.id, status: "PENDING", availableAt: { lte: new Date() } }, data: { status: "PROCESSING", leaseUntil } });
+    const claimed = await prisma.workflowNotification.updateMany({ where: { id: item.id, status: "PENDING", availableAt: { lte: new Date() }, task: eligibleTask }, data: { status: "PROCESSING", leaseUntil } });
     if (!claimed.count) continue;
     const notification = await prisma.workflowNotification.findUnique({ where: { id: item.id }, include: { task: { include: { execution: { include: { invoice: { include: { fornecedor: true } } } }, step: true } } } });
     if (!notification) continue;
@@ -24,6 +26,7 @@ export async function processWorkflowNotifications(limit = 20) {
     let error: string | null = null;
     try {
       const invoice = notification.task.execution.invoice;
+      if (!invoice.fornecedor) throw new Error("Fornecedor pendente.");
       const result = await sendApprovalRequestEmail({ invoiceId: invoice.id, invoiceNumber: invoice.numeroNota, codigoIdentificador: invoice.codigoIdentificador, supplierName: invoice.fornecedor.nome, recipients: [notification.recipient], extraMessage: `Etapa: ${notification.task.step.name}. Consulte a situação atual da nota ao acessar o sistema.` });
       status = result.simulated ? "SIMULATED" : "ACCEPTED";
     } catch {

@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { getSessionManager } from "@/lib/auth";
 import { buildInvoiceWhere } from "@/lib/invoice-query";
 import { prisma } from "@/lib/prisma";
-import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
+import { globalWorkflowTypes } from "@/lib/workflow/access";
 
 export const runtime = "nodejs";
 
@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
   if (!manager) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
   const invoices = await prisma.invoice.findMany({
-    where: buildInvoiceWhere(manager, request.nextUrl.searchParams, manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id)),
+    where: buildInvoiceWhere(manager, request.nextUrl.searchParams, manager.role === "GESTOR" ? await globalWorkflowTypes(manager.id) : []),
     select: {
+      documentType: true, referenceValue: true, fiscalStatus: true,
       codigoIdentificador: true,
       numeroNota: true,
       nDfse: true,
@@ -81,12 +82,16 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = invoices.map((invoice) => {
-    const managerNames = invoice.fornecedor.managerSuppliers
+    const fiscal = invoice.documentType === "NFE" || invoice.documentType === "CTE";
+    const managerNames = (invoice.fornecedor?.managerSuppliers ?? [])
       .map((link) => link.manager.nome)
       .filter(Boolean)
       .join(", ");
 
     return {
+      tipoDocumento: invoice.documentType ?? "Não classificado",
+      valorReferencia: invoice.referenceValue?.toString() ?? "",
+      situacaoFiscal: invoice.fiscalStatus ?? "",
       codigoIdentificador: invoice.codigoIdentificador,
       numeroNota: invoice.numeroNota,
       nDfse: invoice.nDfse ?? "",
@@ -107,15 +112,15 @@ export async function GET(request: NextRequest) {
       tomadorCnpj: invoice.tomadorCnpj ?? "",
       tomadorNome: invoice.tomadorNome ?? "",
       tomadorEmail: invoice.tomadorEmail ?? "",
-      valorBaseCalculo: Number(invoice.valorBaseCalculo ?? 0),
-      valorIssqn: Number(invoice.valorIssqn ?? 0),
-      valorTotalRetido: Number(invoice.valorTotalRetido ?? 0),
-      valorLiquido: Number(invoice.valorLiquido ?? 0),
-      valorServico: Number(invoice.valorServico ?? 0),
+      valorBaseCalculo: fiscal ? "" : Number(invoice.valorBaseCalculo ?? 0),
+      valorIssqn: fiscal ? "" : Number(invoice.valorIssqn ?? 0),
+      valorTotalRetido: fiscal ? "" : Number(invoice.valorTotalRetido ?? 0),
+      valorLiquido: fiscal ? "" : Number(invoice.valorLiquido ?? 0),
+      valorServico: fiscal ? "" : Number(invoice.valorServico ?? 0),
       valorParaAprovacao: invoice.adminReview?.status === "LIBERADA" && invoice.adminReview.valorConfirmado !== null
         ? Number(invoice.adminReview.valorConfirmado)
-        : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
-      aliquota: Number(invoice.aliquota ?? 0),
+        : fiscal ? invoice.referenceValue?.toString() ?? "" : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
+      aliquota: fiscal ? "" : Number(invoice.aliquota ?? 0),
       codigoDelphi: invoice.codigoDelphi ?? "",
       ocContrato: invoice.ocContrato ?? "",
       dataPagamento: formatDate(invoice.dataPagamento),

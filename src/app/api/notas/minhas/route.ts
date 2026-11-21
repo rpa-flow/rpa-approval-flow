@@ -4,7 +4,7 @@ import { getAllowedSupplierIds, getSessionManager } from "@/lib/auth";
 import { buildInvoiceWhere } from "@/lib/invoice-query";
 import { getPaginationMetadata, getPaginationParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
-import { hasGlobalNfseWorkflowAccess } from "@/lib/workflow/access";
+import { globalWorkflowTypes } from "@/lib/workflow/access";
 
 function shouldIncludeXml(request: NextRequest) {
   return request.nextUrl.searchParams.get("includeXml") === "true";
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const includeXml = shouldIncludeXml(request);
   const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
-  const globalAccess = manager.role === "GESTOR" && await hasGlobalNfseWorkflowAccess(manager.id);
+  const globalAccess = manager.role === "GESTOR" ? await globalWorkflowTypes(manager.id) : [];
   const showMyApprovals = request.nextUrl.searchParams.get("myApprovals") === "true";
   const where = buildInvoiceWhere(manager, request.nextUrl.searchParams, globalAccess);
   const allNotesParams = new URLSearchParams(request.nextUrl.searchParams);
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
       id: true,
       codigoIdentificador: true,
       documentType: true,
+      referenceValue: true, fiscalStatus: true, company: { select: { cnpj: true, displayName: true } },
       numeroNota: true,
       nDfse: true,
       fornecedorId: true,
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       valorServico: true,
       aliquota: true,
       criadoPorId: true,
-      adminReview: { select: { status: true, valorConfirmado: true } },
+      adminReview: { select: { status: true, motivos: true, valorConfirmado: true } },
       workflowExecution: { select: { status: true, tasks: { where: { completedAt: null }, select: activeTaskSelect, orderBy: { assignedAt: "asc" } } } },
       fornecedor: {
         select: {
@@ -160,18 +161,19 @@ export async function GET(request: NextRequest) {
     {
       items: invoices.map((invoice) => {
         const company = invoice.tomadorCnpj ? companiesByCnpj.get(invoice.tomadorCnpj) : undefined;
-        const { adminReview, ...invoiceFields } = invoice;
+        const { adminReview, company: linkedCompany, ...invoiceFields } = invoice;
         const invoiceWithCompany = {
           ...invoiceFields,
+          adminReview,
           valorParaAprovacao: adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
             ? Number(adminReview.valorConfirmado)
-            : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
+            : invoice.documentType && invoice.documentType !== "NFSE" ? invoice.referenceValue?.toNumber() ?? null : Number(invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo ?? 0),
           origemValorParaAprovacao: adminReview?.status === "LIBERADA" && adminReview.valorConfirmado !== null
             ? "VALIDACAO_ADMINISTRATIVA"
             : "XML",
           empresa: {
-            cnpj: invoice.tomadorCnpj,
-            nomeExibicao: company?.displayName ?? null
+            cnpj: linkedCompany?.cnpj ?? invoice.tomadorCnpj,
+            nomeExibicao: linkedCompany?.displayName ?? company?.displayName ?? null
           }
         };
 

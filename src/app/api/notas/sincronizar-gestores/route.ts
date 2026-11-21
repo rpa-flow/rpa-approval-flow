@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionManager } from "@/lib/auth";
-import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
+import { invoicesAvailableForApproval, legacyInvoiceTypes } from "@/lib/invoice-admin-review-access";
 import { sendApprovalRequestEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     where: {
       AND: [
         invoicesAvailableForApproval(),
+        legacyInvoiceTypes,
         { status: "AGUARDANDO_APROVACAO", processada: false, statusProcessamento: "PENDENTE" },
         ...(parsed.data.cursor ? [{ id: { gt: parsed.data.cursor } }] : [])
       ]
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
   let unchanged = 0;
 
   for (const invoice of batch) {
+    if (!invoice.fornecedor) continue;
     const supplierResult = supplierResults.get(invoice.fornecedor.id) ?? {
       supplierId: invoice.fornecedor.id,
       supplierName: invoice.fornecedor.nome,

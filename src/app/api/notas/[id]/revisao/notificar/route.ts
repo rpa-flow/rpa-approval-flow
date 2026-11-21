@@ -33,7 +33,7 @@ export async function POST(_: Request, { params }: Params) {
     await sendInvoiceAdminReviewEmail({
       recipient: config.email,
       invoiceNumber: review.invoice.numeroNota,
-      supplierName: review.invoice.fornecedor.nome,
+      supplierName: review.invoice.fornecedor?.nome ?? review.invoice.prestadorNome ?? "Fornecedor pendente",
       invoiceId: review.invoiceId,
       reasons: review.motivos,
       issueDate: review.invoice.dataEmissao?.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? null,

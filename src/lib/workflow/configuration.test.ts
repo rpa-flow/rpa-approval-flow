@@ -73,3 +73,12 @@ test("permite corrigir data na última etapa quando o fluxo demora", () => {
   assert.equal(nfseWorkflowPublishSchema.safeParse(draft).success, true);
 });
 
+for (const documentType of ["NFE", "CTE"] as const) {
+  test(`${documentType} publica etapa sem requisitos específicos de serviços`, () => {
+    const step = { ...valid().steps[0], requiresPurchaseOrder: false, fields: [] };
+    assert.equal(nfseWorkflowPublishSchema.safeParse({ documentType, steps: [step] }).success, true);
+    assert.equal(nfseWorkflowDraftSchema.safeParse({ documentType, steps: [{ ...step, fields: [policy("serviceEvaluation")] }] }).success, false);
+    assert.equal(nfseWorkflowPublishSchema.safeParse({ documentType, steps: [{ ...step, requiresPurchaseOrder: true }] }).success, false);
+  });
+}
+

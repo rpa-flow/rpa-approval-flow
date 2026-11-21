@@ -38,6 +38,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "A revisão mudou desde que foi carregada. Atualize a fila." }, { status: 409 });
   }
   const ignoring = parsed.data.ignorar === true;
+  if (!ignoring && review.motivos.some(m => m !== "VALOR_ZERADO" && m !== "EMISSAO_ANTERIOR")) {
+    return NextResponse.json({ error: "Resolva as pendências de empresa, fornecedor ou XML no detalhe fiscal." }, { status: 409 });
+  }
   if (ignoring && !parsed.data.justificativa?.trim()) {
     return NextResponse.json({ error: "Informe a justificativa para ignorar esta nota." }, { status: 400 });
   }
@@ -72,7 +75,8 @@ export async function POST(request: NextRequest, { params }: Params) {
   const allReasonsResolved = (!needsValue || Boolean(confirmedValue)) && (!needsEmissionConfirmation || emissionConfirmed);
   const nextStatus = ignoring ? "IGNORADA" : allReasonsResolved ? "LIBERADA" : "PENDENTE";
   const changed = await prisma.$transaction(async (tx) => {
-    let workflow: "LEGACY" | "STARTED" | "BLOCKED" | "EXISTS" = "LEGACY";
+    await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${review.invoiceId} FOR UPDATE`;
+    let workflow: Awaited<ReturnType<typeof startConfiguredWorkflow>> = "LEGACY";
     const result = await tx.invoiceAdminReview.updateMany({
       where: { id: review.id, status: "PENDENTE", versao: parsed.data.versao },
       data: {
@@ -108,7 +112,6 @@ export async function POST(request: NextRequest, { params }: Params) {
       });
     }
     if (result.count && nextStatus === "LIBERADA") {
-      await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${review.invoiceId} FOR UPDATE`;
       workflow = await startConfiguredWorkflow(tx, review.invoiceId, { id: manager.id, name: manager.nome, email: manager.email }, review.invoice.createdAt);
     }
     return { ...result, workflow };
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (changed.workflow === "STARTED") {
     try { await processWorkflowNotifications(); } catch { /* O aviso permanece na fila. */ }
   }
-  if (nextStatus === "LIBERADA" && changed.workflow === "LEGACY") {
+  if (nextStatus === "LIBERADA" && changed.workflow === "LEGACY" && review.invoice.fornecedor) {
     const recipients = Array.from(new Set([
       ...review.invoice.fornecedor.managerSuppliers.map((item) => item.manager.email),
       ...(review.invoice.fornecedor.notificationConfig?.emailsExtras ?? [])

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { groupExtrasByFieldName, parseNFSeXml, simplifyExtrasByFieldName } from "@/lib/nfse-parser";
 import { getPaginationMetadata, getPaginationParams, shouldUsePaginatedResponse } from "@/lib/pagination";
 import { createInvoiceFromRequest } from "./create-invoice";
-import { combineInvoiceWhere } from "@/lib/invoice-admin-review-access";
+import { combineInvoiceWhere, legacyInvoiceTypes } from "@/lib/invoice-admin-review-access";
 
 const ALLOWED_STATUSES = Object.values(InvoiceStatus);
 
@@ -45,7 +45,10 @@ export async function GET(request: NextRequest) {
   const includeExtras = shouldIncludeExtras(request);
   const paginated = shouldUsePaginatedResponse(request.nextUrl.searchParams);
   const { page: requestedPage, pageSize } = getPaginationParams(request.nextUrl.searchParams);
-  const where = combineInvoiceWhere(statusParam ? { status: statusParam as InvoiceStatus } : undefined);
+  const where = combineInvoiceWhere({
+    ...legacyInvoiceTypes,
+    ...(statusParam ? { status: statusParam as InvoiceStatus } : {})
+  });
   const total = paginated ? await prisma.invoice.count({ where }) : 0;
   const pagination = paginated ? getPaginationMetadata(total, requestedPage, pageSize) : null;
   const invoices = await prisma.invoice.findMany({
@@ -135,6 +138,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  return createInvoiceFromRequest(request);
+  return createInvoiceFromRequest(request, { allowFiscalIntegration: true });
 }
 

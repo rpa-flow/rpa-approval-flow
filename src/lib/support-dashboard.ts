@@ -1,5 +1,6 @@
 import { DelphiIntegrationStatus, InvoiceSituation, InvoiceStatus, NfseNsuStatus, Prisma, ProcessingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { legacyInvoiceTypes } from "@/lib/invoice-admin-review-access";
 
 const TIME_ZONE = "America/Sao_Paulo";
 const LIST_LIMIT = 50;
@@ -100,6 +101,7 @@ export async function getSupportDashboard(
     InvoiceStatus.EXPIRADA
   ];
   const dueWhere: Prisma.InvoiceWhereInput = {
+    ...legacyInvoiceTypes,
     dataPagamento: { not: null, lt: dueEndExclusive },
     status: { notIn: excludedStatuses },
     situacaoNotaFiscal: { not: InvoiceSituation.CANCELADA }
@@ -151,7 +153,7 @@ export async function getSupportDashboard(
     prisma.invoice.count({ where: { ...dueWhere, dataPagamento: { gte: today, lt: dateAtSaoPauloMidnight(shiftDateKey(todayKey, 1)) } } }),
     prisma.invoice.count({ where: { ...dueWhere, dataPagamento: { gte: dateAtSaoPauloMidnight(shiftDateKey(todayKey, 1)), lt: dueEndExclusive } } }),
     prisma.invoice.count({
-      where: { dataPagamento: null, status: { notIn: excludedStatuses }, situacaoNotaFiscal: { not: InvoiceSituation.CANCELADA } }
+      where: { ...legacyInvoiceTypes, dataPagamento: null, status: { notIn: excludedStatuses }, situacaoNotaFiscal: { not: InvoiceSituation.CANCELADA } }
     }),
     prisma.invoice.aggregate({ where: dueWhere, _sum: { valorServico: true } }),
     prisma.invoice.findMany({
@@ -172,8 +174,8 @@ export async function getSupportDashboard(
     prisma.nfseNsuControl.groupBy({ by: ["companyId"], where: { status: NfseNsuStatus.RetryError, company: { active: true } } }),
     prisma.nfseNsuControl.groupBy({ by: ["companyId"], where: { status: NfseNsuStatus.PendingGap, company: { active: true } } }),
     prisma.nfseNsuControl.count({ where: { status: NfseNsuStatus.PendingGap, company: { active: true } } }),
-    prisma.invoice.count({ where: { statusProcessamento: ProcessingStatus.ERRO } }),
-    prisma.invoice.count({ where: { statusIntegracaoDelphi: DelphiIntegrationStatus.FALHA } })
+    prisma.invoice.count({ where: { ...legacyInvoiceTypes, statusProcessamento: ProcessingStatus.ERRO } }),
+    prisma.invoice.count({ where: { ...legacyInvoiceTypes, statusIntegracaoDelphi: DelphiIntegrationStatus.FALHA } })
   ]);
 
   const bucketMap = new Map<string, { errors: number; downloads: number }>();
@@ -227,7 +229,7 @@ export async function getSupportDashboard(
         return {
           id: invoice.id,
           numeroNota: invoice.numeroNota,
-          supplierName: invoice.fornecedor.nome,
+          supplierName: invoice.fornecedor?.nome ?? "Fornecedor pendente",
           dataPagamento: invoice.dataPagamento!.toISOString(),
           daysUntilDue: dayDifference(dueDate, todayKey),
           status: invoice.status,

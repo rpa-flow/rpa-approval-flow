@@ -1,16 +1,28 @@
 import type { Prisma } from "@prisma/client";
 import { createWorkflowStepAssignments, resolveStepAssignees } from "./assignees";
+import { fiscalWorkflowProblem } from "./fiscal-eligibility";
 
 /** A execução, a primeira atribuição e a auditoria compartilham a transação da nota. */
 export async function startConfiguredWorkflow(tx: Prisma.TransactionClient, invoiceId: string, actor: { id?: string | null; name?: string | null; email?: string | null }, createdAt: Date, newlyCreated = false) {
-  const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType: "NFSE" }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } }, take: 1 } } } } });
-  if (!workflow?.activatedAt || (!newlyCreated && createdAt < workflow.activatedAt) || !workflow.activeVersion) return "LEGACY" as const;
+  const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { fornecedorId: true, documentType: true } });
+  const documentType = invoice?.documentType ?? "NFSE";
+  if (documentType !== "NFSE" && await fiscalWorkflowProblem(tx, invoiceId, true)) return "BLOCKED" as const;
+  const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } }, take: 1 } } } } });
+  if (!workflow?.activatedAt || workflow.activeVersion?.status !== "PUBLISHED") {
+    return documentType === "NFSE" ? "LEGACY" as const : "WAITING" as const;
+  }
+  if (!newlyCreated && createdAt < workflow.activatedAt) {
+    const previous = await tx.invoiceWorkflow.findFirst({ where: { invoiceId }, select: { id: true } });
+    const reopened = previous ? null : await tx.noteAuditLog.findFirst({
+      where: { invoiceId, actionType: "FISCAL_REOPEN" }, select: { id: true }
+    });
+    if (!previous && !reopened) return documentType === "NFSE" ? "LEGACY" as const : "WAITING" as const;
+  }
   const version = workflow.activeVersion;
   const first = version.steps[0];
-  const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { fornecedorId: true } });
   const assignees = version.status === "PUBLISHED" && first && invoice ? await resolveStepAssignees(tx, first, invoice.fornecedorId) : [];
   const available = Boolean(first && assignees.length > 0);
-  const existing = await tx.invoiceWorkflow.findUnique({ where: { invoiceId } });
+  const existing = await tx.invoiceWorkflow.findUnique({ where: { currentInvoiceId: invoiceId } });
   if (existing) return "EXISTS" as const;
   const execution = await tx.invoiceWorkflow.create({ data: { invoiceId, versionId: version.id, status: available ? "ACTIVE" : "BLOCKED" } });
   if (available && first) await createWorkflowStepAssignments(tx, { executionId: execution.id, invoiceId, stepId: first.id, assignees });
