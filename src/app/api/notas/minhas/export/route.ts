@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      workflowHistory: {
+      workflowExecution: {
         select: {
           tasks: { select: { stepId: true, step: { select: { name: true, position: true } } } }
         }
@@ -96,7 +96,8 @@ export async function GET(request: NextRequest) {
       .filter(Boolean)
       .join(", ");
     const validatedByStep = new Map<string, Set<string>>();
-    for (const execution of invoice.workflowHistory) {
+    if (invoice.workflowExecution) {
+      const execution = invoice.workflowExecution;
       const steps = new Map(execution.tasks.map((task) => [task.stepId, task.step]));
       for (const [stepId, step] of steps) {
         const column = `Etapa ${step.position} - ${step.name}`;
