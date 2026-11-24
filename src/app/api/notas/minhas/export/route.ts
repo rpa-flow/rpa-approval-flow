@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
             select: { manager: { select: { nome: true } } }
           }
         }
+      },
+      workflowExecution: {
+        select: {
+          tasks: { select: { stepId: true, step: { select: { name: true, position: true } } } }
+        }
+      },
+      auditLogs: {
+        where: { actionType: "WORKFLOW_STEP_COMPLETED" },
+        select: { actorName: true, beforeData: true }
       }
     },
     orderBy: { createdAt: "desc" }
@@ -80,11 +89,28 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const workflowStepColumns = new Set<string>();
   const rows = invoices.map((invoice) => {
     const managerNames = invoice.fornecedor.managerSuppliers
       .map((link) => link.manager.nome)
       .filter(Boolean)
       .join(", ");
+    const validatedByStep = new Map<string, Set<string>>();
+    if (invoice.workflowExecution) {
+      const execution = invoice.workflowExecution;
+      const steps = new Map(execution.tasks.map((task) => [task.stepId, task.step]));
+      for (const [stepId, step] of steps) {
+        const column = `Etapa ${step.position} - ${step.name}`;
+        workflowStepColumns.add(column);
+        for (const log of invoice.auditLogs) {
+          if (!log.beforeData || typeof log.beforeData !== "object" || Array.isArray(log.beforeData)) continue;
+          if (log.beforeData.stepId !== stepId || !log.actorName) continue;
+          const approvers = validatedByStep.get(column) ?? new Set<string>();
+          approvers.add(log.actorName);
+          validatedByStep.set(column, approvers);
+        }
+      }
+    }
 
     return {
       codigoIdentificador: invoice.codigoIdentificador,
@@ -92,6 +118,7 @@ export async function GET(request: NextRequest) {
       nDfse: invoice.nDfse ?? "",
       Status: invoice.status.replaceAll("_", " "),
       responsavel: invoice.responsavelValidacao || managerNames || "",
+      ...Object.fromEntries([...validatedByStep].map(([column, approvers]) => [column, [...approvers].join(", ")])),
       createdAt: formatDateTime(invoice.createdAt),
       localEmissao: invoice.localEmissao ?? "",
       localPrestacao: invoice.localPrestacao ?? "",
@@ -132,8 +159,10 @@ export async function GET(request: NextRequest) {
     if (nsuB) return 1;
     return 0;
   });
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  worksheet["!cols"] = Object.keys(rows[0] ?? { "Nenhuma nota encontrada": "" }).map((header) => ({ wch: Math.min(Math.max(header.length + 2, 14), 38) }));
+  const fixedHeaders = Object.keys(rows[0] ?? { "Nenhuma nota encontrada": "" }).filter((header) => !workflowStepColumns.has(header));
+  const headers = [...fixedHeaders, ...workflowStepColumns];
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+  worksheet["!cols"] = headers.map((header) => ({ wch: Math.min(Math.max(header.length + 2, 14), 38) }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Notas fiscais");
   const content = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
