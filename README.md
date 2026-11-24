@@ -94,9 +94,11 @@ docker compose exec app npm run prisma:seed
 
 Acesse http://localhost:3000 com `gestor.teste@empresa.com` e senha `123456`. O primeiro comando cria um PostgreSQL local e aplica as migrations; o segundo adiciona dados de exemplo. Execute o seed apenas quando desejar restaurar seus exemplos: ele atualiza registros de exemplo existentes. Alterações em `src` são refletidas durante o desenvolvimento. Alterações nas dependências ou arquivos de configuração exigem reconstruir com `docker compose up --build -d`.
 
+O Compose local habilita a ingestão de NF-e e CT-e para teste. Para chamadas sem sessão, use o cabeçalho `x-api-key: local-test-fiscal-ingest-key` em `POST /api/notas` (JSON com `xml` ou multipart com `xmlFile`). Essa chave e as flags de ativação são valores fictícios e restritos a este Compose; os padrões de `.env.example` continuam desligados.
+
 O banco fica disponível no computador em `localhost:5433`, banco `approval_local`, usuário e senha `local`. Os dados persistem entre reinicializações. Para acompanhar a aplicação use `docker compose logs -f app`; para parar, `docker compose down`. Para apagar todos os dados locais e recomeçar, use `docker compose down -v` e repita os comandos acima.
 
-O container usa configurações próprias e não carrega arquivos `.env` do computador. Sem credenciais do Microsoft Graph, e-mails são simulados nos logs. Este banco e as credenciais são exclusivamente para desenvolvimento. Migrations existentes são aplicadas na inicialização; novas migrations devem ser criadas e revisadas separadamente.
+O container usa configurações próprias e não carrega arquivos `.env` do computador. O e-mail de criação de nota fica desativado e, sem credenciais do Microsoft Graph, avisos de workflow são simulados nos logs. Este banco e as credenciais são exclusivamente para desenvolvimento. Migrations existentes são aplicadas na inicialização; novas migrations devem ser criadas e revisadas separadamente.
 
 ### Setup sem Docker
 

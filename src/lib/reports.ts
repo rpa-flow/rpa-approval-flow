@@ -2,7 +2,7 @@ import { InvoiceStatus, Prisma, SupplierRiskLevel, UserRole } from "@prisma/clie
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAllowedSupplierIds } from "@/lib/auth";
-import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
+import { invoicesAvailableForApproval, legacyInvoiceTypes } from "@/lib/invoice-admin-review-access";
 
 export const APPROVAL_SLA_HOURS = 48;
 
@@ -37,7 +37,7 @@ export function parseFilters(request: NextRequest) {
 
 export function invoiceWhere(scope: ReportsScope, filters: ReturnType<typeof parseFilters>): Prisma.InvoiceWhereInput {
   return {
-    ...invoicesAvailableForApproval(),
+    AND: [invoicesAvailableForApproval(), legacyInvoiceTypes],
     ...(!scope.hasGlobalAccess ? { fornecedorId: { in: scope.allowedSupplierIds ?? [] } } : {}),
     ...(filters.supplierId ? { fornecedorId: filters.supplierId } : {}),
     ...(filters.managerId ? { criadoPorId: filters.managerId } : {}),

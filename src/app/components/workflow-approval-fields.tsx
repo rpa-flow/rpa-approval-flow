@@ -2,7 +2,7 @@
 
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink } from "@/components/evaluation-guidance";
 import { minimumPaymentDate } from "@/lib/payment-date";
-import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
+import { workflowFields, type DocumentType } from "@/lib/workflow/field-catalog";
 
 export type ApprovalEvaluation = {
   rating: 1 | 2 | 3 | 4 | 5 | null;
@@ -18,6 +18,7 @@ export type ApprovalFieldPolicy = {
 };
 
 type Props = {
+  documentType?: DocumentType | null;
   policies: ApprovalFieldPolicy[];
   values: Record<string, string>;
   onValueChange: (key: string, value: string) => void;
@@ -25,10 +26,11 @@ type Props = {
   onEvaluationChange: (update: Partial<ApprovalEvaluation>) => void;
 };
 
-export function WorkflowApprovalFields({ policies, values, onValueChange, evaluation, onEvaluationChange }: Props) {
+export function WorkflowApprovalFields({ documentType, policies, values, onValueChange, evaluation, onEvaluationChange }: Props) {
+  const catalog = workflowFields(documentType ?? "NFSE");
   return <div className="space-y-4">
     {policies.filter((policy) => policy.mode === "EDITABLE").map((policy) => {
-      const field = NFSE_WORKFLOW_FIELDS.find((item) => item.key === policy.fieldKey);
+      const field = catalog.find((item) => item.key === policy.fieldKey);
       if (!field) return null;
       const value = values[policy.fieldKey] ?? "";
       if (policy.fieldKey === "serviceEvaluation") return <fieldset key={policy.fieldKey} className="space-y-3 rounded border border-slate-200 p-3">

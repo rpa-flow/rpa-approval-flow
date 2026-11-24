@@ -32,6 +32,8 @@ enum DelphiIntegrationStatus {
 enum InvoiceSituation {
   AUTORIZADA
   CANCELADA
+  NAO_AUTORIZADA
+  DESCONHECIDA
 }
 
 enum UserRole {
@@ -61,6 +63,27 @@ enum InvoiceAdminReviewStatus {
 
 enum WorkflowDocumentType {
   NFSE
+  NFE
+  CTE
+}
+
+enum FiscalProtocolStatus {
+  AUTHORIZED
+  CANCELLED
+  NOT_AUTHORIZED
+  UNKNOWN
+}
+
+enum FiscalVersionState {
+  CURRENT
+  CANDIDATE
+  ARCHIVED
+  REJECTED
+}
+
+enum FiscalReferenceKind {
+  NFE
+  SUBSTITUTES_CTE
 }
 
 enum WorkflowVersionStatus {
@@ -88,6 +111,7 @@ enum WorkflowExecutionStatus {
   ACTIVE
   COMPLETED
   BLOCKED
+  SUPERSEDED
 }
 
 enum WorkflowNotificationStatus {
@@ -110,6 +134,7 @@ model Company {
 
   nfseNsuCheckpoint NfseNsuCheckpoint?
   nfseNsuControls   NfseNsuControl[]
+  invoices          Invoice[]
 
   @@index([active])
 }
@@ -216,7 +241,10 @@ model Invoice {
   documentType        WorkflowDocumentType?
   numeroNota          String
   nDfse               String?
-  fornecedorId        String
+  fornecedorId        String?
+  companyId           String?
+  referenceValue      Decimal?             @db.Decimal(17, 2)
+  fiscalStatus        FiscalProtocolStatus?
   status              InvoiceStatus    @default(AGUARDANDO_APROVACAO)
   processada          Boolean          @default(false)
   statusProcessamento ProcessingStatus @default(PENDENTE)
@@ -263,7 +291,8 @@ model Invoice {
   valorServico        Decimal?         @db.Decimal(14, 2)
   aliquota            Decimal?         @db.Decimal(5, 2)
 
-  fornecedor          Supplier         @relation(fields: [fornecedorId], references: [id])
+  fornecedor          Supplier?        @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  company             Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   criadoPor           Manager?         @relation("InvoiceCreatedBy", fields: [criadoPorId], references: [id])
   criadoPorId         String?
   statusHistory       NoteStatusHistory[]
@@ -272,9 +301,13 @@ model Invoice {
   serviceEvaluation   ServiceEvaluation?
   documentDetail      InvoiceDocumentDetail?
   adminReview         InvoiceAdminReview?
-  workflowExecution   InvoiceWorkflow?
+  workflowExecution   InvoiceWorkflow?  @relation("CurrentInvoiceWorkflow")
+  workflowHistory     InvoiceWorkflow[] @relation("InvoiceWorkflowHistory")
+  documentVersions    FiscalDocumentVersion[]
+  incomingReferences  FiscalDocumentReference[]
 
   @@index([fornecedorId])
+  @@index([companyId, documentType])
   @@index([codigoIdentificador])
   @@index([criadoPorId])
 }
@@ -332,6 +365,57 @@ model InvoiceDocumentDetail {
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([documentFamily, layout])
+}
+
+// A partial unique index in the migration allows one CURRENT version per receipt.
+model FiscalDocumentVersion {
+  id             String            @id @default(cuid())
+  invoiceId      String
+  contentHash    String            @db.Char(64)
+  xml            String
+  parserVersion  String
+  state          FiscalVersionState
+  reviewedById   String?
+  reviewReason   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime          @default(now())
+
+  invoice        Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  nfe            NfeDocumentDetail?
+  cte            CteDocumentDetail?
+  references     FiscalDocumentReference[]
+  executions     InvoiceWorkflow[]
+
+  @@unique([invoiceId, contentHash])
+  @@unique([id, invoiceId])
+  @@index([invoiceId, state])
+}
+
+// Detail JSON preserves the original decimal precision of quantities and unit prices.
+model NfeDocumentDetail {
+  versionId String @id
+  data      Json
+  version   FiscalDocumentVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+}
+
+model CteDocumentDetail {
+  versionId String @id
+  data      Json
+  version   FiscalDocumentVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+}
+
+model FiscalDocumentReference {
+  id               String             @id @default(cuid())
+  sourceVersionId  String
+  kind             FiscalReferenceKind
+  targetKey        String             @db.VarChar(44)
+  targetInvoiceId  String?
+  sourceVersion    FiscalDocumentVersion @relation(fields: [sourceVersionId], references: [id], onDelete: Restrict)
+  targetInvoice    Invoice?              @relation(fields: [targetInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceVersionId, kind, targetKey])
+  @@index([kind, targetKey])
+  @@index([targetInvoiceId])
 }
 
 model ServiceEvaluation {
@@ -564,17 +648,22 @@ model ApprovalStepFieldPolicy {
 
 model InvoiceWorkflow {
   id          String @id @default(cuid())
-  invoiceId   String @unique
+  invoiceId   String
+  currentInvoiceId String? @unique
+  documentVersionId String?
   versionId   String
   status      WorkflowExecutionStatus @default(ACTIVE)
   revision    Int @default(1)
   createdAt   DateTime @default(now())
   completedAt DateTime?
-  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  invoice     Invoice @relation("InvoiceWorkflowHistory", fields: [invoiceId], references: [id], onDelete: Restrict)
+  currentFor  Invoice? @relation("CurrentInvoiceWorkflow", fields: [currentInvoiceId], references: [id], onDelete: Restrict)
+  documentVersion FiscalDocumentVersion? @relation(fields: [documentVersionId, invoiceId], references: [id, invoiceId], onDelete: Restrict)
   version     ApprovalWorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
   tasks       InvoiceWorkflowTask[]
   commands    WorkflowCommand[]
   @@index([status, createdAt])
+  @@index([invoiceId, createdAt])
 }
 
 model InvoiceWorkflowTask {

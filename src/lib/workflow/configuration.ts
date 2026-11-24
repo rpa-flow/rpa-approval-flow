@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getNfseWorkflowField } from "./field-catalog.ts";
+import { workflowFields } from "./field-catalog.ts";
 
 const fieldPolicySchema = z.object({
   key: z.string().min(1),
@@ -18,7 +18,7 @@ const stepSchema = z.object({
 
 /** Validação estrutural; permissões e situação dos gestores exigem consulta ao banco. */
 export const nfseWorkflowDraftSchema = z.object({
-  documentType: z.literal("NFSE"),
+  documentType: z.enum(["NFSE", "NFE", "CTE"]),
   steps: z.array(stepSchema).max(50)
 }).strict().superRefine((draft, ctx) => {
   draft.steps.forEach((step, stepIndex) => {
@@ -34,7 +34,7 @@ export const nfseWorkflowDraftSchema = z.object({
     const seen = new Set<string>();
     step.fields.forEach((policy, fieldIndex) => {
       const path = ["steps", stepIndex, "fields", fieldIndex];
-      const field = getNfseWorkflowField(policy.key);
+      const field = workflowFields(draft.documentType).find(candidate => candidate.key === policy.key);
       if (!field) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path, "key"], message: "Campo desconhecido." });
       } else if (policy.mode === "EDITABLE" && !field.editable) {
@@ -58,6 +58,14 @@ export const nfseWorkflowDraftSchema = z.object({
 export const nfseWorkflowPublishSchema = nfseWorkflowDraftSchema.superRefine((draft, ctx) => {
   if (!draft.steps.length) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps"], message: "Adicione ao menos uma etapa." });
+  }
+  if (draft.documentType !== "NFSE") {
+    for (const [index, step] of draft.steps.entries()) {
+      if (step.requiresPurchaseOrder && !step.fields.some(f => ["ordemCompra", "ocContrato"].includes(f.key) && f.mode === "EDITABLE")) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["steps", index], message: "Habilite a edição da OC ou contrato exigido." });
+      }
+    }
+    return;
   }
 
   const hasRequiredPaymentDate = draft.steps.some((step) =>

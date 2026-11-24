@@ -9,18 +9,34 @@ import { AppLayout } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink, RatingScaleHint } from "@/components/evaluation-guidance";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
 import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPolicy } from "@/app/components/workflow-approval-fields";
-import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
+import { FiscalDocumentDetails, type FiscalDocumentDetailsProps } from "@/app/components/fiscal-document-details";
+import { DOCUMENT_TYPE_LABEL, FISCAL_STATUS_LABEL, REVIEW_STATUS_LABEL, WORKFLOW_STATUS_LABEL, formatFiscalDecimal } from "@/app/components/fiscal-document-labels";
+import { FiscalReviewActions, saveFiscalXml, type FiscalVersion } from "@/app/components/fiscal-review-actions";
+import type { ParsedGoodsOrFreight, ProtocolStatus } from "@/lib/fiscal-document-parser";
+import { workflowFields, type DocumentType } from "@/lib/workflow/field-catalog";
 
 type Me = { manager: { nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type EmailManager = { id: string; nome: string; email: string; role?: "ADMIN" | "GESTOR" };
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
 type InvoiceStatus = "AGUARDANDO_APROVACAO" | "APROVADO" | "RECUSADO" | "PROCESSADO" | "EXPIRADA" | "DADOS_INCONSISTENTES";
 type AuditEvent = { id: string; actionType: string; actionDescription?: string | null; actorName?: string | null; createdAt: string; reason?: string | null; comment?: string | null };
+type FiscalData = {
+  detail: ParsedGoodsOrFreight["detail"] | null;
+  references: Array<{ kind: "NFE" | "SUBSTITUTES_CTE" | "SUBSTITUTED_BY"; targetKey: string; targetInvoiceId: string | null }>;
+  versions: FiscalVersion[];
+  cycles: Array<{ id: string; status: string; versionId: string; documentVersionId: string | null; createdAt: string; completedAt: string | null }>;
+};
 
 type Invoice = {
   id: string;
   numeroNota: string;
   codigoIdentificador: string;
+  documentType?: DocumentType | null;
+  referenceValue?: string | null;
+  fiscalStatus?: ProtocolStatus | null;
+  empresa?: { nomeExibicao?: string | null; cnpj?: string | null } | null;
+  adminReview?: { status: keyof typeof REVIEW_STATUS_LABEL; motivos: string[] } | null;
+  fiscalDocument?: FiscalData | null;
   status: InvoiceStatus;
   statusProcessamento: "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "ERRO";
   dataEmissao?: string | null;
@@ -54,12 +70,13 @@ type Invoice = {
   numeroParcelas: number;
   dataLancamentoDelphi?: string | null;
   dataPagamento?: string | null;
-  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
+  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> } | null;
 };
 type ApprovalInfo = {
   execution: { id: string; status: string; revision: number };
   currentStep: { id: string; name: string; managerId: string; requiresPurchaseOrder: boolean; fields: ApprovalFieldPolicy[] } | null;
   canComplete: boolean;
+  canReject?: boolean;
   canResume: boolean;
   tasks: Array<{ managerName: string; completedAt: string | null }>;
   invoice?: Record<string, unknown> & { serviceEvaluation?: { rating: number; qualifica: boolean | null; riskLevel: RiskLevel; comment?: string | null } | null };
@@ -92,7 +109,7 @@ const STATUS_OPTIONS: Array<{ value: InvoiceStatus; label: string }> = [
 ];
 
 function getManagerNames(invoice: Invoice) {
-  return invoice.fornecedor.managerSuppliers
+  return invoice.fornecedor?.managerSuppliers
     ?.map((link) => link.manager?.nome)
     .filter((name): name is string => Boolean(name))
     .join(", ") || null;
@@ -103,7 +120,7 @@ function getResponsibleName(invoice: Invoice) {
 }
 
 function formatCurrency(value?: number | null) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return formatFiscalDecimal(value, true) ?? "—";
 }
 
 function formatDate(value?: string | null) {
@@ -139,6 +156,37 @@ function DetailTextItem({ label, value }: { label: string; value?: string | null
   </div>;
 }
 
+const VERSION_LABEL = { CURRENT: "Vigente", CANDIDATE: "Candidata", ARCHIVED: "Arquivada", REJECTED: "Rejeitada" };
+
+function FiscalDetails({ data, documentType }: { data: FiscalData | null | undefined; documentType: "NFE" | "CTE" }) {
+  if (!data?.detail) return <p className="text-sm text-muted" role="status">Os detalhes extraídos do XML estão indisponíveis.</p>;
+  const references: FiscalDocumentDetailsProps["references"] = data.references.map((reference) => ({
+    kind: reference.kind === "SUBSTITUTED_BY" ? "SUBSTITUTED_BY_CTE" : reference.kind,
+    targetKey: reference.targetKey, accessibleInvoiceId: reference.targetInvoiceId
+  }));
+  if (documentType === "NFE" && "items" in data.detail) return <FiscalDocumentDetails documentType="NFE" detail={data.detail} references={references} />;
+  if (documentType === "CTE" && "freight" in data.detail) return <FiscalDocumentDetails documentType="CTE" detail={data.detail} references={references} />;
+  return <p className="text-sm text-muted" role="status">Os detalhes extraídos do XML estão indisponíveis.</p>;
+}
+
+function FiscalHistory({ data }: { data: FiscalData }) {
+  if (!data.cycles.length && !data.versions.length) return null;
+  return <section className="card space-y-3">
+    <h3 className="section-title">Versões e ciclos</h3>
+    {data.versions.length > 0 && <details>
+      <summary className="cursor-pointer text-sm font-semibold text-brand">Versões do documento ({data.versions.length})</summary>
+      <ul className="mt-2 divide-y divide-border text-sm">{data.versions.map((version) => <li key={version.id} className="py-2"><strong>{VERSION_LABEL[version.state]}</strong> · {formatDateTime(version.createdAt)} <span className="block text-muted">Identificador final {version.id.slice(-8)}</span></li>)}</ul>
+    </details>}
+    {data.cycles.length > 0 && <details>
+      <summary className="cursor-pointer text-sm font-semibold text-brand">Ciclos de aprovação ({data.cycles.length})</summary>
+      <ol reversed className="mt-2 divide-y divide-border text-sm">{data.cycles.map((cycle, index) => <li key={cycle.id} className="py-2">
+        <strong>Ciclo {data.cycles.length - index}</strong> · {cycle.status === "SUPERSEDED" ? "Encerrado por revisão" : WORKFLOW_STATUS_LABEL[cycle.status as keyof typeof WORKFLOW_STATUS_LABEL] ?? cycle.status}
+        <span className="block text-muted">De {formatDateTime(cycle.createdAt)}{cycle.completedAt ? ` até ${formatDateTime(cycle.completedAt)}` : ""}</span>
+      </li>)}</ol>
+    </details>}
+  </section>;
+}
+
 export default function NotaDetalhePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -147,6 +195,7 @@ export default function NotaDetalhePage() {
   const [approvalInfo, setApprovalInfo] = useState<ApprovalInfo | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [xmlLoading, setXmlLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [evaluation, setEvaluation] = useState<ApprovalEvaluation>({ rating: null, qualifica: "", riskLevel: "", comment: "" });
@@ -174,8 +223,8 @@ export default function NotaDetalhePage() {
   const [communicationImage, setCommunicationImage] = useState<File | null>(null);
   const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       const [meRes, workflowRes, invoiceRes, historyRes] = await Promise.all([
         fetch("/api/auth/me"),
@@ -214,6 +263,7 @@ export default function NotaDetalhePage() {
       }
 
       if (invoiceRes.status === 403 || historyRes.status === 403) {
+        setInvoice(null);
         setMessageType("error");
         setMessage("Você não tem acesso a esta nota fiscal.");
         setLoading(false);
@@ -221,6 +271,7 @@ export default function NotaDetalhePage() {
       }
 
       if (!invoiceRes.ok) {
+        setInvoice(null);
         setMessageType("error");
         setMessage("Nota fiscal não encontrada.");
         setLoading(false);
@@ -250,13 +301,32 @@ export default function NotaDetalhePage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    if (!loading && invoice && window.location.hash === "#revogar-aprovacao") {
-      document.getElementById("revogar-aprovacao")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const anchor = window.location.hash.slice(1);
+    if (!loading && invoice && ["revogar-aprovacao", "revisao-fiscal"].includes(anchor)) {
+      document.getElementById(anchor)?.scrollIntoView({ block: "start" });
     }
   }, [invoice, loading]);
 
+  async function downloadCurrentXml() {
+    if (!invoice) return;
+    setXmlLoading(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/notas/${encodeURIComponent(invoice.id)}?includeXml=true`);
+      if (response.status === 403) throw new Error("Seu perfil não pode acessar o XML deste documento.");
+      if (!response.ok) throw new Error("Não foi possível baixar o XML.");
+      const data = await response.json() as { xmlOriginal?: string | null };
+      if (!data.xmlOriginal) throw new Error("O XML deste documento está indisponível.");
+      saveFiscalXml(data.xmlOriginal, invoice.codigoIdentificador);
+    } catch (error) {
+      setMessageType("error");
+      setMessage(error instanceof Error ? error.message : "Falha ao baixar o XML.");
+    } finally { setXmlLoading(false); }
+  }
+
   async function recusarNota() {
     if (!invoice) return;
+    if (isFiscal && !approvalInfo?.canReject) return;
 
     const observation = rejectionObservation.trim();
     if (!observation) {
@@ -269,10 +339,10 @@ export default function NotaDetalhePage() {
     setMessage("");
 
     try {
-      const res = await fetch(`/api/notas/${invoice.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/notas/${invoice.id}${isFiscal ? "/workflow/reject" : ""}`, {
+        method: isFiscal ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(isFiscal ? { executionId: approvalInfo?.execution.id, revision: approvalInfo?.execution.revision, reason: observation } : {
           status: "RECUSADO",
           reason: observation,
           observacaoValidacao: observation
@@ -299,6 +369,7 @@ export default function NotaDetalhePage() {
   }
 
   async function abrirModalAprovacao() {
+    if (isFiscal && !hasOpenApproval) return;
     setApprovalError("");
     setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
     setStepApprovalValues({});
@@ -417,7 +488,7 @@ export default function NotaDetalhePage() {
     for (const policy of policies) {
       if (policy.fieldKey === "serviceEvaluation") continue;
       if (policy.required && !getValue(policy.fieldKey).trim()) {
-        const label = NFSE_WORKFLOW_FIELDS.find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
+        const label = workflowFields(invoice?.documentType ?? "NFSE").find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
         setApprovalError(`Preencha o campo obrigatório: ${label}.`);
         return;
       }
@@ -456,7 +527,7 @@ export default function NotaDetalhePage() {
     setIsApproving(true);
     setApprovalError("");
     try {
-      const response = await fetch(`/api/notas/${invoice?.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: approvalInfo.execution.revision, idempotencyKey: stepOperationKey, fields }) });
+      const response = await fetch(`/api/notas/${invoice?.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ executionId: approvalInfo.execution.id, revision: approvalInfo.execution.revision, idempotencyKey: stepOperationKey, fields }) });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "Não foi possível concluir esta aprovação.").replace(/workflow/gi, "aprovação"));
       setMessageType("success");
@@ -563,7 +634,7 @@ export default function NotaDetalhePage() {
     setIsResumingApproval(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/notas/${invoice.id}/workflow/resume`, { method: "POST" });
+      const response = await fetch(`/api/notas/${invoice.id}/workflow/resume`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ executionId: approvalInfo.execution.id }) });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "Não foi possível retomar a aprovação.").replace(/workflow/gi, "aprovação"));
       setMessageType("success");
@@ -577,15 +648,18 @@ export default function NotaDetalhePage() {
     }
   }
 
+  const isFiscal = invoice?.documentType === "NFE" || invoice?.documentType === "CTE";
   const hasOpenApproval = approvalInfo?.execution.status === "ACTIVE" || approvalInfo?.execution.status === "BLOCKED";
   function isApprovalFieldVisible(fieldKey: string) {
     if (!hasOpenApproval) return true;
     return approvalInfo?.currentStep?.fields.some((field) => field.fieldKey === fieldKey && field.mode !== "HIDDEN") ?? false;
   }
-  const canApprove = Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  const canApprove = Boolean(!isFiscal && !hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status));
   const canApproveWorkflow = Boolean(approvalInfo?.execution.status === "ACTIVE" && approvalInfo.canComplete && me?.manager.role !== "FORNECEDOR");
-  const canReject = Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
-  const canChangeApprovedStatus = Boolean(invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
+  const canReject = isFiscal ? Boolean(approvalInfo?.canReject) : Boolean(!hasOpenApproval && invoice && me?.manager.role !== "FORNECEDOR" && ["AGUARDANDO_APROVACAO", "DADOS_INCONSISTENTES"].includes(invoice.status));
+  const canChangeApprovedStatus = Boolean(!isFiscal && invoice && me?.manager.role !== "FORNECEDOR" && invoice.status === "APROVADO");
+  const canReviewFiscal = Boolean(me?.manager.role === "ADMIN" && invoice?.fiscalDocument);
+  const canReopen = Boolean(canReviewFiscal && invoice?.status === "RECUSADO" && (isFiscal || (invoice.statusProcessamento !== "PROCESSANDO" && !invoice.dataLancamentoDelphi)));
   const isCompletedWorkflow = approvalInfo?.execution.status === "COMPLETED";
   const recipientSuggestions = emailManagers
     .filter((manager) => !selectedRecipients.some((recipient) => recipient.email.toLowerCase() === manager.email.toLowerCase()))
@@ -609,33 +683,46 @@ export default function NotaDetalhePage() {
   return <AppLayout>
     <MainHeader title="Detalhes da nota" subtitle={me ? `${me.manager.nome} (${me.manager.email})` : undefined} />
 
-    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role="status">{message}</p>}
+    {message && <p className={`message ${messageType === "error" ? "feedback-error" : ""}`} role={messageType === "error" ? "alert" : "status"}>{message}</p>}
 
-    {loading && <section className="card mt-4"><p className="section-description">Carregando nota fiscal...</p></section>}
+    {loading && <section className="card mt-4" aria-busy="true"><p className="section-description" role="status">Carregando nota fiscal…</p></section>}
 
     {!loading && invoice && <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="min-w-0">
       <section className="card space-y-5">
         <div className="section-header">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold uppercase text-brand">Nota fiscal</p>
-            <h2 className="section-title">NF {invoice.numeroNota}</h2>
-            <p className="section-description">{invoice.fornecedor.nome} • código identificador {invoice.codigoIdentificador}</p>
+            <h2 className="section-title">{invoice.documentType ? DOCUMENT_TYPE_LABEL[invoice.documentType] : "NF"} {invoice.numeroNota}</h2>
+            <p className="section-description break-words">{invoice.fornecedor?.nome ?? "Fornecedor pendente"} · {isFiscal ? "Chave de acesso" : "Código identificador"} <span className="break-all">{invoice.codigoIdentificador}</span></p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="btn-secondary" onClick={() => router.push("/dashboard")}>Voltar ao dashboard</button>
+            {isFiscal && <button type="button" className="btn-secondary" disabled={xmlLoading} onClick={() => void downloadCurrentXml()}>{xmlLoading ? "Baixando…" : "Baixar XML"}</button>}
             <span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>
           </div>
         </div>
 
+        {isFiscal ? <>
+          <div className="grid gap-3 md:grid-cols-3">
+            {isApprovalFieldVisible("valorParaAprovacao") && <DetailItem label="Valor de referência do XML" value={formatFiscalDecimal(invoice.referenceValue, true)} />}
+            {invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" && isApprovalFieldVisible("valorParaAprovacao") && <DetailItem label="Valor para aprovação" value={formatCurrency(invoice.valorParaAprovacao)} />}
+            {isApprovalFieldVisible("tomadorNome") && <DetailItem label="Empresa" value={invoice.empresa?.nomeExibicao ?? "Vínculo pendente"} />}
+            {isApprovalFieldVisible("dataEmissao") && <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />}
+            <DetailItem label="Situação fiscal" value={invoice.fiscalStatus ? FISCAL_STATUS_LABEL[invoice.fiscalStatus] : null} />
+          </div>
+          {invoice.adminReview?.status === "PENDENTE" && <p className="badge badge-warning">Revisão pendente</p>}
+          {!approvalInfo && invoice.status === "AGUARDANDO_APROVACAO" && invoice.adminReview?.status !== "PENDENTE" && <p className="text-sm text-muted">Aguardando encaminhamento para o workflow deste tipo.</p>}
+        </> : <>
         {invoice.statusProcessamento === "ERRO" && <div className="rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
 
         <div className="grid gap-3 md:grid-cols-3">
           {isApprovalFieldVisible("valorParaAprovacao") && <DetailItem label={invoice.origemValorParaAprovacao === "VALIDACAO_ADMINISTRATIVA" ? "Valor para aprovação (validado pelo admin)" : "Valor de serviço"} value={formatCurrency(invoice.valorParaAprovacao ?? invoice.valorServico ?? invoice.valorLiquido ?? invoice.valorBaseCalculo)} />}
           {isApprovalFieldVisible("dataEmissao") && <DetailItem label="Emissão" value={formatDate(invoice.dataEmissao)} />}
           {isApprovalFieldVisible("dataCompetencia") && <DetailItem label="Competência" value={formatCompetence(invoice.dataCompetencia)} />}
-          {isApprovalFieldVisible("prestadorNome") && <DetailItem label="Fornecedor" value={invoice.fornecedor.nome} />}
-          {isApprovalFieldVisible("prestadorCnpj") && <DetailItem label="CNPJ fornecedor" value={invoice.fornecedor.cnpj ?? invoice.prestadorCnpj} />}
-          <DetailItem label="Código externo" value={invoice.fornecedor.codigoExterno} />
+          {isApprovalFieldVisible("prestadorNome") && <DetailItem label="Fornecedor" value={invoice.fornecedor?.nome} />}
+          {isApprovalFieldVisible("prestadorCnpj") && <DetailItem label="CNPJ fornecedor" value={invoice.fornecedor?.cnpj ?? invoice.prestadorCnpj} />}
+          <DetailItem label="Código externo" value={invoice.fornecedor?.codigoExterno} />
           {isApprovalFieldVisible("tomadorNome") && <DetailItem label="Tomador" value={invoice.tomadorNome} />}
           {isApprovalFieldVisible("tomadorCnpj") && <DetailItem label="CNPJ tomador" value={invoice.tomadorCnpj} />}
           {isApprovalFieldVisible("tomadorEmail") && <DetailItem label="E-mail tomador" value={invoice.tomadorEmail} />}
@@ -673,14 +760,20 @@ export default function NotaDetalhePage() {
         </div>
 
         {isApprovalFieldVisible("observacaoValidacao") && invoice.observacaoValidacao && invoice.statusProcessamento !== "ERRO" && <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><strong>Observação de validação:</strong> {invoice.observacaoValidacao}</div>}
+        </>}
       </section>
+      {(invoice.documentType === "NFE" || invoice.documentType === "CTE") && <FiscalDetails data={invoice.fiscalDocument} documentType={invoice.documentType} />}
+      </div>
 
       <aside className="space-y-4">
+
+        {canReviewFiscal && invoice.fiscalDocument && <FiscalReviewActions invoiceId={invoice.id} versions={invoice.fiscalDocument.versions} reasons={invoice.adminReview?.status === "PENDENTE" ? invoice.adminReview.motivos : []} companyCnpj={invoice.empresa?.cnpj ?? invoice.tomadorCnpj} supplierCnpj={invoice.prestadorCnpj} canReopen={canReopen} onChanged={() => loadData(false)} />}
+        {invoice.fiscalDocument && <FiscalHistory data={invoice.fiscalDocument} />}
 
         {approvalInfo?.execution.status === "ACTIVE" && <section className="card space-y-3"><div><h3 className="section-title">Etapa de aprovação</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Aprovação em andamento"}</p></div><p className="text-sm text-slate-600">Responsáveis: {approvalInfo.tasks.filter((task) => !task.completedAt).map((task) => task.managerName).join(", ") || "Aguardando responsável"}</p>{canApproveWorkflow ? <button type="button" className="btn-primary w-full" onClick={abrirModalAprovacao}>Aprovar nota</button> : <p className="text-sm text-slate-600">Esta aprovação está atribuída a outro responsável.</p>}</section>}
         {approvalInfo?.execution.status === "BLOCKED" && <section className="card space-y-3 border-amber-200 bg-amber-50/50"><div><h3 className="section-title">Aprovação aguardando responsável</h3><p className="section-description">{approvalInfo.currentStep?.name ?? "Etapa pendente"}</p></div><p className="text-sm text-slate-700">A etapa será encaminhada quando houver um responsável ativo.</p>{approvalInfo.canResume && <button type="button" className="btn-secondary w-full" disabled={isResumingApproval} onClick={resumeApproval}>{isResumingApproval ? "Retomando…" : "Retomar aprovação"}</button>}</section>}
 
-        {me?.manager.role === "ADMIN" && (!approvalInfo || isCompletedWorkflow) && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
+        {!isFiscal && me?.manager.role === "ADMIN" && (!approvalInfo || isCompletedWorkflow) && <section className="card space-y-4 border-blue-200 bg-blue-50/40 ring-1 ring-blue-100">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Somente administradores</p>
             <h3 className="section-title">{isCompletedWorkflow ? "Finalizar nota" : "Alterar status e comunicar"}</h3>
@@ -701,7 +794,7 @@ export default function NotaDetalhePage() {
                   if (event.key === "Enter" || event.key === "," || event.key === ";") { event.preventDefault(); if (recipientSuggestions.length && recipientDraft.trim()) addRecipient(recipientSuggestions[0]); else addTypedRecipient(); }
                   if (event.key === "Backspace" && !recipientDraft && selectedRecipients.length) setSelectedRecipients((current) => current.slice(0, -1));
                   if (event.key === "Escape") setIsRecipientPickerOpen(false);
-                }} placeholder={selectedRecipients.length ? "Adicionar destinatário..." : "Digite um nome ou e-mail"} aria-autocomplete="list" aria-expanded={isRecipientPickerOpen && recipientSuggestions.length > 0} aria-controls="status-email-suggestions" />
+                }} placeholder={selectedRecipients.length ? "Adicionar destinatário..." : "Digite um nome ou e-mail"} role="combobox" aria-autocomplete="list" aria-expanded={isRecipientPickerOpen && recipientSuggestions.length > 0} aria-controls="status-email-suggestions" />
               </div>
               {isRecipientPickerOpen && recipientDraft.trim() && <div id="status-email-suggestions" role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
                 {recipientSuggestions.map((manager) => <button type="button" role="option" aria-selected="false" key={manager.id} className="flex w-full items-start gap-3 px-3 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none" onMouseDown={(event) => event.preventDefault()} onClick={() => addRecipient(manager)}>
@@ -763,10 +856,10 @@ export default function NotaDetalhePage() {
     {!loading && invoice && isApprovalModalOpen && <>
       <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={() => !isApproving && setIsApprovalModalOpen(false)} />
       <section role="dialog" aria-modal="true" aria-labelledby="detail-approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6">
-        <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor.nome}</p></div><span className="badge badge-blue">Aprovação</span></div>
+        <div className="section-header"><div><h3 id="detail-approval-modal-title" className="section-title">Confirmar aprovação</h3><p className="section-description">Nota {invoice.numeroNota} • fornecedor {invoice.fornecedor?.nome ?? "Fornecedor pendente"}</p></div><span className="badge badge-blue">Aprovação</span></div>
         {invoice.statusProcessamento === "ERRO" && <div className="mt-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {invoice.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
         {approvalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approvalError}</div>}
-        {isLoadingStepApproval ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : hasOpenApproval && approvalInfo?.currentStep ? <div className="mt-5 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields policies={approvalInfo.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{approvalInfo.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="mt-5 space-y-4">
+        {isLoadingStepApproval ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : hasOpenApproval && approvalInfo?.currentStep ? <div className="mt-5 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields documentType={invoice.documentType} policies={approvalInfo.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{approvalInfo.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="mt-5 space-y-4">
           <div role="group" aria-labelledby="detail-rating-label" aria-describedby="detail-rating-scale"><p id="detail-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-center text-sm font-bold transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}>{rate}</button>; })}</div><div className="mt-2"><RatingScaleHint id="detail-rating-scale" /></div></div>
           <div className="grid gap-3 sm:grid-cols-2"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="detail-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="detail-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label></div>
           <label className="approval-field"><span className="approval-field-label">Data de vencimento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label>

@@ -73,9 +73,9 @@ export default function NotasPage() {
           const formData = new FormData();
           if (invoiceForm.fornecedorId) formData.append("fornecedorId", invoiceForm.fornecedorId);
           if (xmlFile) formData.append("xmlFile", xmlFile);
-          return fetch("/api/notas", { method: "POST", body: formData });
+          return fetch("/api/notas/manual", { method: "POST", body: formData });
         })()
-      : fetch("/api/notas", {
+      : fetch("/api/notas/manual", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

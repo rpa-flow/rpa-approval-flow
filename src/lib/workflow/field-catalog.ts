@@ -36,3 +36,17 @@ export type WorkflowFieldMode = "HIDDEN" | "READ_ONLY" | "EDITABLE";
 export function getNfseWorkflowField(key: string) {
   return NFSE_WORKFLOW_FIELDS.find((field) => field.key === key);
 }
+
+export type DocumentType = "NFSE" | "NFE" | "CTE";
+export const isDocumentType = (value: unknown): value is DocumentType => value === "NFSE" || value === "NFE" || value === "CTE";
+
+export function workflowFields(type: DocumentType) {
+  if (type === "NFSE") return NFSE_WORKFLOW_FIELDS;
+  return [
+    { key: "dataEmissao", label: "Data de emissão", editable: false },
+    { key: "valorParaAprovacao", label: type === "NFE" ? "Valor da NF-e" : "Valor da prestação", editable: false },
+    { key: "prestadorNome", label: type === "NFE" ? "Emitente" : "Transportadora", editable: false },
+    { key: "tomadorNome", label: type === "NFE" ? "Destinatário" : "Tomador", editable: false },
+    ...NFSE_WORKFLOW_FIELDS.filter(field => field.editable && field.key !== "serviceEvaluation")
+  ];
+}

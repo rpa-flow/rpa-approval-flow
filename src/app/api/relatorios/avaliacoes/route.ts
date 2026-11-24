@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
   }>();
 
   for (const invoice of invoices) {
-    const key = invoice.fornecedorId;
+    if (!invoice.fornecedor) continue;
+    const key = invoice.fornecedor.id;
     const base = suppliers.get(key) ?? {
       supplierId: key,
       supplierName: invoice.fornecedor.nome,

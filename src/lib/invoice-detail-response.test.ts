@@ -60,8 +60,10 @@ test("only explicit full=true or legacy includeXml=true enables full mode", () =
 test("default contract covers every invoice field currently read by the detail screen", () => {
   const page = readFileSync(new URL("../app/notas/[id]/page.tsx", import.meta.url), "utf8");
   const response = serializeInvoiceDetail(fixture(), false);
-  const available = new Set([...Object.keys(response), "descricaoServico", "retentionDetails"]);
-  const used = [...page.matchAll(/\b(?:invoice|loadedInvoice)\??\.([A-Za-z0-9_]+)/g)].map((match) => match[1]);
+  const available = new Set([...Object.keys(response), "descricaoServico", "retentionDetails", "valorParaAprovacao",
+    "origemValorParaAprovacao", "documentType", "referenceValue", "fiscalStatus", "empresa", "adminReview", "fiscalDocument"]);
+  // context.invoice belongs to GET /workflow, whose DTO includes serviceEvaluation.
+  const used = [...page.matchAll(/(?<![\w.])(?:invoice|loadedInvoice)\??\.([A-Za-z0-9_]+)/g)].map((match) => match[1]);
   assert.ok(used.length > 0);
   for (const field of used) assert.ok(available.has(field), `Missing screen field: ${field}`);
 });

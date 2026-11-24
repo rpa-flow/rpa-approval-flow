@@ -18,7 +18,7 @@ type DetailSource = Pick<Invoice, DetailField> & {
     cnpj: string | null;
     codigoExterno: string | null;
     managerSuppliers: Array<{ manager: { nome: string } }>;
-  };
+  } | null;
 };
 
 export function isFullInvoiceResponse(params: URLSearchParams) {
@@ -32,13 +32,13 @@ export function serializeInvoiceDetail<T extends DetailSource>(invoice: T, full:
   const fields = Object.fromEntries(INVOICE_DETAIL_FIELDS.map((key) => [key, invoice[key]])) as Pick<T, DetailField>;
   return {
     ...fields,
-    fornecedor: {
+    fornecedor: invoice.fornecedor ? {
       nome: invoice.fornecedor.nome,
       cnpj: invoice.fornecedor.cnpj,
       codigoExterno: invoice.fornecedor.codigoExterno,
       managerSuppliers: invoice.fornecedor.managerSuppliers.map(({ manager }) => ({
         manager: { nome: manager.nome }
       }))
-    }
+    } : null
   };
 }

@@ -1,10 +1,28 @@
-# Especificação: gestão de NF-e e CT-e na plataforma
+# Especificação: recebimento via API e aprovação de NFS-e, NF-e e CT-e
+
+> Referência consolidada atual: [Fase 0 consolidada](f0-consolidado.md). Os trechos abaixo são histórico de decisões e devem ser revisados contra esse documento antes da implementação.
+
+> Decisões mais recentes: recepção sem sessão exige chave de integração configurada e válida para os três tipos; a aceitação de XML corrigido durante ou após aprovação reinicia o workflow desde a primeira etapa. Essas decisões prevalecem sobre referências anteriores a manter integralmente a autenticação ou a uma transição ainda não definida.
+
+> Atualização de escopo: regras e cenários antigos referentes a lançamento externo são históricos e não integram este plano. As decisões mais recentes nesta seção prevalecem sobre trechos anteriores em conflito.
+
+## Decisões consolidadas da Fase 0
+
+- Persistência: uma tabela central reúne os dados comuns necessários à identificação, associação, consulta e aprovação; cada tipo possui sua própria tabela de detalhe com dados específicos. A modelagem concreta, migração aditiva e compatibilidade com registros NFS-e existentes serão detalhadas antes da alteração do schema. XML original, versões, decisões e histórico devem ser preservados.
+- Empresa: persistir associação rastreável à empresa cadastrada; NF-e usa destinatário e CT-e usa tomador. Se não houver empresa única ativa, aguardar ADMIN. Não sobrecarregar campos fiscais de NFS-e para representar outros papéis.
+- Duplicidade: identidade e conteúdo equivalentes resultam em recebimento idempotente; conteúdo diferente com a mesma identidade gera conflito e versão candidata para revisão do ADMIN, sem substituir a versão anterior. O 409 atual não é suficiente para distinguir os casos; detalhar resposta compatível com a API existente.
+- CT-e de substituição: relacionar substituto e original, invalidar o original e preservá-lo no histórico, inclusive quando chegar fora de ordem. Detalhar bloqueios e comportamento para original já aprovado.
+- Workflow: configurações e versões independentes por tipo. Documento elegível entra no workflow publicado de seu tipo; sem publicação, aguarda e ADMIN encaminha o estoque elegível após a primeira publicação.
+- Situação fiscal: preservar o estado informado pela fonte e permitir representar autorizado, cancelado, não autorizado e desconhecido; os três últimos permanecem pendentes para análise. A representação técnica e os critérios exatos de transição serão detalhados, sem presumir que ausência de informação seja autorização.
+- Campos da lista e detalhe foram aprovados pelo usuário, conforme DR-24 e AC-36. As menções anteriores a campos aguardando aprovação estão superadas.
 
 ## Objetivo e limites
 
-- Objetivo: evoluir a plataforma de gestão de notas para obter e processar NF-e e CT-e, reaproveitar o fluxo existente de aprovação e viabilizar o lançamento aprovado no Minerion, preservando o processamento atual de NFS-e.
-- Escopo proposto pelo texto recebido: obtenção via FSist; identificação do tipo pelo XML; extração e armazenamento dos dados e XML; associação a fornecedores; listagem, filtros e detalhes por tipo; aprovação, recusa, histórico e auditoria; integração de lançamento no Minerion com erros e reprocessamento; validação ponta a ponta e regressão de NFS-e.
-- Fora de escopo declarado: escrituração/validação fiscal completa; validação criptográfica completa; consulta direta à SEFAZ; eventos fiscais como carta de correção; relatórios novos não previstos; mudanças de processo sem relação direta com NF-e/CT-e.
+- Objetivo: disponibilizar uma interface via API para receber NFS-e, NF-e e CT-e, interpretar e armazenar os documentos e exibi-los no portal de aprovação, reaproveitando e estendendo os fluxos de consulta e aprovação existentes.
+- Escopo: contrato de recebimento por API; identificação do tipo pelo XML; validação e armazenamento do XML/dados necessários; associação e revisão administrativa; listagem, filtros, detalhes e relações entre tipos; aprovação, recusa, histórico e auditoria; autorização, erros e duplicidade na entrada; preservação do processamento atual de NFS-e.
+- Fora de escopo deste plano: integração de coleta direta com FSist; lançamento ou consulta de lançamentos no Minerion/Delphi via `rpa-web`; reconciliação de resultados de lançamento; validação fiscal/criptográfica completa, consulta direta à SEFAZ, eventos fiscais fora do necessário para classificar/exibir o documento e relatórios novos.
+- Fora de escopo declarado: coleta direta FSist; integração de lançamento Minerion/Delphi; escrituração/validação fiscal completa; validação criptográfica completa; consulta direta à SEFAZ; eventos fiscais não necessários à exibição/aprovação; relatórios novos não previstos.
+- Regras e cenários antigos sobre envio/reconciliação Minerion ou campos necessários ao lançamento são material de escopo futuro, não critérios de aceite desta especificação revisada.
 - Cobertura confirmada para os novos tipos: compras e fretes contratados pelas empresas. Documentos de saída das empresas não fazem parte desta entrega; os critérios técnicos de reconhecimento dependem dos papéis e campos do XML a mapear.
 - Fonte: texto fornecido pelo usuário nesta conversa e esclarecimentos subsequentes. Ainda não aprovado como especificação executável; decisões materiais seguem abertas.
 
@@ -14,13 +32,22 @@
 |---|---|---|
 | Fato observado | A aplicação recebe e interpreta XML de NFS-e e mantém o campo `xmlOriginal`. | README e `src/lib/nfse-parser.ts`; não foi feita auditoria completa das rotas nesta etapa. |
 | Fato observado | O enum `WorkflowDocumentType` atualmente contém apenas `NFSE`; regras de workflow e catálogo de campos também são NFS-e. | `prisma/schema.prisma`, `src/lib/workflow/` e `/api/workflows/field-catalog`. |
-| Fato observado | O fluxo atual usa campos e status com nome Delphi. O usuário confirmou que Minerion é o mesmo destino e que obtenção/lançamento continuam no robô externo `rpa-web`. | Código local e resposta afirmativa do usuário à pergunta composta sobre destino/executor. O consumidor externo ainda não foi inspecionado. |
+| Fato observado | O fluxo atual tem campos/status legados com nome Delphi. | A integração de lançamento correspondente está fora do escopo deste plano. |
 | Fato observado | O anexo indica FSist como fonte e Minerion como destino, sem descrever contratos ou mecanismo de integração. | Texto recebido. |
 | Decisão confirmada | A plataforma deve permitir cadastrar um workflow separado para cada tipo (NFS-e, NF-e e CT-e), reaproveitando a capacidade de workflow existente e possibilitando configurações distintas por tipo. | Esclarecimento do usuário nesta conversa. Detalhes das regras e da ativação por tipo permanecem por fechar. |
 | Decisão confirmada | NF-e/CT-e sem workflow publicado aguardam configuração, sem aprovação ou lançamento pelo fluxo legado. | Resposta do usuário na Fase 0. |
 | Decisão confirmada | As exigências de aprovação serão configuráveis por tipo; não copiar automaticamente todas as exigências de NFS-e para NF-e/CT-e. | Resposta do usuário: configurar exigências por tipo. Detalhes de configuração seguem em alinhamento. |
-| Decisão confirmada | Revisão administrativa por valor zero ou emissão em mês anterior vale para os três tipos. | Resposta do usuário na Fase 0. Falta definir o campo monetário de referência para NF-e/CT-e. |
+| Decisão confirmada | Revisão administrativa por valor zero ou emissão em mês anterior vale para os três tipos. | Resposta do usuário na Fase 0; valor de referência definido abaixo. |
 | Decisão confirmada | NF-e/CT-e entram somente pela integração nesta entrega. | Upload manual de XML e cadastro sem XML para esses tipos ficam fora da entrega atual. |
+| Decisão confirmada | A API dos três tipos deve seguir o contrato, a autenticação e o comportamento de resposta usados atualmente para receber NFS-e. O consumidor externo é separado e não será definido neste plano. | Inspecionar a rota NFS-e para documentar seu contrato efetivo e reutilizá-lo/estendê-lo sem projetar um novo contrato do lado consumidor. |
+| Decisão confirmada | Recebimento repetido com mesma identidade e mesmo conteúdo é idempotente; mesma identidade com conteúdo diferente gera conflito rastreável, sem sobrescrita silenciosa. | Resposta HTTP e ação administrativa devem seguir o padrão existente sempre que possível. |
+| Decisão confirmada | NF-e associa-se à empresa pelo destinatário; CT-e, pelo tomador. Se não houver correspondência única com empresa cadastrada e ativa, o recebimento aguarda resolução do ADMIN. | Aplica-se aos três tipos, incluindo NFS-e. |
+| Decisão confirmada | Valor de referência para revisão de valor zero: valor usado atualmente em NFS-e, `vNF` em NF-e e `vTPrest` em CT-e. | Valor ausente não é zero; deve permanecer pendente para resolução administrativa. |
+| Decisão confirmada | Documentos cancelados, não autorizados ou com situação desconhecida são recebidos e exibidos como pendentes. | A situação exibida é a informada no documento recebido; não implica validação externa. |
+| Decisão confirmada | CT-e de substituição invalida o CT-e substituído; ambos aparecem na mesma visão, com o documento anterior preservado no histórico. | Definir a representação visual e o comportamento quando o original já está aprovado; não encaminhar o original como válido após substituição. |
+| Decisão confirmada | Com workflow publicado, documento novo entra nele após recepção e validações; sem workflow publicado, aguarda seleção do ADMIN após a primeira publicação. | Pendências de associação, revisão administrativa ou situação fiscal impedem início do workflow. |
+| Decisão confirmada | XML corrigido de documento já recebido preserva a versão anterior e exige revisão do ADMIN antes de continuar. | A aprovação anterior não vale automaticamente para dados corrigidos; registrar versões e decisões. |
+| Pendente de revisão | Campos apresentados na lista e no detalhe para cada tipo. | Ver proposta em `f0-contracts.md`; o usuário fará a revisão no plano. |
 | Decisão confirmada | Incluir somente compras e fretes contratados pelas empresas; relações CT-e/NF-e são informativas, com aprovação independente. | Respostas do usuário na Fase 0. |
 | Decisão confirmada | Após publicar o primeiro workflow de um novo tipo, ADMIN seleciona e encaminha os documentos que aguardavam configuração e estejam elegíveis. | Reaproveitar o encaminhamento administrativo existente; não realizar encaminhamento automático desse estoque. |
 | Fato confirmado | O usuário dispõe de documentação/acesso de homologação para FSist e Minerion e de exemplos anonimizados/campos obrigatórios para o Minerion. | Esclarecimento do usuário; artefatos ainda não foram compartilhados ou inspecionados neste planejamento. |
@@ -31,8 +58,8 @@
 | Decisão confirmada | Fornecedor/transportadora inexistente será criado a partir do XML, como no fluxo atual. Quando não houver identificação de uma única empresa cadastrada e ativa, o recebimento aguarda resolução do ADMIN, sem aprovação ou lançamento. | O mapeamento dos papéis do XML e os campos mínimos de autocadastro permanecem por fechar. |
 | Decisão confirmada | Alteração em dados que afetam o lançamento após aprovação e antes de iniciar o envio exige nova aprovação desde o começo do workflow, usando a versão publicada mais recente do tipo. | Histórico preservado; durante envio ou resultado incerto os dados ficam bloqueados. |
 | Decisão confirmada | Cancelamento conhecido impede novos envios. Quando já houve lançamento, ADMIN realiza reconciliação manual com histórico preservado, sem estorno automático. | Não implica consultar SEFAZ nem implementar cobertura completa de eventos fiscais; contrato de recebimento da informação continua pendente. |
-| Decisão aberta | Quais itens de produto, tributos e informações de carga/documentos vinculados são necessários para o lançamento real, inclusive nível de detalhe por item. | Layouts e exemplos reais anonimizados, com mapeamento Minerion. |
-| Decisão aberta | Qual identidade torna um documento único e como tratar XMLs repetidos, eventos, cancelamento, versões e documentos corrigidos. | Regra por chave de acesso, fonte e estabelecimento; definir atualização versus rejeição. |
+| Pendente de revisão | Quais campos devem aparecer na lista e nos detalhes do portal. | Proposta em `f0-contracts.md`; depende de revisão do usuário. Lançamento Minerion está fora deste plano. |
+| Decisão parcialmente fechada | Identidade e repetição: equivalentes são idempotentes; conteúdo divergente com mesma identidade é conflito. | Definir chaves de identidade específicas para NFS-e, NF-e e CT-e ao inspecionar parser/rotas atuais. Correções de documentos já recebidos seguem em aberto. |
 | Decisão confirmada | Exibir vínculos CT-e/NF-e sem dependência entre suas aprovações. | Referência a documento ainda não importado não deve criar bloqueio de aprovação. Navegação para documento existente continua sujeita à autorização. Mapeamentos externos de lançamento permanecem pendentes. |
 | Decisão aberta | Estratégia de implantação, migração dos registros antigos sem `documentType`, ativação gradual e recuperação/rollback. | Confirmar rollout e compatibilidade operacional. |
 
@@ -65,6 +92,9 @@
 - DR-19 (confirmada): somente ADMIN pode alterar dados operacionais que afetam o lançamento após a aprovação, com motivo registrado. A alteração segue DR-16 e não pode contornar o bloqueio de DR-17. XML original não é editado; ajustes operacionais são registrados separadamente.
 - DR-20 (confirmada): ADMIN pode reabrir uma nota recusada, corrigi-la e iniciar novo ciclo desde a primeira etapa com a versão publicada mais recente do tipo. Preservar recusa, decisões e dados anteriores; não reativar comandos/tarefas do ciclo encerrado. Reabertura não aprova nem libera envio e não remove impedimentos de cancelamento, revisão administrativa ou associação. Sem versão publicada, aguardar configuração.
 - DR-21 (confirmada): a consulta reaproveita os vínculos de fornecedor e as atribuições existentes. A consulta global concedida pelo workflow vale somente para o tipo configurado e não amplia implicitamente o acesso aos demais tipos. Aplicar a mesma autorização a listagem, detalhe, XML, exportações e navegação de relações; a ausência de outra concessão de acesso impede consulta fora do tipo autorizado.
+- DR-22 (confirmada): após receber um documento e concluir validações, associação e revisão administrativa exigidas, se houver workflow publicado para o tipo, iniciar a execução conforme a configuração publicada. Sem workflow publicado, manter o documento aguardando configuração; após a primeira publicação, somente ADMIN seleciona e encaminha os documentos elegíveis que aguardavam.
+- DR-23 (confirmada): XML corrigido para identidade já recebida cria uma nova versão candidata ligada ao mesmo documento; preserva a versão anterior e registra o conflito sem sobrescrita silenciosa. ADMIN deve revisar a nova versão antes de qualquer avanço. O ciclo atual fica suspenso enquanto a revisão estiver pendente; se a versão corrigida for aceita após aprovação, iniciar novo ciclo de aprovação desde a primeira etapa, sem reaproveitar aprovações dos dados anteriores. Registrar autor/data/resultado da revisão e manter histórico consultável.
+- DR-24 (confirmada): o portal exibe na lista tipo e número/chave, fornecedor ou transportadora, empresa/estabelecimento, data de emissão, valor de referência, situação informada no XML e estado de revisão/workflow. O detalhe expõe XML original conforme permissão e os dados fiscais por tipo: itens, quantidades e totais da NF-e; tomador, remetente, recebedor, trajeto, carga, componentes do frete, NF-e relacionada e substituição do CT-e; campos atuais da NFS-e. O portal também apresenta o histórico de versões e as relações entre documentos sem conceder acesso implícito.
 
 ## Cenários de aceite preliminares
 
@@ -206,13 +236,37 @@
 
 **Então** a concessão global NFS-e não dá acesso. Vínculos de fornecedor e atribuições válidas continuam concedendo os acessos próprios, conforme as regras reaproveitadas.
 
+### AC-34: documento recebido com workflow publicado
+
+**Dado** documento recebido com XML válido, empresa resolvida, sem revisão administrativa pendente e com workflow publicado para seu tipo
+
+**Quando** a API concluir as validações de recebimento
+
+**Então** a nota inicia o workflow publicado correspondente ao tipo. Se qualquer pré-condição estiver pendente, ela permanece bloqueada até a resolução.
+
+### AC-35: XML corrigido durante ou após aprovação
+
+**Dado** documento recebido cuja mesma identidade chega novamente com conteúdo diferente
+
+**Quando** a nova versão for recebida
+
+**Então** a versão anterior é preservada, a nova fica sinalizada para revisão do ADMIN e o workflow não avança enquanto essa revisão estiver pendente. Se a versão anterior já estava aprovada e o ADMIN aceita a versão corrigida, o documento inicia novo ciclo desde a primeira etapa; o histórico anterior permanece consultável.
+
+### AC-36: dados apresentados no portal por tipo
+
+**Dado** um usuário autorizado consultando uma nota na lista ou no detalhe
+
+**Quando** o documento for NFS-e, NF-e ou CT-e
+
+**Então** a lista apresenta tipo e número/chave, fornecedor ou transportadora, empresa/estabelecimento, emissão, valor de referência, situação informada no XML e estado de revisão/workflow. O detalhe apresenta o XML original conforme permissão e os dados específicos definidos em DR-24, incluindo itens da NF-e, informações de transporte e vínculos/substituição do CT-e, e os campos atuais da NFS-e.
+
 ## Erros, autorização e casos de borda
 
 A análise detalhada, com prioridades, evidências locais e cenários adicionais propostos, está em [review.md](review.md). As recomendações da revisão não são decisões de negócio aprovadas.
 
-- Definir autorização para consulta de XML, ações administrativas de reprocessamento e envio manual ao Minerion.
+- Definir autorização para recepção via API, consulta de XML e ações disponíveis no portal.
 - Definir limites de tamanho/tempo dos XMLs, namespaces/layouts aceitos, chaves ausentes e versões desconhecidas.
-- Definir idempotência sob concorrência e resposta para timeout com resultado incerto no Minerion.
+- Definir idempotência sob concorrência e resposta da API a recebimentos repetidos ou conflitantes.
 - Não enviar XML ou credenciais a telas/logs sem necessidade; limitar dados expostos por API ao papel autorizado.
 - Tratar migração de notas legadas com `documentType = null` sem classificar documentos de forma incorreta.
 
@@ -221,36 +275,34 @@ A análise detalhada, com prioridades, evidências locais e cenários adicionais
 | Decisão | Estado | Consequência a avaliar |
 |---|---|---|
 | Persistência dos campos específicos de NF-e/CT-e | Aberta; comparar extensão do modelo atual com dados tipados por documento. | Migration, consultas e consistência dos dados. |
-| Interface de obtenção FSist e execução agendada | Executor externo `rpa-web` confirmado; mecanismo e agenda pendentes dos contratos. | Segredos, observabilidade, retentativas e limites entre robô e plataforma. |
-| Integração Minerion | Aberta, depende do contrato e da possibilidade de homologação. | Idempotência, timeout, reconciliação e segurança. |
+| Contrato da API de recebimento | Reutilizar formato, autenticação e comportamento de resposta da NFS-e; idempotência de domínio definida. | Inspecionar a rota existente para documentar pormenores, códigos de resposta, limites e identidade por tipo. Consumidor externo fora do escopo. |
+| Coleta FSist e lançamento Minerion | Fora do escopo deste plano. | Especificar em trabalho futuro caso necessário. |
 | Aprovação por tipo | Confirmado que deve haver workflow separado por tipo; detalhes de campos e etapas continuam em aberto. O schema atual tem enum e configuração limitados a NFSE. | Expandir catálogo de campos, configuração, autorização, versionamento e migração sem misturar dados específicos dos tipos. |
 | Guarda do XML | Em aberto confirmar retenção, volume, acesso e eventual armazenamento externo. | Custo, privacidade e respostas das APIs existentes. |
 
 ## Plano de implementação proposto
 
-A descoberta e os contratos em alinhamento da Fase 0 estão em [f0-contracts.md](f0-contracts.md). A fase está em andamento e depende dos materiais externos e das decisões ali identificadas.
+A descoberta e os contratos em alinhamento da Fase 0 estão em [f0-contracts.md](f0-contracts.md). A fase está em andamento e depende das decisões internas da API e do portal ali identificadas.
 
-1. **Fase 0 — Descoberta técnica e contratos:** inspecionar rotas/modelo atuais e os contratos, exemplos anonimizados e acesso de homologação já disponíveis para FSist e Minerion; confirmar permissões, campos obrigatórios, volume, frequência e ambiente de homologação.
-2. **Fase 1 — Domínio, schema e parsing:** fechar identidade e lifecycle; modelar os tipos e campos necessários; implementar detecção/parsers versionados, preservação do XML, validações e idempotência de ingestão.
-3. **Fase 2 — Aquisição FSist:** implementar busca/download, controle de checkpoints ou paginação conforme contrato, retentativas, registro de falhas e operação observável.
-4. **Fase 3 — Gestão e aprovação:** ampliar APIs/listagens/detalhes e filtros; associar fornecedor/empresa; estender workflow a NF-e/CT-e apenas conforme regras confirmadas; preservar controles de acesso.
-5. **Fase 4 — Lançamento Minerion:** mapear campos, enviar somente documentos aprovados, reconciliar resultados incertos, registrar falhas e permitir reprocessamento autorizado e idempotente.
-6. **Fase 5 — Validação e ativação:** testes focados de parsing/idempotência/autorização, integração em homologação, regressão NFS-e, observabilidade e rollout gradual com plano de recuperação.
+1. **Fase 0 — Descoberta técnica e contratos:** inspecionar rotas/modelo atuais e fechar a API de recebimento, autorização, idempotência, dados exibidos, associação e estados do portal.
+2. **Fase 1 — Domínio, schema e parsing:** modelar os tipos/campos necessários; implementar detecção e parsers versionados, preservação do XML, validações e idempotência de recepção.
+3. **Fase 2 — API de recebimento:** aceitar os três tipos pelo contrato acordado, registrar falhas de forma recuperável e manter compatibilidade necessária com o consumidor de NFS-e.
+4. **Fase 3 — Portal e workflow:** ampliar listagens/detalhes/filtros e workflows para NFS-e, NF-e e CT-e; associar empresa/fornecedor e preservar controles de acesso.
+5. **Fase 4 — Verificação e ativação:** verificações focadas de parsing, duplicidade, autorização e regressão NFS-e, além de ativação gradual da API e portal.
 
 ### Entregáveis necessários para fechar a Fase 0
 
 - Matriz por tipo: entrada suportada, identidade, empresa/papel no documento, fornecedor, valor de aprovação, campos/precisão, workflow e destino do lançamento.
-- Contratos de ingestão, consulta e processamento: autenticação/escopo, payloads por tipo, erros, idempotência, concorrência, paginação e compatibilidade com consumidores antigos.
+- Contratos de ingestão e consulta: autenticação/escopo, payloads por tipo, erros, idempotência, concorrência, limites e compatibilidade com consumidores existentes.
 - Matriz de transições: situação fiscal, ingestão, revisão administrativa, aprovação e lançamento; especificar quais combinações bloqueiam cada ação.
 - Modelagem de ciclos de reaprovação: o schema atual admite um `InvoiceWorkflow` por nota (`invoiceId` único). Definir extensão para múltiplos ciclos ou histórico equivalente sem apagar tarefas, decisões e comandos idempotentes anteriores; não confundir uma nova tentativa técnica de envio com novo ciclo de aprovação.
-- Decisões sobre ausência de workflow publicado, responsável inativo, alteração após aprovação, documentos históricos e resultado incerto no Minerion.
-- Matriz de falhas e recuperação por etapa, incluindo checkpoint da coleta e evidências de reconciliação do lançamento.
+- Decisões sobre ausência de workflow publicado, responsável inativo, alterações após aprovação e documentos históricos.
+- Matriz de falhas e recuperação da recepção, parsing, associação, revisão administrativa e encaminhamento para workflow.
 - Plano de migração e ativação por tipo/empresa, com critérios observáveis de entrada/saída e responsáveis operacionais.
 
 ## Riscos, rollout e itens adiados
 
-- Os contratos FSist e Minerion são dependências críticas; sem eles não é possível fechar comportamento de obtenção, sucesso, duplicidade ou recuperação.
-- O usuário informou que os contratos, homologação e exemplos necessários estão disponíveis e pediu para deixar sua disponibilização/análise pendente. Eles seguem como dependência das integrações; isso não impede alinhar regras da plataforma.
+- Contratos externos de FSist e Minerion estão adiados e não bloqueiam este escopo. A origem do POST à API e a autenticação do consumidor permanecem decisões internas necessárias.
 - O texto cita implantação no ambiente atual, mas ainda não autoriza uma ativação específica nem define janela, rollout ou responsáveis.
 - A proposta não cobre escrituração fiscal completa, validação junto à SEFAZ nem eventos fiscais além do que for necessário para reconhecer o documento e lançá-lo.
 - Esta especificação é rascunho de planejamento; nenhum código de produto foi alterado e as regras/cenários acima ainda precisam de alinhamento.

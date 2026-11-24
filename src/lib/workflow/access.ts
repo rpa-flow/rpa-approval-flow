@@ -1,11 +1,14 @@
+import type { Prisma, WorkflowDocumentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-/** Consulta global de NFS-e concedida pela versão vigente; não concede aprovação. */
-export async function hasGlobalNfseWorkflowAccess(managerId: string): Promise<boolean> {
-  const configuredUser = await prisma.approvalWorkflow.findFirst({ where: { documentType: "NFSE", activeVersion: { is: { status: "PUBLISHED", steps: { some: { responsibleManagers: { some: { managerId } }, consultationScope: "ALL" } } } } }, select: { id: true } });
-  if (configuredUser) return true;
-  const supplierBasedStep = await prisma.approvalWorkflow.findFirst({ where: { documentType: "NFSE", activeVersion: { is: { status: "PUBLISHED", steps: { some: { responsibilityMode: "SUPPLIER_MANAGERS", consultationScope: "ALL" } } } } }, select: { id: true } });
-  if (!supplierBasedStep) return false;
-  return Boolean(await prisma.managerSupplier.findFirst({ where: { managerId }, select: { id: true } }));
+export async function globalWorkflowTypes(managerId: string, db: Prisma.TransactionClient = prisma): Promise<WorkflowDocumentType[]> {
+  const linked = await db.managerSupplier.findFirst({ where: { managerId }, select: { id: true } });
+  const workflows = await db.approvalWorkflow.findMany({
+    where: { activeVersion: { is: { status: "PUBLISHED", steps: { some: { consultationScope: "ALL", OR: [
+      { responsibleManagers: { some: { managerId } } },
+      ...(linked ? [{ responsibilityMode: "SUPPLIER_MANAGERS" as const }] : [])
+    ] } } } } },
+    select: { documentType: true }
+  });
+  return workflows.map(w => w.documentType);
 }
-

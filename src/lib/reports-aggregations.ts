@@ -11,7 +11,7 @@ type InvoiceLike = {
   processada: boolean;
   dataLancamentoDelphi?: Date | null;
   codigoDelphi?: string | null;
-  fornecedor: { nome: string };
+  fornecedor: { nome: string } | null;
   criadoPor: { nome: string } | null;
   statusHistory?: Array<{ previousStatus: InvoiceStatus | null; newStatus: InvoiceStatus; createdAt: Date }>;
 };

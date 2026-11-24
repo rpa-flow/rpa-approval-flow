@@ -6,6 +6,7 @@ import { enrollmentError } from "@/lib/workflow/enrollment";
 import { invoicesAvailableForApproval } from "@/lib/invoice-admin-review-access";
 import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 import { createWorkflowStepAssignments, resolveStepAssignees } from "@/lib/workflow/assignees";
+import { fiscalWorkflowProblem } from "@/lib/workflow/fiscal-eligibility";
 
 const selectionSchema = z.object({
   invoiceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
@@ -37,10 +38,14 @@ export async function POST(request: NextRequest) {
         if (reason) return { invoiceId, success: false, error: reason };
         const eligible = await tx.invoice.findFirst({ where: { id: invoiceId, AND: [invoicesAvailableForApproval()] }, select: { id: true } });
         if (!eligible) return { invoiceId, success: false, error: "A nota exige revisão administrativa." };
-        if (invoice.documentType && invoice.documentType !== "NFSE") return { invoiceId, success: false, error: "Tipo de documento não suportado." };
-        const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType: "NFSE" }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } } } } } } });
+        const documentType = invoice.documentType ?? "NFSE";
+        if (documentType !== "NFSE") {
+          const problem = await fiscalWorkflowProblem(tx, invoiceId, true);
+          if (problem) return { invoiceId, success: false, error: problem };
+        }
+        const workflow = await tx.approvalWorkflow.findUnique({ where: { documentType }, include: { activeVersion: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } } } } } } });
         const version = workflow?.activeVersion;
-        if (!version || version.status !== "PUBLISHED" || !version.steps.length) return { invoiceId, success: false, error: "Não há workflow NFS-e publicado." };
+        if (!version || version.status !== "PUBLISHED" || !version.steps.length) return { invoiceId, success: false, error: "Não há workflow publicado para o tipo da nota." };
         const isInconsistent = invoice.status === "DADOS_INCONSISTENTES";
         const step = isInconsistent
           ? version.steps.find((candidate) => candidate.id === selection.stepId)

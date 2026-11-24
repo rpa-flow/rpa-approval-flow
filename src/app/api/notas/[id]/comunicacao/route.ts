@@ -5,6 +5,9 @@ import { getSessionManager } from "@/lib/auth";
 import { sendInvoiceStatusEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { processWorkflowNotifications } from "@/lib/workflow/notifications";
+import { hasPendingXmlCandidate, holdFiscalInvoice } from "@/lib/fiscal-document-ingest";
+import { isLegacyProcessingResult, legacyProcessingUnresolved } from "@/lib/fiscal-document-rules";
+import { reopenInconsistentWorkflow } from "@/lib/workflow/reopen";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -28,6 +31,8 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (!Object.values(InvoiceStatus).includes(newStatus)) return NextResponse.json({ error: "Selecione um status válido." }, { status: 400 });
   const existing = await prisma.invoice.findUnique({ where: { id: params.id }, include: { fornecedor: true, adminReview: true, workflowExecution: { select: { status: true } } } });
   if (!existing) return NextResponse.json({ error: "Nota não encontrada." }, { status: 404 });
+  if (existing.documentType && existing.documentType !== "NFSE") return NextResponse.json({ error: "Use o workflow específico do documento." }, { status: 409 });
+  if (!existing.fornecedor) return NextResponse.json({ error: "Resolva o fornecedor antes de alterar o status." }, { status: 409 });
   if (existing.adminReview && existing.adminReview.status !== "LIBERADA") {
     return NextResponse.json({ error: "Nota indisponível no fluxo normal enquanto a revisão administrativa não for liberada." }, { status: 409 });
   }
@@ -42,9 +47,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!codigoDelphi || codigoDelphi.length > 120) return NextResponse.json({ error: "Informe um código Delphi válido, com até 120 caracteres." }, { status: 400 });
     const processed = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${existing.id} FOR UPDATE`;
-      const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { workflowExecution: true } });
+      const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { adminReview: true, workflowExecution: true } });
       if (!current || current.workflowExecution?.status !== "COMPLETED" || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime() || current.status === "PROCESSADO") return null;
+      if (current.adminReview && current.adminReview.status !== "LIBERADA") return null;
+      const deferredConflict = legacyProcessingUnresolved(current) && await hasPendingXmlCandidate(tx, current.id);
       const invoice = await tx.invoice.update({ where: { id: existing.id }, data: { status: "PROCESSADO", processada: true, statusProcessamento: "CONCLUIDO", dataLancamentoDelphi: new Date(), codigoDelphi } });
+      if (deferredConflict) await holdFiscalInvoice(tx, invoice.id, "CONFLITO_XML", manager);
       await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus: "PROCESSADO" } });
       await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "STATUS_CHANGED", actionDescription: `${manager.nome} marcou a nota como processada`, previousStatus: existing.status, newStatus: "PROCESSADO", beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
       return invoice;
@@ -65,12 +73,14 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${existing.id} FOR UPDATE`;
-    const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { workflowExecution: { include: { tasks: { include: { step: true } } } } } });
+    const current = await tx.invoice.findUnique({ where: { id: existing.id }, include: { adminReview: true, workflowExecution: true } });
     if (!current || (current.workflowExecution && current.workflowExecution.status !== "COMPLETED") || current.dataAtualizacao.getTime() !== existing.dataAtualizacao.getTime()) return null;
+    if (current.adminReview && current.adminReview.status !== "LIBERADA") return null;
     if (current.workflowExecution?.status === "COMPLETED" && !["PROCESSADO", "DADOS_INCONSISTENTES"].includes(newStatus)) return null;
+    const deferredConflict = legacyProcessingUnresolved(current) && await hasPendingXmlCandidate(tx, current.id);
+    if (deferredConflict && !isLegacyProcessingResult(newStatus)) return null;
     const execution = current.workflowExecution;
-    const lastStepTasks = execution?.tasks.length ? execution.tasks.filter((task) => task.step.position === Math.max(...execution.tasks.map((item) => item.step.position))) : [];
-    if (execution && newStatus === "DADOS_INCONSISTENTES" && !lastStepTasks.length) return null;
+    if (execution && newStatus === "DADOS_INCONSISTENTES" && !await reopenInconsistentWorkflow(tx, execution)) return null;
     const invoice = await tx.invoice.update({
       where: { id: existing.id },
       data: {
@@ -80,13 +90,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         ...processing
       }
     });
-    if (execution && newStatus === "DADOS_INCONSISTENTES") {
-      const reopenedAt = new Date();
-      const nextRevision = execution.revision + 1;
-      await tx.invoiceWorkflowTask.updateMany({ where: { executionId: execution.id, stepId: lastStepTasks[0].stepId }, data: { completedAt: null, assignedAt: reopenedAt } });
-      await tx.invoiceWorkflow.update({ where: { id: execution.id }, data: { status: "ACTIVE", completedAt: null, revision: { increment: 1 } } });
-      for (const task of lastStepTasks) await tx.workflowNotification.create({ data: { taskId: task.id, deduplicationKey: `reopened:${task.id}:${nextRevision}`, recipient: task.managerEmail, payload: { invoiceId: invoice.id, executionId: execution.id, stepId: task.stepId, reason: "DADOS_INCONSISTENTES" } } });
-    }
+    if (deferredConflict) await holdFiscalInvoice(tx, invoice.id, "CONFLITO_XML", manager);
     await tx.noteStatusHistory.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, previousStatus: existing.status, newStatus, reason } });
     await tx.noteAuditLog.create({ data: { invoiceId: invoice.id, actorId: manager.id, actorName: manager.nome, actorEmail: manager.email, actionType: "STATUS_CHANGED", actionDescription: `${manager.nome} alterou o status da nota`, previousStatus: existing.status, newStatus, reason, beforeData: JSON.parse(JSON.stringify(existing)), afterData: JSON.parse(JSON.stringify(invoice)) } });
     return invoice;

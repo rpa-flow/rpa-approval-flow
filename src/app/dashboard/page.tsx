@@ -6,16 +6,18 @@ import { MainHeader } from "@/app/components/main-header";
 import { AppLayout, EmptyState, ErrorState, LoadingState, PageHeader, PaginationControls } from "@/components/ui-kit";
 import { getRatingLabel, QualificaHelpText, QualificationProcedureLink } from "@/components/evaluation-guidance";
 import { WorkflowApprovalFields, type ApprovalEvaluation, type ApprovalFieldPolicy } from "@/app/components/workflow-approval-fields";
+import { DOCUMENT_TYPE_LABEL, FISCAL_STATUS_LABEL, REVIEW_STATUS_LABEL, WORKFLOW_STATUS_LABEL, formatFiscalDecimal } from "@/app/components/fiscal-document-labels";
+import type { ProtocolStatus } from "@/lib/fiscal-document-parser";
 import type { PaginationMetadata } from "@/lib/pagination";
 import { minimumPaymentDate, paymentDateAtSaoPauloNoon } from "@/lib/payment-date";
-import { NFSE_WORKFLOW_FIELDS } from "@/lib/workflow/field-catalog";
+import { workflowFields, type DocumentType } from "@/lib/workflow/field-catalog";
 
 type Me = { manager: { id: string; nome: string; email: string; role: "ADMIN" | "GESTOR" | "FORNECEDOR" } };
 type IntegrationStatus = "AGUARDANDO" | "SUCESSO" | "FALHA";
 type RiskLevel = "BAIXO" | "MEDIO" | "ALTO";
 type StepApprovalContext = {
   invoice: Record<string, unknown> & { serviceEvaluation?: { rating: number; qualifica: boolean | null; riskLevel: RiskLevel; comment?: string | null } | null };
-  execution: { revision: number };
+  execution: { id: string; revision: number };
   currentStep: { id: string; name: string; managerId: string; fields: ApprovalFieldPolicy[]; requiresPurchaseOrder: boolean };
   canComplete: boolean;
 };
@@ -25,6 +27,10 @@ type Invoice = {
   id: string;
   numeroNota: string;
   codigoIdentificador: string;
+  documentType?: DocumentType | null;
+  referenceValue?: string | null;
+  fiscalStatus?: ProtocolStatus | null;
+  adminReview?: { status: keyof typeof REVIEW_STATUS_LABEL; motivos: string[] } | null;
   status: string;
   statusProcessamento: "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "ERRO";
   dataAtualizacao: string;
@@ -34,7 +40,7 @@ type Invoice = {
   valorParaAprovacao?: number | null;
   tomadorNome?: string | null;
   tomadorCnpj?: string | null;
-  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> };
+  fornecedor: { nome: string; cnpj?: string | null; codigoExterno?: string | null; managerSuppliers?: Array<{ manager?: { nome?: string | null } | null }> } | null;
   empresa?: { cnpj?: string | null; nomeExibicao?: string | null };
   responsavelValidacao?: string | null;
   dataValidacao?: string | null;
@@ -79,7 +85,7 @@ function onlyDigits(value?: string | null) {
 }
 
 function getManagerNames(invoice: Invoice) {
-  return invoice.fornecedor.managerSuppliers
+  return invoice.fornecedor?.managerSuppliers
     ?.map((link) => link.manager?.nome)
     .filter((name): name is string => Boolean(name))
     .join(", ") || null;
@@ -111,6 +117,10 @@ function formatCompany(invoice: Invoice) {
   const cnpj = invoice.empresa?.cnpj ?? invoice.tomadorCnpj;
   const name = invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada";
   return `${name} - ${formatCnpj(cnpj)}`;
+}
+
+function isNewDocumentType(type: Invoice["documentType"]) {
+  return type === "NFE" || type === "CTE";
 }
 
 function formatRelativeUpdate(value: string) {
@@ -220,7 +230,12 @@ export default function DashboardPage() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const notesRequestId = useRef(0);
   const [notesLoadError, setNotesLoadError] = useState(false);
+  const [notesPermissionError, setNotesPermissionError] = useState(false);
   const [statusFilter, setStatusFilter] = useState("TODOS");
+  const [documentType, setDocumentType] = useState<DocumentType | "">("");
+  const [fiscalStatus, setFiscalStatus] = useState<ProtocolStatus | "">("");
+  const [reviewStatus, setReviewStatus] = useState<keyof typeof REVIEW_STATUS_LABEL | "">("");
+  const [workflowStatus, setWorkflowStatus] = useState<keyof typeof WORKFLOW_STATUS_LABEL | "">("");
   const [myApprovalsOnly, setMyApprovalsOnly] = useState(false);
   const [allNotesTotal, setAllNotesTotal] = useState(0);
   const [myApprovalsTotal, setMyApprovalsTotal] = useState(0);
@@ -272,6 +287,10 @@ export default function DashboardPage() {
     });
 
     if (statusFilter !== "TODOS") params.set("status", statusFilter);
+    if (documentType) params.set("documentType", documentType);
+    if (fiscalStatus) params.set("fiscalStatus", fiscalStatus);
+    if (reviewStatus) params.set("reviewStatus", reviewStatus);
+    if (workflowStatus) params.set("workflowStatus", workflowStatus);
     if (myApprovalsOnly) params.set("myApprovals", "true");
     if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
     if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
@@ -285,10 +304,12 @@ export default function DashboardPage() {
 
     setIsLoadingNotes(true);
     setNotesLoadError(false);
+    setNotesPermissionError(false);
     try {
       const notesRes = await fetch(`/api/notas/minhas?${params.toString()}`);
       if (requestId !== notesRequestId.current) return;
       if (notesRes.status === 401) return router.push("/login");
+      if (notesRes.status === 403) { setNotesPermissionError(true); setInvoices([]); return; }
       if (!notesRes.ok) {
         setNotesLoadError(true);
         setMessageType("error");
@@ -312,7 +333,7 @@ export default function DashboardPage() {
     } finally {
       if (requestId === notesRequestId.current) setIsLoadingNotes(false);
     }
-  }, [competenceFrom, competenceTo, debouncedTakerFilter, issueFrom, issueTo, myApprovalsOnly, page, pageSize, responsibleFilter, router, statusFilter, supplierFilter, updatedFrom, updatedTo]);
+  }, [competenceFrom, competenceTo, debouncedTakerFilter, documentType, fiscalStatus, issueFrom, issueTo, myApprovalsOnly, page, pageSize, responsibleFilter, reviewStatus, router, statusFilter, supplierFilter, updatedFrom, updatedTo, workflowStatus]);
 
   useEffect(() => { loadMe(); }, [loadMe]);
   useEffect(() => { loadData(); }, [loadData]);
@@ -358,6 +379,7 @@ export default function DashboardPage() {
   }
 
   async function abrirModalAprovacao(invoice: Invoice) {
+    if (isNewDocumentType(invoice.documentType) && invoice.workflowExecution?.status !== "ACTIVE") return;
     setMenuState(null);
     setApproveModalError("");
     setEvaluation({ rating: null, qualifica: "", riskLevel: "", comment: "" });
@@ -422,7 +444,7 @@ export default function DashboardPage() {
     setMenuState(null);
   }
 
-  function handleMenuPointerDown(event: React.PointerEvent<HTMLButtonElement>, action: () => void) {
+  function handleMenuAction(event: React.MouseEvent<HTMLButtonElement>, action: () => void) {
     event.preventDefault();
     event.stopPropagation();
     action();
@@ -520,7 +542,7 @@ export default function DashboardPage() {
     for (const policy of policies) {
       if (policy.fieldKey === "serviceEvaluation") continue;
       if (policy.required && !getValue(policy.fieldKey).trim()) {
-        const label = NFSE_WORKFLOW_FIELDS.find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
+        const label = workflowFields(approveModal.documentType ?? "NFSE").find((field) => field.key === policy.fieldKey)?.label ?? policy.fieldKey;
         setApproveModalError(`Preencha o campo obrigatório: ${label}.`);
         return;
       }
@@ -539,7 +561,7 @@ export default function DashboardPage() {
     const evaluationPolicy = policies.find((policy) => policy.fieldKey === "serviceEvaluation");
     const hasEvaluationInput = Boolean(evaluation.rating || evaluation.qualifica || evaluation.riskLevel || evaluation.comment.trim());
     const evaluationComplete = Boolean(evaluation.rating && evaluation.riskLevel);
-    if (evaluationPolicy?.required && !evaluationComplete || hasEvaluationInput && !evaluationComplete) {
+    if (evaluationPolicy && (evaluationPolicy.required || hasEvaluationInput) && !evaluationComplete) {
       setApproveModalError("Complete a avaliação do serviço com pontuação e classificação de risco.");
       return;
     }
@@ -565,7 +587,7 @@ export default function DashboardPage() {
     setApproveModalError("");
     setMessage("");
     try {
-      const response = await fetch(`/api/notas/${approveModal.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: stepApproval.execution.revision, idempotencyKey: stepOperationKey, fields }) });
+      const response = await fetch(`/api/notas/${approveModal.id}/workflow/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ executionId: stepApproval.execution.id, revision: stepApproval.execution.revision, idempotencyKey: stepOperationKey, fields }) });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "Não foi possível concluir esta aprovação.").replace(/workflow/gi, "aprovação"));
       setMessageType("success");
@@ -600,6 +622,10 @@ export default function DashboardPage() {
     setMessage("");
     const params = new URLSearchParams();
     if (statusFilter !== "TODOS") params.set("status", statusFilter);
+    if (documentType) params.set("documentType", documentType);
+    if (fiscalStatus) params.set("fiscalStatus", fiscalStatus);
+    if (reviewStatus) params.set("reviewStatus", reviewStatus);
+    if (workflowStatus) params.set("workflowStatus", workflowStatus);
     if (myApprovalsOnly) params.set("myApprovals", "true");
     if (supplierFilter !== "TODOS") params.set("supplierId", supplierFilter);
     if (debouncedTakerFilter) params.set("taker", debouncedTakerFilter);
@@ -633,6 +659,10 @@ export default function DashboardPage() {
   }
 
   const activeFilters = [
+    documentType ? { key: "documentType", label: DOCUMENT_TYPE_LABEL[documentType], clear: () => setDocumentType("") } : null,
+    fiscalStatus ? { key: "fiscalStatus", label: FISCAL_STATUS_LABEL[fiscalStatus], clear: () => setFiscalStatus("") } : null,
+    workflowStatus ? { key: "workflowStatus", label: WORKFLOW_STATUS_LABEL[workflowStatus], clear: () => setWorkflowStatus("") } : null,
+    reviewStatus ? { key: "reviewStatus", label: REVIEW_STATUS_LABEL[reviewStatus], clear: () => setReviewStatus("") } : null,
     statusFilter !== "TODOS" ? { key: "status", label: `Status: ${statusFilter === "LANCADAS" ? "Lançadas" : statusFilter.replaceAll("_", " ")}`, clear: () => setStatusFilter("TODOS") } : null,
     supplierFilter !== "TODOS" ? { key: "supplier", label: `Fornecedor: ${supplierOptions.find((supplier) => supplier.id === supplierFilter)?.nome ?? "Selecionado"}`, clear: () => setSupplierFilter("TODOS") } : null,
     responsibleFilter !== "TODOS" ? { key: "responsible", label: `Responsável: ${responsibleFilter}`, clear: () => setResponsibleFilter("TODOS") } : null,
@@ -643,10 +673,14 @@ export default function DashboardPage() {
   ].filter((filter): filter is { key: string; label: string; clear: () => void } => Boolean(filter));
 
   const hasInvalidDateRange = isInvalidDateRange(issueFrom, issueTo) || isInvalidDateRange(competenceFrom, competenceTo) || isInvalidDateRange(updatedFrom, updatedTo);
-  const activeAdvancedFiltersCount = [issueFrom || issueTo, competenceFrom || competenceTo, updatedFrom || updatedTo].filter(Boolean).length;
+  const activeAdvancedFiltersCount = [fiscalStatus, reviewStatus, workflowStatus, issueFrom || issueTo, competenceFrom || competenceTo, updatedFrom || updatedTo].filter(Boolean).length;
 
   function clearFilters() {
     setStatusFilter("TODOS");
+    setDocumentType("");
+    setFiscalStatus("");
+    setReviewStatus("");
+    setWorkflowStatus("");
     setSupplierFilter("TODOS");
     setResponsibleFilter("TODOS");
     setTakerFilter("");
@@ -664,6 +698,7 @@ export default function DashboardPage() {
     if (!me || me.manager.role === "FORNECEDOR") return false;
     const currentTask = invoice.workflowExecution?.tasks.find((task) => task.managerId === me.manager.id);
     if (invoice.workflowExecution?.status === "ACTIVE") return Boolean(currentTask);
+    if (isNewDocumentType(invoice.documentType)) return false;
     return (!invoice.workflowExecution || invoice.workflowExecution.status === "COMPLETED") && ["AGUARDANDO_APROVACAO", "RECUSADO", "DADOS_INCONSISTENTES"].includes(invoice.status);
   }
 
@@ -700,7 +735,14 @@ export default function DashboardPage() {
           <h3 id="invoice-filters-heading" className="text-sm font-semibold text-text">Filtros de busca</h3>
           <p className="text-xs text-muted">Refine a fila sem perder a visão geral.</p>
         </div>
-        <div className="grid gap-2 md:grid-cols-[minmax(8rem,0.8fr)_minmax(12rem,1.2fr)_minmax(12rem,1fr)_minmax(12rem,1.2fr)_auto] md:items-end">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
+          <label className="text-xs font-medium text-slate-600">
+            Tipo de documento
+            <select className="mt-1" value={documentType} onChange={(event) => { setDocumentType(event.target.value as typeof documentType); setPage(1); }}>
+              <option value="">Todos os tipos</option>
+              {Object.entries(DOCUMENT_TYPE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
           <label className="text-xs font-medium text-slate-600">
             Status
             <select className="mt-1" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -742,9 +784,18 @@ export default function DashboardPage() {
           <div id="advanced-invoice-filters" className="rounded-md border border-border bg-surface-container-lowest p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-slate-800">Filtros avançados</h3>
-              <span className="text-xs text-slate-500">Períodos de datas da nota e do sistema</span>
+              <span className="text-xs text-slate-500">Situação e períodos do documento</span>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
+              <label className="text-xs font-medium text-slate-600">Situação fiscal
+                <select className="mt-1" value={fiscalStatus} onChange={(event) => { setFiscalStatus(event.target.value as typeof fiscalStatus); setPage(1); }}><option value="">Todas as situações</option>{Object.entries(FISCAL_STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+              </label>
+              <label className="text-xs font-medium text-slate-600">Aprovação
+                <select className="mt-1" value={workflowStatus} onChange={(event) => { setWorkflowStatus(event.target.value as typeof workflowStatus); setPage(1); }}><option value="">Todos os estados</option>{Object.entries(WORKFLOW_STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{key === "WAITING" ? "Sem fluxo iniciado" : label}</option>)}</select>
+              </label>
+              {me?.manager.role === "ADMIN" && <label className="text-xs font-medium text-slate-600">Revisão administrativa
+                <select className="mt-1" value={reviewStatus} onChange={(event) => { setReviewStatus(event.target.value as typeof reviewStatus); setPage(1); }}><option value="">Todos os estados</option>{Object.entries(REVIEW_STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+              </label>}
               <DateRangeFilter legend="Emissão" from={issueFrom} to={issueTo} onFromChange={(value) => { setIssueFrom(value); setPage(1); }} onToChange={(value) => { setIssueTo(value); setPage(1); }} />
               <DateRangeFilter legend="Competência" from={competenceFrom} to={competenceTo} onFromChange={(value) => { setCompetenceFrom(value); setPage(1); }} onToChange={(value) => { setCompetenceTo(value); setPage(1); }} />
               <DateRangeFilter legend="Atualização" from={updatedFrom} to={updatedTo} onFromChange={(value) => { setUpdatedFrom(value); setPage(1); }} onToChange={(value) => { setUpdatedTo(value); setPage(1); }} />
@@ -771,15 +822,15 @@ export default function DashboardPage() {
       </section>
 
       <div className="table-shell" aria-busy={isLoadingNotes}>
-        {isLoadingNotes && !invoices.length ? <div className="p-4 sm:p-5"><LoadingState rows={6} /></div> : notesLoadError && !invoices.length ? <div className="p-4 sm:p-5"><ErrorState title="Não foi possível carregar as notas" description="Verifique sua conexão e tente atualizar a lista." onRetry={() => void loadData()} /></div> : !invoices.length ? <div className="p-4 sm:p-5"><EmptyState title="Nenhuma nota encontrada" description={activeFilters.length ? "Ajuste ou limpe os filtros para consultar outras notas." : "As notas que exigirem acompanhamento aparecerão aqui."} action={activeFilters.length ? <button type="button" className="btn-secondary" onClick={clearFilters}>Limpar filtros</button> : undefined} /></div> : <>
+        {notesPermissionError ? <div className="p-4 sm:p-5"><ErrorState title="Acesso à lista indisponível" description="Seu perfil não tem permissão para consultar esta fila de documentos." /></div> : isLoadingNotes && !invoices.length ? <div className="p-4 sm:p-5"><LoadingState rows={6} /></div> : notesLoadError && !invoices.length ? <div className="p-4 sm:p-5"><ErrorState title="Não foi possível carregar as notas" description="Verifique sua conexão e tente atualizar a lista." onRetry={() => void loadData()} /></div> : !invoices.length ? <div className="p-4 sm:p-5"><EmptyState title="Nenhuma nota encontrada" description={activeFilters.length ? "Ajuste ou limpe os filtros para consultar outras notas." : "As notas que exigirem acompanhamento aparecerão aqui."} action={activeFilters.length ? <button type="button" className="btn-secondary" onClick={clearFilters}>Limpar filtros</button> : undefined} /></div> : <>
         {notesLoadError && <div className="border-b border-border p-4"><ErrorState title="Exibindo resultados anteriores" description="Não foi possível atualizar a lista para os filtros atuais. Tente novamente antes de realizar uma nova análise." onRetry={() => void loadData()} /></div>}
         <p id="invoice-table-instructions" className="sr-only">A tabela pode ser rolada horizontalmente em telas estreitas. Selecione uma linha para expandir o resumo da nota.</p>
         <table className="min-w-[56rem] text-sm" aria-describedby="invoice-table-instructions">
           <thead>
             <tr>
-              <th scope="col" className="px-2 py-2 text-left">Fornecedor / NF</th>
+              <th scope="col" className="px-2 py-2 text-left">Fornecedor / Documento</th>
               <th scope="col" className="px-2 py-2 text-left">Empresa</th>
-              <th scope="col" className="px-2 py-2 text-right" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor para aprovação</th>
+              <th scope="col" className="px-2 py-2 text-right" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Valor</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Emissão</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Competência</th>
               <th scope="col" className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>Status</th>
@@ -794,19 +845,35 @@ export default function DashboardPage() {
               const currentTask = activeTasks.find((task) => task.managerId === me?.manager.id) ?? activeTasks[0];
               const waitingTime = formatWaitingTime(currentTask?.assignedAt);
               const canApprove = canApproveFromRow(invoice);
+              const fiscal = isNewDocumentType(invoice.documentType);
+              const canExpand = fiscal || !invoice.workflowExecution || invoice.workflowExecution.status === "COMPLETED";
+              const value = fiscal ? invoice.referenceValue : invoice.valorParaAprovacao ?? invoice.valorServico;
+              const workflowLabel = invoice.workflowExecution?.status === "BLOCKED" ? WORKFLOW_STATUS_LABEL.BLOCKED
+                : fiscal && !invoice.workflowExecution && invoice.status === "AGUARDANDO_APROVACAO" && invoice.adminReview?.status !== "PENDENTE" ? WORKFLOW_STATUS_LABEL.WAITING : null;
               return <Fragment key={invoice.id}>
-              <tr className="cursor-pointer focus-within:bg-surface-container-low" onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>
-                <td className="px-2 py-2 text-left"><div className="font-semibold text-slate-900">{invoice.fornecedor.nome}</div><div className="flex flex-wrap items-center gap-x-2"><span className="text-xs text-slate-500">NF {invoice.numeroNota}</span><button type="button" className="text-xs font-semibold text-brand underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-expanded={expandedId === invoice.id} aria-controls={`invoice-summary-${invoice.id}`} onClick={(event) => { event.stopPropagation(); setExpandedId(expandedId === invoice.id ? null : invoice.id); }}>{expandedId === invoice.id ? "Ocultar resumo" : "Ver resumo"}</button></div>{waitingTime && <p className="mt-1 text-xs font-semibold text-amber-800" title={`Atribuída em ${new Date(currentTask!.assignedAt).toLocaleString("pt-BR")}`}>Aguardando há {waitingTime.replace(/^há /, "")}</p>}</td>
+              <tr className="focus-within:bg-surface-container-low">
+                <td className="px-2 py-2 text-left"><div className="font-semibold text-slate-900">{invoice.fornecedor?.nome ?? "Fornecedor pendente"}</div><div className="flex flex-wrap items-center gap-x-2"><span className="text-xs text-slate-600">{invoice.documentType ? DOCUMENT_TYPE_LABEL[invoice.documentType] : "NF"} {invoice.numeroNota}</span>{canExpand && <button type="button" className="text-xs font-semibold text-brand underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand" aria-expanded={expandedId === invoice.id} aria-controls={expandedId === invoice.id ? `invoice-summary-${invoice.id}` : undefined} onClick={() => setExpandedId(expandedId === invoice.id ? null : invoice.id)}>{expandedId === invoice.id ? "Ocultar resumo" : "Ver resumo"}</button>}</div>{waitingTime && <p className="mt-1 text-xs font-semibold text-amber-800" title={`Atribuída em ${new Date(currentTask!.assignedAt).toLocaleString("pt-BR")}`}>Aguardando há {waitingTime.replace(/^há /, "")}</p>}</td>
                 <td className="px-2 py-2 text-left text-slate-700"><div className="font-medium text-slate-800">{workflowFieldVisible(invoice, "tomadorNome") ? invoice.empresa?.nomeExibicao ?? "Empresa não cadastrada" : "—"}</div><div className="whitespace-nowrap text-xs text-slate-500">{workflowFieldVisible(invoice, "tomadorCnpj") ? formatCnpj(invoice.empresa?.cnpj ?? invoice.tomadorCnpj) : "—"}</div></td>
-                <td className="px-2 py-2 text-right font-medium tabular-nums text-slate-800" style={{ minWidth: "7.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{workflowFieldVisible(invoice, "valorParaAprovacao") ? Number(invoice.valorParaAprovacao ?? invoice.valorServico ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</span></td>
+                <td className="whitespace-nowrap px-2 py-2 text-right font-medium tabular-nums text-slate-800" title={fiscal ? "Valor de referência do XML" : "Valor para aprovação"}>{workflowFieldVisible(invoice, "valorParaAprovacao") ? formatFiscalDecimal(value, true) ?? "—" : "—"}</td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{workflowFieldVisible(invoice, "dataEmissao") && invoice.dataEmissao ? new Date(invoice.dataEmissao).toLocaleDateString("pt-BR") : "-"}</span></td>
                 <td className="px-1.5 py-2 text-center text-slate-700" style={{ minWidth: "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{workflowFieldVisible(invoice, "dataCompetencia") ? formatCompetence(invoice.dataCompetencia) : "-"}</span></td>
-                <td className="px-1.5 py-2 text-center" style={{ minWidth: "8.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="flex flex-col items-center gap-1"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>{invoice.statusProcessamento === "ERRO" && <span className="badge bg-rose-700 text-white ring-2 ring-rose-200">⚠ Erro no processamento</span>}</div></td>
+                <td className="px-1.5 py-2 text-center"><div className="flex flex-col items-center gap-1"><span className={`badge ${STATUS_COLORS[invoice.status] ?? "badge-slate"}`}>{invoice.status.replaceAll("_", " ")}</span>{fiscal && invoice.fiscalStatus && <span className="text-xs text-slate-700">{FISCAL_STATUS_LABEL[invoice.fiscalStatus]}</span>}{invoice.adminReview && <span className={`badge ${invoice.adminReview.status === "PENDENTE" ? "badge-warning" : "badge-slate"}`}>{REVIEW_STATUS_LABEL[invoice.adminReview.status]}</span>}{workflowLabel && <span className="text-xs text-slate-700">{workflowLabel}</span>}{!fiscal && invoice.statusProcessamento === "ERRO" && <span className="badge bg-rose-700 text-white ring-2 ring-rose-200">⚠ Erro no processamento</span>}</div></td>
                 <td className="px-2 py-2 text-left text-slate-700">{invoice.workflowExecution && invoice.workflowExecution.status !== "COMPLETED" ? invoice.workflowExecution.tasks.map((task) => task.managerName).join(", ") || "Aguardando responsável" : getResponsibleName(invoice)}</td>
                 <td className="px-1.5 py-2 text-center text-slate-600" style={{ minWidth: "5.75rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><span title={new Date(invoice.dataAtualizacao).toLocaleString("pt-BR")} style={{ whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}>{formatRelativeUpdate(invoice.dataAtualizacao)}</span></td>
                 <td className="px-1.5 py-2 text-center" style={{ minWidth: canApprove ? "9.5rem" : "5.5rem", whiteSpace: "nowrap", overflowWrap: "normal", wordBreak: "normal" }}><div className="dashboard-row-actions flex items-center justify-center gap-1">{canApprove && <button type="button" className="btn-primary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(event) => { event.stopPropagation(); void abrirModalAprovacao(invoice); }}>Aprovar</button>}<button type="button" aria-label={`Mais ações para nota ${invoice.numeroNota}`} className="btn-secondary min-h-0 whitespace-nowrap px-2 py-1 text-sm" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLButtonElement).getBoundingClientRect(); setMenuState({ invoice, x: Math.max(8, Math.min(r.right - 208, window.innerWidth - 248)), y: Math.min(r.bottom + 6, window.innerHeight - 260) }); }}>{canApprove ? "Mais" : "Ações"} ▾</button></div></td>
               </tr>
-              {expandedId === invoice.id && (!invoice.workflowExecution || invoice.workflowExecution.status === "COMPLETED") && <tr><td colSpan={9} className="bg-slate-50 p-0"><div id={`invoice-summary-${invoice.id}`} className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3">{invoice.statusProcessamento === "ERRO" && <div className="sm:col-span-3 rounded-md border-2 border-rose-300 bg-rose-50 p-3 text-rose-900" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}<p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor.codigoExterno ?? "-"}</p><p><strong>Ordem de Compra – Pontual:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>Ordem de Compra – Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Número de parcelas:</strong> {invoice.numeroParcelas ?? 1}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p></div></td></tr>}
+              {expandedId === invoice.id && canExpand && <tr><td colSpan={9} className="bg-slate-50 p-0"><div id={`invoice-summary-${invoice.id}`} className="grid gap-3 px-4 py-4 text-xs text-slate-700 sm:grid-cols-3">
+                {fiscal ? <>
+                  <p className="break-all"><strong>Chave de acesso:</strong> {invoice.codigoIdentificador}</p>
+                  <p><strong>Empresa:</strong> {workflowFieldVisible(invoice, "tomadorNome") ? formatCompany(invoice) : "—"}</p>
+                  <p><strong>CNPJ fornecedor:</strong> {invoice.fornecedor?.cnpj ?? "—"}</p>
+                  <p><strong>Valor de referência:</strong> {workflowFieldVisible(invoice, "valorParaAprovacao") ? formatFiscalDecimal(invoice.referenceValue, true) ?? "Não informado" : "—"}</p>
+                  {me?.manager.role === "ADMIN" && invoice.adminReview?.status === "PENDENTE" && <p><a href={`/notas/${invoice.id}#revisao-fiscal`} className="font-semibold text-brand underline">Consultar pendências</a></p>}
+                </> : <>
+                  {invoice.statusProcessamento === "ERRO" && <div className="sm:col-span-3 rounded-md border-2 border-rose-300 bg-rose-50 p-3 text-rose-900" role="alert"><p className="font-bold">⚠ Erro no processamento — revise antes de reaprovar</p><p className="mt-1">{invoice.observacaoValidacao || "Consulte o histórico da nota para identificar a causa do erro antes de tentar uma nova aprovação."}</p></div>}
+                  <p><strong>Identificador XML:</strong> {invoice.codigoIdentificador}</p><p><strong>Empresa:</strong> <span className="whitespace-nowrap">{formatCompany(invoice)}</span></p><p><strong>CNPJ fornecedor:</strong> <span className="whitespace-nowrap">{invoice.fornecedor?.cnpj ?? "-"}</span></p><p><strong>Código externo fornecedor:</strong> {invoice.fornecedor?.codigoExterno ?? "-"}</p><p><strong>Ordem de Compra – Pontual:</strong> {invoice.ordemCompra ?? "-"}</p><p><strong>Ordem de Compra – Contrato:</strong> {invoice.ocContrato ?? "-"}</p><p><strong>Número de parcelas:</strong> {invoice.numeroParcelas ?? 1}</p><p><strong>Dt. Lanc. Delphi:</strong> {invoice.dataLancamentoDelphi ? new Date(invoice.dataLancamentoDelphi).toLocaleString("pt-BR") : "-"}</p><p><strong>Código Delphi:</strong> {invoice.codigoDelphi ?? "Pendente integração"}</p><p><strong>Integração:</strong> {invoice.statusIntegracaoDelphi ?? "AGUARDANDO"}</p><p className="sm:col-span-3"><strong>Observação da validação:</strong> {invoice.observacaoValidacao ?? "-"}</p>
+                </>}
+              </div></td></tr>}
             </Fragment>;
             })}
           </tbody>
@@ -824,11 +891,11 @@ export default function DashboardPage() {
 
     {menuState && <button type="button" aria-label="Fechar menu de ações" className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setMenuState(null)} />}
     {menuState && <div className="fixed z-50 w-[calc(100vw-1rem)] max-w-60 rounded-md border border-border bg-surface-container-lowest p-2 shadow-elevated" style={{ left: menuState.x, top: menuState.y }} onClick={(e) => e.stopPropagation()}>
-      {(!menuState.invoice.workflowExecution || menuState.invoice.workflowExecution.status === 'COMPLETED') && ['AGUARDANDO_APROVACAO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onPointerDown={(event) => handleMenuPointerDown(event, () => abrirModalRecusa(menuState.invoice))}>⛔ Reprovar</button>}
-      {menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); })}>↩️ Revogar aprovação</button>}
-      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); })}>🔎 Ver detalhes</button>
-      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => { setExpandedId(menuState.invoice.id); setMenuState(null); })}>▾ Expandir resumo</button>
-      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onPointerDown={(event) => handleMenuPointerDown(event, () => void verHistorico(menuState.invoice))}>🕒 Ver histórico</button>
+      {!isNewDocumentType(menuState.invoice.documentType) && (!menuState.invoice.workflowExecution || menuState.invoice.workflowExecution.status === 'COMPLETED') && ['AGUARDANDO_APROVACAO', 'DADOS_INCONSISTENTES'].includes(menuState.invoice.status) && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-rose-700 hover:!bg-rose-50" onClick={(event) => handleMenuAction(event, () => abrirModalRecusa(menuState.invoice))}>⛔ Reprovar</button>}
+      {!isNewDocumentType(menuState.invoice.documentType) && menuState.invoice.status === 'APROVADO' && me?.manager.role !== 'FORNECEDOR' && <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-amber-700 hover:!bg-amber-50" onClick={(event) => handleMenuAction(event, () => { router.push(`/notas/${menuState.invoice.id}#revogar-aprovacao`); setMenuState(null); })}>↩️ Revogar aprovação</button>}
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={(event) => handleMenuAction(event, () => { router.push(`/notas/${menuState.invoice.id}`); setMenuState(null); })}>🔎 Ver detalhes</button>
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={(event) => handleMenuAction(event, () => { setExpandedId(menuState.invoice.id); setMenuState(null); })}>▾ Expandir resumo</button>
+      <button type="button" className="w-full rounded !bg-white px-3 py-2 text-left text-sm font-semibold !text-slate-700 hover:!bg-slate-50" onClick={(event) => handleMenuAction(event, () => void verHistorico(menuState.invoice))}>🕒 Ver histórico</button>
     </div>}
 
 
@@ -841,10 +908,10 @@ export default function DashboardPage() {
 
     {approveModal && <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" onClick={fecharModalAprovacao} />}
     {approveModal && <section role="dialog" aria-modal="true" aria-labelledby="approval-modal-title" className="fixed inset-x-2 top-4 z-50 mx-auto max-h-[calc(100svh-2rem)] w-auto max-w-2xl overflow-y-auto rounded-md bg-surface-container-lowest p-4 shadow-elevated sm:inset-x-0 sm:top-8 sm:w-[92vw] sm:p-6" onClick={(e) => e.stopPropagation()}>
-      <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">{approveModal.workflowExecution?.status === "ACTIVE" ? "Aprovar nota" : "Avaliação obrigatória do serviço"}</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor.nome}</p><p className="section-description">Código externo: {approveModal.fornecedor.codigoExterno ?? "Não informado"}</p>{stepApproval && <p className="section-description">Etapa: {stepApproval.currentStep.name}</p>}</div><span className="badge badge-blue">Aprovação</span></div>
+      <div className="section-header"><div><h3 id="approval-modal-title" className="section-title">{approveModal.workflowExecution?.status === "ACTIVE" ? "Aprovar nota" : "Avaliação obrigatória do serviço"}</h3><p className="section-description">Nota {approveModal.numeroNota} • fornecedor {approveModal.fornecedor?.nome ?? "Fornecedor pendente"}</p><p className="section-description">Código externo: {approveModal.fornecedor?.codigoExterno ?? "Não informado"}</p>{stepApproval && <p className="section-description">Etapa: {stepApproval.currentStep.name}</p>}</div><span className="badge badge-blue">Aprovação</span></div>
       {approveModal.statusProcessamento === "ERRO" && <div className="mb-4 rounded-md border-2 border-rose-300 bg-rose-50 p-4 text-sm text-rose-950 shadow-sm" role="alert"><p className="font-bold">⚠ Esta nota apresentou erro no processamento</p><p className="mt-1">Revise a causa antes de reaprovar: {approveModal.observacaoValidacao || "consulte o histórico da nota para identificar o erro."}</p></div>}
       {approveModalError && <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm font-medium text-rose-950" role="alert">{approveModalError}</div>}
-      {stepApprovalLoading ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : stepApproval ? <div className="mt-4 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields policies={stepApproval.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{stepApproval.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="space-y-4">
+      {stepApprovalLoading ? <p role="status" className="mt-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm">Carregando os campos desta aprovação…</p> : stepApproval ? <div className="mt-4 space-y-3"><p className="text-sm text-slate-600">Preencha os campos editáveis desta aprovação.</p><WorkflowApprovalFields documentType={approveModal.documentType} policies={stepApproval.currentStep.fields} values={stepApprovalValues} onValueChange={(key, value) => setStepApprovalValues((current) => ({ ...current, [key]: value }))} evaluation={evaluation} onEvaluationChange={(update) => setEvaluation((current) => ({ ...current, ...update }))} />{stepApproval.currentStep.requiresPurchaseOrder && <p className="text-xs text-slate-600">Informe uma ordem de compra ou de contrato.</p>}</div> : <div className="space-y-4">
         <div role="group" aria-labelledby="dashboard-rating-label"><p id="dashboard-rating-label" className="mb-2 text-sm font-semibold text-slate-800">Pontuação do serviço</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-5">{[1, 2, 3, 4, 5].map((rate) => { const description = getRatingLabel(rate); return <button key={rate} type="button" aria-label={`${rate} - ${description}`} title={`${rate} - ${description}`} className={`rounded-md border p-3 text-left text-xs transition ${evaluation.rating === rate ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm" : "border-slate-200 !bg-white !text-slate-700 hover:!bg-slate-50"}`} onClick={() => setEvaluation((prev) => ({ ...prev, rating: rate as 1 | 2 | 3 | 4 | 5 }))}><strong className="text-base">{rate}</strong><br />{description}</button>; })}</div></div>
         <div className="grid items-start gap-3 sm:grid-cols-3"><label className="approval-field"><span className="approval-field-label">Qualifica?</span><select className="approval-field-control" aria-describedby="dashboard-qualifica-help" value={evaluation.qualifica} onChange={(event) => setEvaluation((prev) => ({ ...prev, qualifica: event.target.value as "SIM" | "NAO" }))}><option value="">Selecione</option><option value="SIM">Sim</option><option value="NAO">Não</option></select><QualificaHelpText id="dashboard-qualifica-help" /></label><label className="approval-field"><span className="approval-field-label">Classificação de risco</span><select className="approval-field-control" value={evaluation.riskLevel} onChange={(event) => setEvaluation((prev) => ({ ...prev, riskLevel: event.target.value as RiskLevel }))}><option value="">Selecione</option><option value="BAIXO">Baixo</option><option value="MEDIO">Médio</option><option value="ALTO">Alto</option></select></label><label className="approval-field"><span className="approval-field-label">Data de pagamento</span><input className="approval-field-control" type="date" min={minimumPaymentDate()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} required /><span className="text-xs text-muted">A partir de {minimumPaymentDate().split("-").reverse().join("/")}.</span></label></div>
         <div className="approval-field-row grid gap-3 sm:grid-cols-3">

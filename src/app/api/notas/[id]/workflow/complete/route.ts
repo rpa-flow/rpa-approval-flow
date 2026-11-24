@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isPaymentDateKeyAllowed, paymentDateAtSaoPauloNoon, utcDateKey } from "@/lib/payment-date";
 import { processWorkflowNotifications } from "@/lib/workflow/notifications";
 import { createWorkflowStepAssignments, resolveStepAssignees } from "@/lib/workflow/assignees";
+import { fiscalWorkflowProblem } from "@/lib/workflow/fiscal-eligibility";
 
 const fieldsSchema = z.object({
   ordemCompra: z.string().trim().regex(/^\d+$/).max(120).nullable().optional(),
@@ -16,7 +17,7 @@ const fieldsSchema = z.object({
   observacaoValidacao: z.string().max(500).nullable().optional(),
   serviceEvaluation: z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(1000).optional(), riskLevel: z.enum(["BAIXO", "MEDIO", "ALTO"]), qualifica: z.enum(["SIM", "NAO"]).optional() }).strict().optional()
 }).strict();
-const bodySchema = z.object({ revision: z.number().int().positive(), idempotencyKey: z.string().min(1).max(120), fields: fieldsSchema }).strict();
+const bodySchema = z.object({ executionId: z.string().min(1).optional(), revision: z.number().int().positive(), idempotencyKey: z.string().min(1).max(120), fields: fieldsSchema }).strict();
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const manager = await getSessionManager();
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const invoice = await tx.invoice.findUnique({ where: { id: params.id }, include: { adminReview: true, serviceEvaluation: true, workflowExecution: { include: { tasks: { where: { completedAt: null }, include: { step: { include: { fields: true } } } }, version: { include: { steps: { orderBy: { position: "asc" }, include: { responsibleManagers: { include: { manager: true } } } } } } } } } });
       if (!invoice?.workflowExecution) return { code: 404, error: "Workflow não encontrado." };
       const execution = invoice.workflowExecution;
+      const fiscal = invoice.documentType === "NFE" || invoice.documentType === "CTE";
+      const needsCycleId = fiscal || (!input.executionId && await tx.invoiceWorkflow.count({ where: { invoiceId: invoice.id } }) > 1);
+      if ((needsCycleId || input.executionId) && input.executionId !== execution.id) return { code: 409, error: "O ciclo mudou. Atualize a nota." };
       const previous = await tx.workflowCommand.findUnique({ where: { executionId_idempotencyKey: { executionId: execution.id, idempotencyKey: input.idempotencyKey } } });
       if (previous) {
         if (previous.actorId !== manager.id || previous.payloadHash !== payloadHash || previous.action !== "COMPLETE") return { code: 409, error: "Chave de operação já usada com outros dados." };
@@ -42,6 +46,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const task = execution.tasks.find((candidate) => candidate.managerId === manager.id);
       if (!task || !manager.ativo || manager.role === "FORNECEDOR" || execution.tasks.some((candidate) => candidate.stepId !== task.stepId)) return { code: 403, error: "Somente um responsável atual pode concluir esta etapa." };
       if (invoice.adminReview && invoice.adminReview.status !== "LIBERADA") return { code: 409, error: "Nota retida para revisão administrativa." };
+      if (fiscal) {
+        const problem = await fiscalWorkflowProblem(tx, invoice.id);
+        if (problem) return { code: 409, error: problem };
+      }
       const lastStep = execution.version.steps[execution.version.steps.length - 1];
       const isReopenedInconsistentLastStep = invoice.status === "DADOS_INCONSISTENTES"
         && invoice.processada
@@ -65,12 +73,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const nextAssignees = next ? await resolveStepAssignees(tx, next, invoice.fornecedorId) : [];
       if (next && !nextAssignees.length) return { code: 409, error: `A próxima etapa (${next.name}) não tem responsáveis ativos para este fornecedor.` };
       const now = new Date();
-      if (!next) {
+      if (!next && !fiscal) {
         if (!values.ordemCompra?.trim() && !values.ocContrato?.trim()) return { code: 400, error: "Informe ordem de compra ou contrato." };
         if (!values.dataPagamento || !isPaymentDateKeyAllowed(utcDateKey(values.dataPagamento), now)) return { code: 400, error: "A data de pagamento não é válida para a aprovação final." };
         if (!serviceEvaluation && !invoice.serviceEvaluation) return { code: 400, error: "A avaliação do serviço é obrigatória." };
         Object.assign(data, { status: "APROVADO", processada: false, statusProcessamento: "PROCESSANDO", dataValidacao: now, responsavelValidacao: manager.nome, tentativasNotificacao: 0, ultimoLembreteEm: null });
       }
+      if (!next && fiscal) Object.assign(data, { status: "APROVADO", dataValidacao: now, responsavelValidacao: manager.nome });
       const changed = await tx.invoiceWorkflow.updateMany({ where: { id: execution.id, status: "ACTIVE", revision: input.revision }, data: { revision: { increment: 1 }, ...(next ? {} : { status: "COMPLETED", completedAt: now }) } });
       if (!changed.count) return { code: 409, error: "A etapa mudou. Atualize a nota." };
       await tx.invoice.update({ where: { id: invoice.id }, data });

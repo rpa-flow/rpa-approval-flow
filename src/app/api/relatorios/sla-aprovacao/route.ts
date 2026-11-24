@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       return {
         invoiceId: invoice.id,
         numeroNota: invoice.numeroNota,
-        fornecedor: invoice.fornecedor.nome,
+        fornecedor: invoice.fornecedor?.nome ?? "Fornecedor pendente",
         gestor: invoice.criadoPor?.nome ?? "Não informado",
         approvalHours: Number(approvalHours.toFixed(2)),
         outOfSla: approvalHours > APPROVAL_SLA_HOURS
